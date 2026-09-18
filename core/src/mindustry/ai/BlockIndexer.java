@@ -618,6 +618,34 @@ public class BlockIndexer{
         return f.dst2(unit) < w.dst2(unit) ? f : w;
     }
 
+    /** GL: closest floor or wall ore of the item that passes the filter (checks every ore tile, so call it rarely). */
+    public @Nullable Tile findClosestMineableOre(Unit unit, Item item, Boolf<Tile> filter){
+        Tile closest = null;
+        float minDst = Float.MAX_VALUE;
+        for(int pass = 0; pass < 2; pass++){
+            boolean walls = pass == 1;
+            if(walls ? !unit.type.mineWalls : !unit.type.mineFloor) continue;
+            IntSeq[][][] all = walls ? wallOres : ores;
+            if(all == null || item.id >= all.length || all[item.id] == null) continue;
+            for(int qx = 0; qx < quadWidth; qx++){
+                for(int qy = 0; qy < quadHeight; qy++){
+                    IntSeq arr = all[item.id][qx][qy];
+                    if(arr == null) continue;
+                    for(int i = 0; i < arr.size; i++){
+                        Tile tile = world.tile(arr.items[i]);
+                        if(tile == null || (tile.block() == Blocks.air) == walls) continue;
+                        float dst = Mathf.dst2(unit.x, unit.y, tile.worldx(), tile.worldy());
+                        if(dst < minDst && filter.get(tile)){
+                            closest = tile;
+                            minDst = dst;
+                        }
+                    }
+                }
+            }
+        }
+        return closest;
+    }
+
     private void process(Tile tile){
         var team = tile.team();
         //only process entity changes with centered tiles

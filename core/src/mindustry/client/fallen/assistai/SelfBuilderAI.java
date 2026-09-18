@@ -347,6 +347,8 @@ public class SelfBuilderAI extends AIController{
                 unit.type.mineItems.select(unit::canMine) : mindustry.client.ui.PanelFragment.itemtomine.copy();
             if(items.isEmpty()) return false;
             afkPath = new mindustry.client.navigation.MinePath(items, -1, false, "", true);
+            // the unit hovers up to its mine range away from the ore, so keep that much more away from enemy turrets
+            afkPath.setOreFilter(t -> !isInEnemyTurretRange(t.worldx(), t.worldy(), unit.type.mineRange));
             mindustry.client.navigation.Navigation.follow(afkPath);
             return true;
         }
@@ -413,13 +415,18 @@ public class SelfBuilderAI extends AIController{
     }
 
     public boolean isInEnemyTurretRange(float wx, float wy){
+        return isInEnemyTurretRange(wx, wy, 0f);
+    }
+
+    public boolean isInEnemyTurretRange(float wx, float wy, float margin){
         for(var teamData : state.teams.present){
             if(teamData.team != unit.team && teamData.team != Team.derelict){
                 var tree = teamData.buildingTree;
                 if(tree != null){
-                    Building danger = tree.find(wx - maxTurretCheckRange, wy - maxTurretCheckRange, maxTurretCheckRange * 2f, maxTurretCheckRange * 2f, b -> {
+                    float check = maxTurretCheckRange + margin;
+                    Building danger = tree.find(wx - check, wy - check, check * 2f, check * 2f, b -> {
                         if(b instanceof TurretBuild tb && tb.block instanceof Turret t){
-                            return tb.within(wx, wy, t.range + unit.hitSize + 16f);
+                            return tb.within(wx, wy, t.range + unit.hitSize + 16f + margin);
                         }
                         return false;
                     });

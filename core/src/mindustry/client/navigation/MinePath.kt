@@ -1,6 +1,7 @@
 package mindustry.client.navigation
 
 import arc.*
+import arc.func.Boolf
 import arc.math.geom.*
 import arc.struct.*
 import arc.util.*
@@ -26,6 +27,10 @@ class MinePath @JvmOverloads constructor(
     private var coreIdle = false
     private var bestItem: Item? = null
     var tile: Tile? = null
+    /** GL: when set, only ore tiles passing it are mined (poly AFK mining skips ores under enemy turrets) */
+    var oreFilter: Boolf<Tile>? = null
+    private val filterTimer = Interval()
+    private var tileItem: Item? = null
 
     init {
         val split = args.lowercase().split("\\s".toRegex())
@@ -123,7 +128,16 @@ class MinePath @JvmOverloads constructor(
 
         // mine
         } else {
-            tile = indexer.findClosestMineableOre(player.unit(), bestItem) ?: return
+            val filter = oreFilter
+            tile = if (filter == null) indexer.findClosestMineableOre(player.unit(), bestItem) else {
+                // the filtered search checks every ore tile, so keep the target and only look again once a second
+                val current = tile
+                if (current == null || tileItem != bestItem || filterTimer[60f] || !filter.get(current)) {
+                    tileItem = bestItem
+                    indexer.findClosestMineableOre(player.unit(), bestItem, filter)
+                } else current
+            }
+            if (tile == null) return
             if (player.within(tile, player.unit().type.mineRange)) player.unit().mineTile = tile
             player.boosting = player.unit().type.canBoost && !player.within(tile, player.unit().type.mineRange)
             goTo(tile, player.unit().type.mineRange - tilesize * 2)
