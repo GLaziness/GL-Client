@@ -579,11 +579,10 @@ public class SettingsMenuDialog extends BaseDialog{
         client.sliderPref("alarmgriefblocksbreake", 100, 0, 500, 1, String::valueOf);
 
         client.updateUuid();
-        client.textPref("uchatcolor", "");
-        client.textPref("uchatgradientstart", "");
-        client.textPref("uchatgradientend", "");
-        client.sliderPref("uchatgradientstep", 3, 1, 10, 1, String::valueOf);
         client.sliderPref("uchatmode", 0, 0, 4, i -> "@client.slider.uchatmode." + i);
+        client.colorPref("uchatcolor", "ffd37f");
+        client.colorPref("uchatgradientstart", "ffd37f");
+        client.colorPref("uchatgradientend", "ffffff");
         client.addGradientNicknameGenerator();
 
         if (settings.getBool("client-experimentals") || OS.hasProp("policone")) {
@@ -1008,6 +1007,42 @@ public class SettingsMenuDialog extends BaseDialog{
             list.add(new CheckSetting(name, def, changed));
             settings.defaults(name, def);
             rebuild();
+        }
+
+        public void colorPref(String name, String defHex){
+            settings.defaults(name, defHex);
+            pref(new Setting(name){
+                @Override
+                public void add(SettingsTable table){
+                    Color col = new Color();
+                    try{
+                        String raw = settings.getString(name, defHex).trim();
+                        if(raw.startsWith("#")) raw = raw.substring(1);
+                        Color named = Colors.get(raw);
+                        col.set(named != null ? named : Color.valueOf(raw.isEmpty() ? defHex : raw));
+                    }catch(Exception e){
+                        col.set(Color.valueOf(defHex));
+                    }
+                    col.a = 1f;
+                    Image swatch = new Image(Tex.whiteui);
+                    swatch.setColor(col);
+                    table.table(t -> {
+                        t.left();
+                        t.add(title).padRight(10).growX();
+                        t.add(swatch).size(36).padRight(8);
+                        t.button(Icon.pencil, Styles.cleari, () -> ui.picker.show(col.cpy(), false, c -> {
+                            c.a = 1f;
+                            col.set(c);
+                            swatch.setColor(c);
+                            int r = Mathf.clamp((int)(c.r * 255f + 0.5f), 0, 255);
+                            int g = Mathf.clamp((int)(c.g * 255f + 0.5f), 0, 255);
+                            int b = Mathf.clamp((int)(c.b * 255f + 0.5f), 0, 255);
+                            settings.put(name, String.format("%02x%02x%02x", r, g, b));
+                        })).size(40);
+                    }).left().growX().padTop(4).padBottom(4);
+                    table.row();
+                }
+            });
         }
 
         public void textPref(String name, String def){
