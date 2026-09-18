@@ -82,13 +82,9 @@ public class BeControl{
             .submit(res -> {
                 Jval val = Jval.read(res.getResultAsString());
                 String newBuild = val.getString("name");
-                if(!newBuild.trim().isEmpty() && !Version.clientVersion.equals(newBuild)){
-                    Jval asset = val.get("assets").asArray().find(v -> v.getString("name", "").toLowerCase().contains("desktop"));
-                    if (asset == null) asset = val.get("assets").asArray().find(v -> v.getString("name", "").toLowerCase().contains("mindustry"));
-                    if (asset == null) {
-                        Core.app.post(() -> done.get(false));
-                        return;
-                    }
+                Jval asset = val.get("assets").asArray().find(v -> v.getString("name", "").toLowerCase().contains("desktop"));
+                if (asset == null) asset = val.get("assets").asArray().find(v -> v.getString("name", "").toLowerCase().contains("mindustry"));
+                if(!newBuild.trim().isEmpty() && asset != null && isNewer(asset, newBuild)){
                     updateUrl = asset.getString("browser_download_url", "");
                     updateAvailable = true;
                     updateBuild = newBuild;
@@ -97,6 +93,16 @@ public class BeControl{
                     Core.app.post(() -> done.get(false));
                 }
             });
+    }
+
+    /**
+     * GL Client keeps the same version between updates, so builds are compared by time instead of by name.
+     * The release asset's label holds the build time (ms) of the uploaded jar, see {@link Version#buildTime}.
+     */
+    private static boolean isNewer(Jval asset, String releaseName){
+        long assetBuild = Strings.parseLong(asset.getString("label", ""), 0L);
+        if(assetBuild > 0 && Version.buildTime > 0) return assetBuild > Version.buildTime;
+        return !Version.clientVersion.equals(releaseName);
     }
 
     /** @return whether a new update is available */
