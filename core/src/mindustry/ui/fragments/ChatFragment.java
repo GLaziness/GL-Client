@@ -87,7 +87,9 @@ public class ChatFragment extends Table{
                     updateChat();
                 }
                 boolean tabConsumed = false;
-                if (input.keyTap(Binding.chatAutocomplete) && completion.any() /*&& mode == ChatMode.normal*/) {
+                // GL: with only the mode prefix typed ("!c "), Tab always switches the mode instead of completing a command
+                boolean onlyPrefix = chatfield.getText().equals(mode.normalizedPrefix());
+                if (input.keyTap(Binding.chatAutocomplete) && completion.any() && !onlyPrefix /*&& mode == ChatMode.normal*/) {
                     completionPos = Mathf.clamp(completionPos, 0, completion.size - 1);
                     String oldText = chatfield.getText();
                     String newText = completion.get(completionPos).getCompletion(chatfield.getText());
@@ -1042,7 +1044,7 @@ public class ChatFragment extends Table{
         admin("/a", () -> (Server.current.adminui()) && (!settings.getBool("disableadminchatifsolo") || Groups.player.count(p -> p.admin) > 1)),
         staff("/s", () -> Server.fish.b() && settings.getBool("fish-staff", false)),
         client("!c"),
-        global("!g", mindustry.client.utils.GlobalChat::enabled); // GL: global chat between GL Client players
+        global("!g"); // GL: global chat between GL Client players (when it is off, sending explains how to turn it on)
 
         public String prefix;
         public Boolp valid;

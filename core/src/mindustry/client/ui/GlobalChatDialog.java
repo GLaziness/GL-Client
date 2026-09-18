@@ -3,68 +3,118 @@ package mindustry.client.ui;
 import arc.*;
 import arc.graphics.*;
 import arc.input.*;
+import arc.scene.event.*;
 import arc.scene.ui.*;
 import arc.scene.ui.layout.*;
+import arc.util.*;
 import mindustry.client.utils.*;
 import mindustry.gen.*;
 import mindustry.graphics.*;
 import mindustry.ui.*;
-import mindustry.ui.dialogs.*;
 
-/** GL: a window with the global chat only, opened from the Alt + left click menu. */
-public class GlobalChatDialog extends BaseDialog{
+import static mindustry.Vars.*;
+
+/**
+ * GL: a floating window with the global chat only, opened from the Alt + left click menu. It can be dragged by the
+ * move button like the log history window, and the game keeps running under it.
+ */
+public class GlobalChatDialog extends Table{
     private static GlobalChatDialog instance;
 
     private final Table lines = new Table();
     private ScrollPane pane;
     private TextField field;
+    private boolean shown, placed;
+    private float lastX, lastY;
 
     public static void showDialog(){
-        if(instance == null) instance = new GlobalChatDialog();
-        instance.show();
+        if(instance == null){
+            instance = new GlobalChatDialog();
+            ui.hudGroup.addChild(instance);
+        }
+        instance.toggle();
     }
 
     private GlobalChatDialog(){
-        super("@client.globalchat.title");
-        addCloseButton();
+        setSize(460f, 380f);
+        touchable = Touchable.childrenOnly;
+        visible(() -> shown && ui.hudfrag.shown);
 
-        cont.table(head -> {
-            head.left();
-            head.image(Icon.chat).color(Pal.accent).size(24f).padRight(8f);
-            head.label(GlobalChat::status).growX().left().wrap();
-            head.button(Icon.power, Styles.clearNoneTogglei, () -> {
-                boolean on = !GlobalChat.enabled();
-                Core.settings.put("globalchat", on);
-                GlobalChat.setEnabled(on);
-            }).size(40f).checked(b -> GlobalChat.enabled()).tooltip("@client.setting.globalchat.name");
-        }).growX().maxWidth(700f).row();
-        cont.image().color(Pal.accent).height(3f).growX().maxWidth(700f).padTop(4f).padBottom(6f).row();
+        table(Tex.buttonTrans, root -> {
+            root.margin(8f);
+            root.table(head -> {
+                ImageButton drag = head.button(Icon.move, Styles.cleari, () -> {}).size(36f).get();
+                drag.addListener(new InputListener(){
+                    @Override
+                    public boolean touchDown(InputEvent event, float x, float y, int pointer, KeyCode button){
+                        lastX = x;
+                        lastY = y;
+                        return true;
+                    }
 
-        lines.top().left();
-        pane = cont.pane(lines).grow().maxWidth(700f).scrollX(false).get();
-        cont.row();
+                    @Override
+                    public void touchDragged(InputEvent event, float x, float y, int pointer){
+                        moveBy(x - lastX, y - lastY);
+                        keepInside();
+                    }
+                });
+                head.image(Icon.chat).color(Pal.accent).size(22f).padLeft(4f).padRight(6f);
+                head.add("@client.globalchat.title").color(Pal.accent);
+                head.add().growX();
+                head.button(Icon.power, Styles.clearNoneTogglei, () -> {
+                    boolean on = !GlobalChat.enabled();
+                    Core.settings.put("globalchat", on);
+                    GlobalChat.setEnabled(on);
+                }).size(36f).checked(b -> GlobalChat.enabled()).tooltip("@client.setting.globalchat.name");
+                head.button(Icon.cancel, Styles.cleari, this::toggle).size(36f);
+            }).growX().row();
 
-        cont.table(input -> {
-            field = input.field("", t -> {}).growX().height(48f).maxTextLength(200).get();
-            field.setMessageText(Core.bundle.get("client.globalchat.hint"));
-            input.button(Icon.right, Styles.flati, this::send).size(48f).padLeft(6f);
-        }).growX().maxWidth(700f).padTop(6f);
+            root.label(GlobalChat::status).fontScale(0.85f).wrap().growX().left().padTop(2f).row();
+            root.image().color(Pal.accent).height(2f).growX().padTop(4f).padBottom(4f).row();
 
-        keyDown(KeyCode.enter, this::send);
+            lines.top().left();
+            pane = root.pane(lines).grow().scrollX(false).get();
+            root.row();
 
-        shown(() -> {
+            root.table(input -> {
+                field = input.field("", t -> {}).growX().height(42f).maxTextLength(200).get();
+                field.setMessageText(Core.bundle.get("client.globalchat.hint"));
+                field.keyDown(KeyCode.enter, this::send);
+                field.keyDown(KeyCode.escape, () -> Core.scene.setKeyboardFocus(null));
+                input.button(Icon.right, Styles.flati, this::send).size(42f).padLeft(4f);
+            }).growX().padTop(6f);
+        }).grow().touchable(Touchable.enabled);
+
+        update(() -> {
+            if(!placed && Core.scene.getWidth() > 0){
+                setPosition(Core.scene.getWidth() / 2f, Core.scene.getHeight() / 2f, Align.center);
+                placed = true;
+            }
+        });
+    }
+
+    private void toggle(){
+        shown = !shown;
+        if(shown){
+            toFront();
             GlobalChat.listener = this::rebuild;
             rebuild();
             Core.scene.setKeyboardFocus(field);
-        });
-        hidden(() -> GlobalChat.listener = null);
+        }else{
+            GlobalChat.listener = null;
+            if(Core.scene.getKeyboardFocus() == field) Core.scene.setKeyboardFocus(null);
+        }
+    }
+
+    private void keepInside(){
+        float w = Core.scene.getWidth(), h = Core.scene.getHeight();
+        setPosition(Math.max(0f, Math.min(x, w - width)), Math.max(0f, Math.min(y, h - height)));
     }
 
     private void send(){
         String text = field.getText().trim();
         if(text.isEmpty()) return;
         if(GlobalChat.send(text)) field.setText("");
-        Core.scene.setKeyboardFocus(field);
     }
 
     private void rebuild(){
@@ -75,8 +125,9 @@ public class GlobalChatDialog extends BaseDialog{
         for(String line : GlobalChat.log){
             lines.add(line).left().growX().wrap().padBottom(3f).row();
         }
-        lines.layout();
-        pane.layout();
-        Core.app.post(() -> pane.setScrollY(pane.getMaxY()));
+        Core.app.post(() -> {
+            pane.layout();
+            pane.setScrollY(pane.getMaxY());
+        });
     }
 }
