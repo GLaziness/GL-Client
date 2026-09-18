@@ -42,7 +42,7 @@ public class BeControl{
 
     public void init(){
         Events.on(EventType.ClientLoadEvent.class, event -> {
-            checkUpdates = Core.settings.getBool("autoupdate");
+            checkUpdates = Core.settings.getBool("autoupdate", true);
             Timer.schedule(() -> {
                     if(checkUpdates && !mobile){ // Don't auto update on manually cloned copies of the repo
                         checkUpdate(result -> {
