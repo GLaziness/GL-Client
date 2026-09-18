@@ -405,7 +405,7 @@ public class PanelFragment extends Table{
     }
 
     private static void fixPower(){
-        ClientVars.clientCommandHandler.handleMessage("!fixpower c", player);
+        ClientVars.clientCommandHandler.handleMessage(autoFixPower ? "!fixpower c q" : "!fixpower c", player);
     }
 
     // region panel widgets

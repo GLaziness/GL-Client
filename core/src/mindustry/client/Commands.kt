@@ -272,7 +272,7 @@ fun setupCommands() {
         ).findCoords()
     }
 
-    register("fixpower [c]", Core.bundle.get("client.command.fixpower.description")) { args, player ->
+    register("fixpower [c] [quiet]", Core.bundle.get("client.command.fixpower.description")) { args, player ->
         val start = Time.nanos()
         val diodeLinks = PowerDiode.connections(player.team()) // Must be run on the main thread
         val grids = Groups.powerGraph.array.select { it.graph().all.first().team == player.team() }.associate { it.graph().getID() to it.graph().all.copy() }
@@ -307,6 +307,13 @@ fun setupCommands() {
                     configCache.clear()
                 }
             }
+        }
+
+        // GL: "!fixpower c q" (the automatic panel mode) says nothing when there is nothing to connect
+        val quiet = args.size > 1 && args[1] == "q"
+        if (confirmed && n == 0) {
+            if (!quiet) ui.chatfrag.addMsg(Core.bundle.get("client.command.fixpower.nothing")).format()
+            return@register
         }
 
         val msg = ui.chatfrag.addMsg("")
