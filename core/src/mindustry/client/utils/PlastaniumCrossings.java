@@ -335,29 +335,63 @@ public class PlastaniumCrossings{
         Seq<Building> targets = nodeTargets(build);
         IntSet occupied = occupiedBy(result, plans);
 
-        Tile a = findNodeSpot(build, node, targets, occupied, null);
-        if(a == null) return false;
-        Seq<Building> left = targets.select(t -> !covers(node, a, t));
-        // better to leave the node where it is than to cut the grid
-        if(left.size == targets.size && targets.size > 0) return false;
-
-        Tile b = null;
-        if(!left.isEmpty()){
-            a.getLinkedTilesAs(node, tempTiles).each(t -> occupied.add(t.pos()));
-            Tile spot = findNodeSpot(build, node, left, occupied, a);
-            if(spot != null && left.contains(t -> covers(node, spot, t))) b = spot;
+        // a busy node may not fit its links into a power node (range or link count): try a large one as well
+        NodeMove best = tryMove(build, node, targets, occupied);
+        if((best == null || best.kept < targets.size) && node != Blocks.powerNodeLarge && Blocks.powerNodeLarge.unlockedNow()){
+            NodeMove large = tryMove(build, (PowerNode)Blocks.powerNodeLarge, targets, occupied);
+            if(large != null && (best == null || large.kept > best.kept)) best = large;
         }
+        // better to leave the node where it is than to cut the grid
+        if(best == null || (best.kept == 0 && targets.size > 0)) return false;
 
         // the new nodes go first so the grid is never cut
-        BuildPlan planA = new BuildPlan(a.x, a.y, 0, node, linksFrom(node, a, targets));
+        BuildPlan planA = new BuildPlan(best.a.x, best.a.y, 0, best.node, linksFrom(best.node, best.a, targets));
         add(planA);
-        if(b != null){
-            BuildPlan planB = new BuildPlan(b.x, b.y, 0, node, linksFrom(node, b, left));
-            add(planB);
+        if(best.b != null){
+            add(new BuildPlan(best.b.x, best.b.y, 0, best.node, linksFrom(best.node, best.b, best.leftForB)));
             // link the two halves once both exist
-            nodeTargets.put(planA, IntSeq.with(b.pos()));
+            nodeTargets.put(planA, IntSeq.with(best.b.pos()));
         }
         return true;
+    }
+
+    private static class NodeMove{
+        PowerNode node;
+        Tile a;
+        @Nullable Tile b;
+        Seq<Building> leftForB;
+        int kept;
+    }
+
+    /** One node next to the line, plus a second one on the other side if the first can't reach everything. */
+    private static @Nullable NodeMove tryMove(Building build, PowerNode node, Seq<Building> targets, IntSet taken){
+        IntSet occupied = new IntSet();
+        occupied.addAll(taken);
+
+        Tile a = findNodeSpot(build, node, targets, occupied, null);
+        if(a == null) return null;
+        NodeMove move = new NodeMove();
+        move.node = node;
+        move.a = a;
+        move.kept = keptBy(node, a, targets);
+        move.leftForB = targets.select(t -> !covers(node, a, t));
+
+        if(!move.leftForB.isEmpty() && move.kept > 0){
+            a.getLinkedTilesAs(node, tempTiles).each(t -> occupied.add(t.pos()));
+            Tile spot = findNodeSpot(build, node, move.leftForB, occupied, a);
+            if(spot != null && move.leftForB.contains(t -> covers(node, spot, t))){
+                move.b = spot;
+                move.kept += keptBy(node, spot, move.leftForB);
+            }
+        }
+        return move;
+    }
+
+    /** How many targets a node at this spot keeps, with lasers limited by the node's link count. */
+    private static int keptBy(PowerNode node, Tile at, Seq<Building> targets){
+        int touching = targets.count(t -> touches(node, at, t));
+        int lasers = targets.count(t -> !touches(node, at, t) && inRange(node, at, t));
+        return touching + Math.min(lasers, node.maxNodes - 1);
     }
 
     /** Buildings the old node is connected to: its lasers, plus the buildings it powers by touching them. */
