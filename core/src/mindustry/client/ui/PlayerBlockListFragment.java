@@ -40,6 +40,11 @@ public class PlayerBlockListFragment {
     private TextField search;
     public static String name_for_plans = null;
 
+    /** GL: a click on a player's counter shows their blocks, a second click hides them again. */
+    public static void togglePlans(String name){
+        name_for_plans = name != null && name.equals(name_for_plans) ? null : name;
+    }
+
     private final Seq<Player> search_players = new Seq<>();
     private HistoryFragment historyDialog;
 
@@ -282,14 +287,14 @@ public class PlayerBlockListFragment {
                 button.table(stats -> {
                     // GL: numbers stay on one line (they used to wrap digit by digit), large counts are shortened
                     stats.defaults().height(30f).pad(2f);
-                    stats.button("[green]+" + UI.formatAmount(built), () -> name_for_plans = user.name)
-                            .minWidth(50f).wrapLabel(false).tooltip("Построено: " + built);
+                    stats.button("[green]+" + UI.formatAmount(built), Styles.togglet, () -> togglePlans(user.name))
+                            .checked(b -> user.name.equals(name_for_plans)).minWidth(50f).wrapLabel(false).tooltip("Построено: " + built);
 
-                    stats.button("[red]-" + UI.formatAmount(broken), () -> name_for_plans = user.name)
-                            .minWidth(50f).wrapLabel(false).tooltip("Сломано: " + broken);
+                    stats.button("[red]-" + UI.formatAmount(broken), Styles.togglet, () -> togglePlans(user.name))
+                            .checked(b -> user.name.equals(name_for_plans)).minWidth(50f).wrapLabel(false).tooltip("Сломано: " + broken);
 
-                    stats.button("[blue]~" + UI.formatAmount(config), () -> name_for_plans = user.name)
-                            .minWidth(50f).wrapLabel(false).tooltip("Потрогано: " + config);
+                    stats.button("[blue]~" + UI.formatAmount(config), Styles.togglet, () -> togglePlans(user.name))
+                            .checked(b -> user.name.equals(name_for_plans)).minWidth(50f).wrapLabel(false).tooltip("Потрогано: " + config);
 
                     stats.button(Icon.hammer, ustyle, () -> {
                         String targetName = Strings.stripColors(user.name());

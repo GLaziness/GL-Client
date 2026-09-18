@@ -432,9 +432,9 @@ public class PlayerListFragment{
 
     /** GL: one block-log counter of the player list row. */
     private static void counter(Table t, String prefix, int value, String tip, Player user){
-        t.button(prefix + mindustry.core.UI.formatAmount(value), Styles.flatt,
-            () -> mindustry.client.ui.PlayerBlockListFragment.name_for_plans = user.name)
-            .wrapLabel(false).tooltip(tip + ": " + value).get().getLabel().setFontScale(0.8f);
+        t.button(prefix + mindustry.core.UI.formatAmount(value), Styles.flatTogglet,
+            () -> mindustry.client.ui.PlayerBlockListFragment.togglePlans(user.name))
+            .checked(b -> user.name.equals(mindustry.client.ui.PlayerBlockListFragment.name_for_plans)).wrapLabel(false).tooltip(tip + ": " + value).get().getLabel().setFontScale(0.8f);
     }
 
     public void toggle(){
