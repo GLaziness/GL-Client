@@ -27,6 +27,15 @@ public class GlobalChatDialog extends Table{
         fontColor = Color.white;
         over = down = ((arc.scene.style.TextureRegionDrawable)Tex.whiteui).tint(1f, 1f, 1f, 0.12f);
     }};
+    /** Tabs: see-through too, the selected one is tinted with the accent color. */
+    private static final TextButton.TextButtonStyle tabStyle = new TextButton.TextButtonStyle(){{
+        font = Fonts.def;
+        fontColor = Color.white;
+        checkedFontColor = Pal.accent;
+        disabledFontColor = Color.gray;
+        over = down = ((arc.scene.style.TextureRegionDrawable)Tex.whiteui).tint(1f, 1f, 1f, 0.12f);
+        checked = ((arc.scene.style.TextureRegionDrawable)Tex.whiteui).tint(Pal.accent.r, Pal.accent.g, Pal.accent.b, 0.2f);
+    }};
 
     private final Table lines = new Table();
     private ScrollPane pane;
@@ -51,7 +60,7 @@ public class GlobalChatDialog extends Table{
         table(Tex.buttonTrans, root -> {
             root.margin(8f);
             root.table(head -> {
-                ImageButton drag = head.button(Icon.move, Styles.cleari, () -> {}).size(36f).get();
+                ImageButton drag = head.button(Icon.move, Styles.clearNonei, () -> {}).size(36f).get();
                 drag.addListener(new InputListener(){
                     @Override
                     public boolean touchDown(InputEvent event, float x, float y, int pointer, KeyCode button){
@@ -87,19 +96,19 @@ public class GlobalChatDialog extends Table{
                 head.button(Icon.planet, Styles.clearNoneTogglei, () -> GlobalChat.setGlobal(!GlobalChat.globalOn()))
                     .size(36f).checked(b -> GlobalChat.globalOn()).tooltip(t -> t.background(Styles.black8).margin(4f).label(() ->
                         Core.bundle.get(GlobalChat.globalOn() ? "client.globalchat.btn.global.off" : "client.globalchat.btn.global.on")));
-                head.button(Icon.cancel, Styles.cleari, this::toggle).size(36f);
+                head.button(Icon.cancel, Styles.clearNonei, this::toggle).size(36f);
             }).growX().row();
 
             root.table(tabs -> {
                 tabs.defaults().height(34f).growX();
                 // the server first: it is the one opened by default when the player is on a server
                 // one update for the text and the selection: a second update() would replace the one of checked()
-                tabs.button("", Styles.flatTogglet, () -> setTab(true))
+                tabs.button("", tabStyle, () -> setTab(true))
                     .update(b -> tab(b, serverTab, !GlobalChat.onServer(), !GlobalChat.onServer() ? Core.bundle.get("client.globalchat.tab.server.off") :
                         !GlobalChat.serverOn() ? Core.bundle.get("client.globalchat.tab.server.disabled") :
                         Core.bundle.format("client.globalchat.tab.server", GlobalChat.channel().isEmpty() ? 0 : GlobalChat.serverOnline())))
                     .tooltip("@client.globalchat.tab.server.hint");
-                tabs.button("", Styles.flatTogglet, () -> setTab(false)).padLeft(4f)
+                tabs.button("", tabStyle, () -> setTab(false)).padLeft(4f)
                     .update(b -> tab(b, !serverTab, false, !GlobalChat.globalOn() ? Core.bundle.get("client.globalchat.tab.global.disabled") :
                         Core.bundle.format("client.globalchat.tab.global", GlobalChat.connected() ? GlobalChat.online() : 0)));
             }).growX().padTop(4f).row();
@@ -126,7 +135,7 @@ public class GlobalChatDialog extends Table{
                 field.update(() -> field.setMessageText(Core.bundle.get(serverTab ? "client.globalchat.hint.server" : "client.globalchat.hint")));
                 field.keyDown(KeyCode.enter, this::send);
                 field.keyDown(KeyCode.escape, () -> Core.scene.setKeyboardFocus(null));
-                input.button(Icon.right, Styles.flati, this::send).size(42f).padLeft(4f);
+                input.button(Icon.right, Styles.clearNonei, this::send).size(42f).padLeft(4f);
             }).growX().padTop(6f);
         }).grow().touchable(Touchable.enabled);
 
