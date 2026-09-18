@@ -612,7 +612,8 @@ public class GlobalChat{
         lineNames.add(name);
         lineKinds.add(kind);
         if(log.size > maxLog) removeLine(0);
-        if(ui != null && ui.chatfrag != null) ui.chatfrag.addMessage(text);
+        // the game chat too, unless that is off in the settings (the chat window always has every line)
+        if(ui != null && ui.chatfrag != null && Core.settings.getBool("globalchat-inchat", true)) ui.chatfrag.addMessage(text);
         if(listener != null) listener.run();
     }
 
