@@ -133,7 +133,7 @@ public class GlobalChatDialog extends Table{
         // a click on a line copies its text
         for(int i = 0; i < GlobalChat.log.size; i++){
             String copy = GlobalChat.copies.get(i), line = GlobalChat.log.get(i);
-            lines.button(b -> b.add(line).left().growX().wrap(), lineStyle, () -> {
+            lines.button(b -> b.add(line).left().wrap().width(410f), lineStyle, () -> {
                 Core.app.setClipboardText(copy);
                 ui.showInfoFade("@client.globalchat.copied");
             }).left().growX().padBottom(2f).get().left().margin(2f, 4f, 2f, 4f);

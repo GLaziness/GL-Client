@@ -121,6 +121,10 @@ public class PausedDialog extends BaseDialog{
 
             cont.row();
 
+            cont.button("@client.recommended", Icon.star, () -> mindustry.client.ui.RecommendedDialog.instance.show()).colspan(2).width(dw * 2 + 10f);
+
+            cont.row();
+
             cont.button("@client.certs.manage.title", Icon.lock, () -> new TLSKeyDialog().show()).tooltip("@client.certs.manage.description");
             cont.button("@quit", Icon.exit, this::showQuitConfirm).update(s -> s.setText(control.saves.getCurrent() != null && control.saves.getCurrent().isAutosave() ? "@save.quit" : "@quit"));
 

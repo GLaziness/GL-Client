@@ -285,6 +285,7 @@ public class MenuFragment{
                                 Core.app.setClipboardText("https://github.com/GLaziness/GL-Client");
                             }
                         }),
+                        new MenuButton("@client.recommended", Icon.star, () -> mindustry.client.ui.RecommendedDialog.instance.show()),
                         new MenuButton("@client.changelog", Icon.edit, ChangelogDialog.INSTANCE::show),
                         new MenuButton("@client.features", Icon.list, FeaturesDialog.INSTANCE::show),
                         new MenuButton("@client.certs.manage.title", Icon.lock, () -> new TLSKeyDialog().show())

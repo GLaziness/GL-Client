@@ -1,5 +1,20 @@
 # Join the discord in the client tab on the main menu to stay up to date on new stuff.
 
+# GL Client
+ * Fork of Foo's Client with the FD client features, data is kept in the MindustryGL folder
+ * GL side panel: mining, view, combat, automation and server commands in one window
+ * GL global chat: a chat shared by every GL Client player on any server (!g text, the !g mode with Tab, a window from Alt + left click), turn it on in the settings
+ * Recommended add-ons in the GL Client menu: install the GL Admin Mode mod and turn on the global chat
+ * Alt + left click tile menu: coordinates to chat, tile logs, teleport, client windows, toggles, waypoints
+ * Poly mode: your unit rebuilds, heals and helps building by itself, mines when idle and avoids enemy turrets
+ * Novas and Velas help building: a panel button, right click to choose the types
+ * Unit mining AI: safe mining, moving to another ore, retreating from fire, repairs, repeated commands
+ * Colored chat (plain color, gradient, rainbow, fire) with a color picker
+ * Hide your cursor from other players (except in /history mode) and a see-through own unit
+ * Plastanium conveyor bridges, circle assist with routes
+ * Build plan sharing with Foo/GL clients is a setting now, on by default
+ * R also resets the camera after spectating a player from a list
+
 # Version 8.0
  * Updated to v7
  * Many systems reworked/improved internally due to changes in the game's code

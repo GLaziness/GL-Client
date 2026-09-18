@@ -10,6 +10,19 @@
 # Foo's Client
  * Funky woe client
 
+# GL Client
+ * GL side panel on the left: mining, view, combat, automation, server commands. Right click on many buttons opens their settings or an automatic mode
+ * Alt + left click on a tile: coordinates to chat, tile logs, teleport, client windows, toggles, waypoints, global chat
+ * Poly mode (panel button, right click for settings): rebuilds, heals, helps building, mines when idle
+ * Recommended add-ons in the GL Client menu: the GL Admin Mode mod and the global chat
+
+# GL global chat
+ * A chat shared by every GL Client player on any server. Turn it on in Settings, Client, Chat or in Recommended add-ons
+ * {p}g text - send a message, {p}g alone - status and players online
+ * Pick the !g mode in the chat with {chat_mode} to write without the command, like /t and /a
+ * Alt + left click, Global chat - a floating window with the global chat only; click a message to copy it
+ * The short tag after the name (#ab12cd) is given by the server and cannot be faked
+
 # Keybinds
  * {tile_actions_menu_modifier} - display actions for a tile
  * {freecam_modifier} movement keys - free camera movement
