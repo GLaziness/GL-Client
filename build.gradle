@@ -42,7 +42,7 @@ allprojects{
 
     ext{
         versionNumber = '8'
-        if(!project.hasProperty("updateUrl")) updateUrl = ''
+        if(!project.hasProperty("updateUrl")) updateUrl = 'GLaziness/GL-Client'
         if(!project.hasProperty("assetUrl")) assetUrl = 'mindustry-antigrief/mindustry-client'
         if(!project.hasProperty("assetRef")) assetRef = 'v8'
         if(!project.hasProperty("versionModifier")) versionModifier = 'release'
