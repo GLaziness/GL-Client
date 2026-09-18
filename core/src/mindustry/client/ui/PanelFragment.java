@@ -66,7 +66,7 @@ import static mindustry.client.fallen.miners.MinersFDAI.minePolys;
 public class PanelFragment extends Table{
     public Table fdpanel; //Создание интерфейса дял кнопок
     public static Seq<Item> itemtomine = new Seq<>(); //Создание выборки для копания
-    public static boolean minecopper = false,minelead = false, minetitan = false, minesand = false, minecoal = false, minescrap = false;
+    public static boolean minecopper = true, minelead = true, minetitan = true, minesand = false, minecoal = false, minescrap = false;
     public static boolean mineBerylliumwall, mineGraphiticwall;
     private float brokenFade = 0f;
     public static int max_length = 146;
@@ -147,11 +147,6 @@ public class PanelFragment extends Table{
                 }
             }, 5f);
             rebuild();
-//            autoMiningActive = false;
-            minecopper = true; minelead = true; minetitan = true;
-            mineBerylliumwall = false; mineGraphiticwall = false;
-            //minesand = false; minecoal = false;
-            minescrap = false;
             itemtomine.clear();
             updatemineitems();
             effStorage.clear();
@@ -451,9 +446,36 @@ public class PanelFragment extends Table{
         });
     }
 
-    /** Switch: highlighted and bright while on, dimmed like the active modes display while off. */
+    /** Keys of the switches whose saved state was already applied this launch. */
+    private static final ObjectSet<String> restored = new ObjectSet<>();
+
+    /**
+     * Makes a panel switch keep its state between launches: the saved state is applied once per launch,
+     * and any change (from the panel, a hotkey or a dialog) is written back to the settings.
+     */
+    private static void remember(String key, Boolp on, Runnable flip){
+        if(!restored.add(key)) return;
+        String setting = "glpanel-" + key;
+        if(settings.has(setting) && settings.getBool(setting) != on.get()) flip.run();
+    }
+
+    private static void save(String key, boolean value){
+        String setting = "glpanel-" + key;
+        if(settings.getBool(setting, !value) != value) settings.put(setting, value);
+    }
+
+    /** Switch: highlighted and bright while on, dimmed like the active modes display while off. Remembers its state. */
     private static GridEntry toggle(Drawable icon, String key, Boolp on, Runnable flip){
-        return toggle(icon, on, flip, tooltip(key));
+        return savedToggle(icon, key, on, flip, tooltip(key));
+    }
+
+    private static GridEntry savedToggle(Drawable icon, String key, Boolp on, Runnable flip, String tooltipText){
+        remember(key, on, flip);
+        return g -> iconButton(g, icon, tooltipText, on, flip).update(b -> {
+            save(key, on.get());
+            b.setChecked(on.get());
+            b.getImage().setColor(on.get() ? Color.white : offColor);
+        });
     }
 
     private static GridEntry toggle(Drawable icon, Boolp on, Runnable flip, String tooltipText){
@@ -464,7 +486,7 @@ public class PanelFragment extends Table{
     }
 
     private static GridEntry settingToggle(Drawable icon, String key, String setting){
-        return toggle(icon, key, () -> settings.getBool(setting, false), () -> settings.put(setting, !settings.getBool(setting, false)));
+        return toggle(icon, () -> settings.getBool(setting, false), () -> settings.put(setting, !settings.getBool(setting, false)), tooltip(key));
     }
 
     /** One-off action, always drawn bright. */
@@ -474,9 +496,11 @@ public class PanelFragment extends Table{
 
     /** Left click runs the action once, right click toggles running it automatically (highlighted while automatic). */
     private static GridEntry autoAction(Drawable icon, String key, Runnable action, Boolp auto, Runnable toggleAuto){
+        remember(key, auto, toggleAuto);
         return g -> {
             ImageButton b = iconButton(g, icon, tooltip(key) + "\n[lightgray]" + bundle.get("fdpanel.autohint"), auto, action).get();
             b.update(() -> {
+                save(key, auto.get());
                 b.setChecked(auto.get());
                 b.getImage().setColor(auto.get() ? Pal.accent : Color.white);
             });
@@ -495,7 +519,7 @@ public class PanelFragment extends Table{
 
     /** Mining ore selector. */
     private GridEntry itemToggle(Item item, String suffix, Boolp on, Runnable flip){
-        return toggle(icon(item), on, () -> {
+        return savedToggle(icon(item), "mine." + item.name, on, () -> {
             flip.run();
             updatemineitems();
         }, bundle.get("fdpanel.mineitem") + ": " + item.localizedName + (suffix.isEmpty() ? "" : " (" + suffix + ")"));

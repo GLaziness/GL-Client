@@ -168,7 +168,7 @@ public class MinersFDAI {
     public static void init() {
         loadPermissions();
         Events.on(EventType.WorldLoadEvent.class, e -> {
-            autoMiningActive = false;
+            // autoMiningActive is kept: the panel button remembers its state between maps and launches
             wasAutoMiningActive = false;
             manualUnits.clear();
             assistingUnits.clear();
