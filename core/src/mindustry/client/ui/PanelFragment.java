@@ -24,6 +24,7 @@ import mindustry.ai.UnitStance;
 import mindustry.ai.types.BuilderAI;
 import mindustry.client.ClientVars;
 import mindustry.client.fallen.*;
+import mindustry.client.fallen.assistai.*;
 import mindustry.client.fallen.miners.MinersFDAI;
 import mindustry.client.fallen.miners.MinersSettingsDialog;
 import mindustry.client.navigation.BuildPath;
@@ -105,7 +106,7 @@ public class PanelFragment extends Table{
     private static int syncTimer = 0;
 
     public static boolean polyAiMode = Core.settings.getBool("polyAiMode", false);
-    public static final BuilderAI aiNotPolyAi = new BuilderAI();
+    public static final SelfBuilderAI aiNotPolyAi = new SelfBuilderAI();
 
 
 
@@ -371,7 +372,12 @@ public class PanelFragment extends Table{
             action(Icon.power, "fdpanel.fixpower", () -> ClientVars.clientCommandHandler.handleMessage("!fixpower c", player)),
             action(Icon.logic, "fdpanel.fixcode", () -> ClientVars.clientCommandHandler.handleMessage("!fixcode r", player)),
             settingToggle(Icon.eraser, "fdpanel.schemcleanup", "placeSchematicWithCleanup"),
-            settingToggle(icon(Blocks.itemBridge), "fdpanel.plastbridges", "plastbridges")
+            settingToggle(icon(Blocks.itemBridge), "fdpanel.plastbridges", "plastbridges"),
+            withSettings(toggle(icon(UnitTypes.poly), "fdpanel.polyai", () -> polyAiMode, () -> {
+                polyAiMode = !polyAiMode;
+                settings.put("polyAiMode", polyAiMode);
+                if(!polyAiMode && player.unit() != null) player.unit().plans.clear();
+            }), () -> PolySettingsDialog.instance.show())
         );
     }
 
@@ -493,6 +499,23 @@ public class PanelFragment extends Table{
     /** One-off action, always drawn bright. */
     private static GridEntry action(Drawable icon, String key, Runnable action){
         return g -> iconButton(g, icon, tooltip(key), null, action).update(b -> b.setChecked(false));
+    }
+
+    /** Adds a right click action (opening the settings of the feature) to a grid entry. */
+    private static GridEntry withSettings(GridEntry entry, Runnable openSettings){
+        return g -> {
+            entry.add(g);
+            g.getChildren().peek().addListener(new InputListener(){
+                @Override
+                public boolean touchDown(InputEvent e, float x, float y, int pointer, KeyCode key){
+                    if(key == KeyCode.mouseRight){
+                        openSettings.run();
+                        return true;
+                    }
+                    return false;
+                }
+            });
+        };
     }
 
     /** Left click runs the action once, right click toggles running it automatically (highlighted while automatic). */

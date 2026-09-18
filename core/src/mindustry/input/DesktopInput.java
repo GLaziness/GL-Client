@@ -1522,6 +1522,15 @@ public class DesktopInput extends InputHandler{
     }
 
     protected void updateMovement(Unit unit, boolean ignoreKeys){ // Heavily modified to support navigation
+        if(PanelFragment.polyAiMode){ // GL: poly mode, the player's unit is driven by SelfBuilderAI
+            if(unit == null || player.dead()) return;
+            PanelFragment.aiNotPolyAi.unit(unit);
+            PanelFragment.aiNotPolyAi.updateMovement();
+            player.mouseX = unit.aimX();
+            player.mouseY = unit.aimY();
+            return;
+        }
+
         boolean omni = unit.type.omniMovement;
 
         float speed = unit.speed();
