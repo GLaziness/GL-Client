@@ -1044,7 +1044,8 @@ public class ChatFragment extends Table{
         admin("/a", () -> (Server.current.adminui()) && (!settings.getBool("disableadminchatifsolo") || Groups.player.count(p -> p.admin) > 1)),
         staff("/s", () -> Server.fish.b() && settings.getBool("fish-staff", false)),
         client("!c"),
-        global("!g"); // GL: global chat between GL Client players (when it is off, sending explains how to turn it on)
+        global("!g"), // GL: global chat between GL Client players (when it is off, sending explains how to turn it on)
+        globalServer("!gs", () -> !mindustry.client.utils.GlobalChat.channel().isEmpty()); // GL: its channel of the current server
 
         public String prefix;
         public Boolp valid;

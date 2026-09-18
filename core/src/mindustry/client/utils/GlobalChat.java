@@ -4,6 +4,7 @@ import arc.*;
 import arc.struct.*;
 import arc.util.*;
 import arc.util.serialization.*;
+import mindustry.game.*;
 import mindustry.gen.*;
 
 import javax.net.ssl.*;
@@ -20,6 +21,8 @@ import static mindustry.Vars.*;
  * The server certificate is pinned, so a fake server cannot pretend to be it. Nothing secret is stored here:
  * every client has a random token of its own, and the server turns it into the short tag shown after the name,
  * so nobody can write under the tag of someone else.
+ * Besides the global channel there is a channel for every game server (by its IP, so all modes of one server share
+ * it): only players who are on that server now see it.
  */
 public class GlobalChat{
     private static final String host = "2.26.10.69";
@@ -29,6 +32,10 @@ public class GlobalChat{
     private static final int maxText = 200, maxLog = 150;
     /** Start of every line of the global chat. */
     public static final String prefix = "[#7fd3ff][[GL][] ";
+    /** Start of every line of the chat of the server the player is on. */
+    public static final String serverPrefix = "[#a3e87a][[GL-S][] ";
+    /** Kinds of {@link #lineKinds}: system lines are shown in both tabs. */
+    public static final int kindSystem = 0, kindGlobal = 1, kindServer = 2;
 
     private static volatile boolean running;
     private static volatile SSLSocket socket;
@@ -36,8 +43,15 @@ public class GlobalChat{
     private static volatile boolean connected;
     private static volatile int online;
     private static volatile String tag = "";
-    /** "owner", "mod" or "": given by the server, it checks the rights itself on every action. */
+    /** "owner", "curator" or "": given by the server, it checks the rights itself on every action. */
     private static volatile String role = "";
+    /** Game server the player is on now (its IP, "" in the menu) and the server channel the chat server confirmed. */
+    private static volatile String serverHost = "", channel = "";
+    private static volatile int serverOnline;
+    /** "mod" when the player is a moderator of the server he is on. */
+    private static volatile String serverRole = "";
+    private static String pendingHost = "";
+    private static boolean hooked;
     /** Why the chat is not connected (shown to the player), null when there is no problem. */
     private static volatile @Nullable String error;
     private static Thread thread;
@@ -48,11 +62,64 @@ public class GlobalChat{
     public static final Seq<String> copies = new Seq<>();
     /** Tag and name of the player who wrote each line of {@link #log} ("" for system lines), for the moderation buttons. */
     public static final Seq<String> lineTags = new Seq<>(), lineNames = new Seq<>();
+    /** {@link #kindSystem}, {@link #kindGlobal} or {@link #kindServer} for each line of {@link #log}. */
+    public static final IntSeq lineKinds = new IntSeq();
     /** Called on the main thread when a line is added to {@link #log}. */
     public static @Nullable Runnable listener;
 
     public static void init(){
+        if(!hooked){
+            hooked = true;
+            // the server channel follows the game server: set when its world is loaded, cleared in the menu
+            Events.on(EventType.ClientServerConnectEvent.class, e -> pendingHost = e.ip);
+            Events.on(EventType.WorldLoadEvent.class, e -> {
+                if(net.client()) setServer(pendingHost);
+            });
+            Events.on(EventType.MenuReturnEvent.class, e -> setServer(""));
+        }
         if(enabled()) start();
+    }
+
+    /** The game server the player is on (address as typed, it is resolved to the IP), "" when none. */
+    public static void setServer(String address){
+        String a = address == null ? "" : address.trim();
+        if(a.isEmpty()){
+            report("");
+            return;
+        }
+        Thread t = new Thread(() -> {
+            String h;
+            try{
+                h = InetAddress.getByName(a).getHostAddress();
+            }catch(Exception e){
+                h = a.toLowerCase();
+            }
+            report(h);
+        }, "GL-GlobalChat-resolve");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    private static void report(String h){
+        if(h.equals(serverHost)) return;
+        serverHost = h;
+        if(connected) sendServer();
+    }
+
+    private static void sendServer(){
+        Jval msg = Jval.newObject();
+        msg.put("t", "server");
+        msg.put("host", serverHost);
+        write(msg);
+    }
+
+    /** Server channel the player is in, "" when he is not on a server. */
+    public static String channel(){
+        return connected ? channel : "";
+    }
+
+    public static int serverOnline(){
+        return serverOnline;
     }
 
     public static boolean enabled(){
@@ -75,8 +142,8 @@ public class GlobalChat{
 
     private static @Nullable arc.func.Cons<Seq<Jval>> whoListener;
 
-    /** Asks the server who is online; the answer comes on the main thread. */
-    public static void requestWho(arc.func.Cons<Seq<Jval>> listener){
+    /** Asks the server who is online (in the whole chat or on my server); the answer comes on the main thread. */
+    public static void requestWho(boolean server, arc.func.Cons<Seq<Jval>> listener){
         if(!enabled() || !connected){
             postRaw(status());
             return;
@@ -84,12 +151,16 @@ public class GlobalChat{
         whoListener = listener;
         Jval msg = Jval.newObject();
         msg.put("t", "who");
+        if(server) msg.put("ch", "server");
         write(msg);
     }
 
-    /** The chat owner or a moderator: can mute and ban. */
-    public static boolean moderator(){
-        return connected && !role.isEmpty();
+    /**
+     * Can mute and ban here: the owner and curators everywhere (their punishments cover the whole chat),
+     * a moderator only in the chat of the server he was appointed for.
+     */
+    public static boolean moderator(boolean server){
+        return curator() || (server && connected && !channel.isEmpty() && serverRole.equals("mod"));
     }
 
     public static boolean owner(){
@@ -115,8 +186,22 @@ public class GlobalChat{
         return tag;
     }
 
-    /** Moderation request; the server checks the rights and answers in the chat. */
+    /**
+     * Moderation request; the server checks the rights and answers in the chat. Besides the protocol actions:
+     * ban30 and banforever (in the whole chat), sban and sbanforever (in the chat of this server only).
+     */
     public static void moderate(String action, String target){
+        switch(action){
+            case "ban30" -> moderate("ban", target, "30d", "all");
+            case "banforever" -> moderate("ban", target, "forever", "all");
+            case "sban" -> moderate("ban", target, "7d", "server");
+            case "sbanforever" -> moderate("ban", target, "forever", "server");
+            default -> moderate(action, target, null, null);
+        }
+    }
+
+    /** @param length "7d", "30d" or "forever" for bans; @param scope "server", "all" or null for the default of my rank */
+    public static void moderate(String action, String target, @Nullable String length, @Nullable String scope){
         if(!enabled() || !connected){
             postRaw(status());
             return;
@@ -125,6 +210,8 @@ public class GlobalChat{
         msg.put("t", "mod");
         msg.put("action", action);
         msg.put("target", target == null ? "" : target.trim());
+        if(length != null) msg.put("len", length);
+        if(scope != null) msg.put("scope", scope);
         if(!write(msg)) postRaw(Core.bundle.format("client.globalchat.failed", Core.bundle.get("client.globalchat.err.send")));
     }
 
@@ -143,7 +230,9 @@ public class GlobalChat{
         if(!enabled()) return Core.bundle.get("client.globalchat.off");
         if(connected) return Core.bundle.format("client.globalchat.status", online);
         String e = error;
-        return e != null ? Core.bundle.format("client.globalchat.failed", e) : Core.bundle.get("client.globalchat.connecting");
+        if(e == null) return Core.bundle.get("client.globalchat.connecting");
+        // a banned player needs his tag to ask for an unban
+        return Core.bundle.format("client.globalchat.failed", e) + (tag.isEmpty() ? "" : " " + Core.bundle.format("client.globalchat.mytag", tag));
     }
 
     private static String token(){
@@ -174,12 +263,21 @@ public class GlobalChat{
         thread = null;
     }
 
-    /** Sends a message. When it cannot be sent, the reason is written to the chat. */
+    /** Sends a message to the global chat. When it cannot be sent, the reason is written to the chat. */
     public static boolean send(String text){
+        return send(text, false);
+    }
+
+    /** Sends a message to the global chat or to the chat of my server. */
+    public static boolean send(String text, boolean server){
         text = text.replace('\n', ' ').trim();
         if(text.isEmpty()) return true;
         if(!enabled() || !connected){
             postRaw(status());
+            return false;
+        }
+        if(server && channel.isEmpty()){
+            postRaw(Core.bundle.get("client.globalchat.sys.noserver"));
             return false;
         }
         if(text.length() > maxText){
@@ -189,6 +287,7 @@ public class GlobalChat{
         Jval msg = Jval.newObject();
         msg.put("t", "msg");
         msg.put("text", text);
+        if(server) msg.put("ch", "server");
         if(!write(msg)){
             postRaw(Core.bundle.format("client.globalchat.failed", Core.bundle.get("client.globalchat.err.send")));
             return false;
@@ -230,6 +329,8 @@ public class GlobalChat{
 
             boolean was = connected;
             connected = false;
+            channel = "";
+            serverRole = "";
             closeSocket();
             if(!running) break;
 
@@ -306,44 +407,75 @@ public class GlobalChat{
                 tag = msg.getString("tag", "");
                 role = msg.getString("role", "");
                 online = msg.getInt("online", 0);
+                channel = "";
+                serverRole = "";
                 connected = true;
                 error = null;
                 postRaw(Core.bundle.format("client.globalchat.connected", online));
+                if(!serverHost.isEmpty()) sendServer();
             }
             case "online" -> online = msg.getInt("n", online);
+            case "server" -> {
+                String h = msg.getString("host", "");
+                serverOnline = msg.getInt("online", 0);
+                serverRole = msg.getString("role", "");
+                if(!h.equals(channel)){
+                    channel = h;
+                    // lines of the previous server go away, the chat server sends the history of the new one
+                    Core.app.post(() -> {
+                        for(int i = log.size - 1; i >= 0; i--){
+                            if(lineKinds.get(i) == kindServer) removeLine(i);
+                        }
+                        if(listener != null) listener.run();
+                    });
+                }
+            }
+            case "role" -> {
+                role = msg.getString("role", "");
+                serverRole = msg.getString("server", "");
+            }
             case "msg" -> {
                 String name = escape(msg.getString("name", "?"));
                 String from = msg.getString("tag", "");
                 String raw = msg.getString("text", "");
                 String self = from.equals(tag) ? "[accent]" : "[white]";
                 String badge = badge(msg.getString("role", ""));
-                postRaw("[#7fd3ff][[GL][] " + badge + self + name + "[] [gray]#" + escape(from) + "[]: [white]" + escape(raw), raw, from, msg.getString("name", "?"));
+                boolean server = msg.getString("ch", "").equals("server");
+                postRaw((server ? serverPrefix : prefix) + badge + self + name + "[] [gray]#" + escape(from) + "[]: [white]" + escape(raw), raw, from,
+                    msg.getString("name", "?"), server ? kindServer : kindGlobal);
             }
             case "sys" -> {
                 String code = msg.getString("code", "");
-                String key = "client.globalchat.sys." + code;
+                boolean server = msg.getString("ch", "").equals("server");
+                String key = "client.globalchat.sys." + (server && code.equals("banned") ? "serverbanned" : code);
+                if(msg.getBool("forever", false) && Core.bundle.has(key + ".forever")) key += ".forever";
                 int left = msg.getInt("left", 0);
                 String text = left > 0 && Core.bundle.has(key + ".left") ? Core.bundle.format(key + ".left", duration(left)) :
                     Core.bundle.has(key) ? Core.bundle.get(key) : "[#7fd3ff][[GL][] [scarlet]" + escape(msg.getString("text", ""));
-                if(code.equals("banned") || code.equals("kicked") || code.equals("full")){
+                if(!server && (code.equals("banned") || code.equals("kicked") || code.equals("full"))){
                     error = Strings.stripColors(text.replace("[[GL]", "")).trim();
                 }
-                postRaw(text);
+                // the server tells a banned player his tag: he can copy it (a click on this line) and send it to a moderator
+                String own = msg.getString("tag", "");
+                if(code.equals("banned") && own.matches("[0-9a-f]{6}")){
+                    tag = own;
+                    postRaw(text + "\n[lightgray]" + Core.bundle.format("client.globalchat.bannedtag", own), own, "", "", kindSystem);
+                }else{
+                    postRaw(text);
+                }
             }
             case "modevent" -> {
                 String action = msg.getString("action", "");
-                String key = "client.globalchat.mod." + action;
+                String key = "client.globalchat.mod." + action + (msg.getBool("forever", false) ? ".forever" : "");
                 if(Core.bundle.has(key)){
                     String name = msg.getString("name", "");
                     String who = escape(name.isEmpty() ? "?" : name) + " [gray]#" + escape(msg.getString("tag", "")) + "[]";
-                    postRaw(Core.bundle.format(key, escape(msg.getString("by", "?")), who, duration(msg.getInt("minutes", 0) * 60)));
-                }
-                if(msg.getString("tag", "").equals(tag)){
-                    switch(action){
-                        case "addmod" -> role = "mod";
-                        case "addcur" -> role = "curator";
-                        case "delmod", "delcur" -> role = "";
-                    }
+                    String text = Core.bundle.format(key, escape(msg.getString("by", "?")), who, duration(msg.getInt("minutes", 0) * 60),
+                        escape(msg.getString("host", "")));
+                    // actions of server moderators are about the chat of one server
+                    boolean server = msg.getString("ch", "").equals("server");
+                    if(server && text.startsWith(prefix)) text = serverPrefix + text.substring(prefix.length());
+                    postRaw(text, Strings.stripColors(text), "", "", server ? kindServer : kindGlobal);
                 }
             }
             case "who" -> {
@@ -363,7 +495,12 @@ public class GlobalChat{
                     for(int i = 0; i < arr.size; i++){
                         Jval e = arr.get(i);
                         sb.append(i == 0 ? "" : ", ").append(escape(e.getString("name", ""))).append(" [gray]#").append(escape(e.getString("tag", ""))).append("[]");
-                        if(e.getInt("left", 0) > 0) sb.append(" (").append(duration(e.getInt("left", 0))).append(")");
+                        if(e.getBool("forever", false)) sb.append(" (").append(Core.bundle.get("client.globalchat.forever")).append(")");
+                        else if(e.getInt("left", 0) > 0) sb.append(" (").append(duration(e.getInt("left", 0))).append(")");
+                        // the server a moderator or a punishment belongs to
+                        Jval hosts = e.get("hosts");
+                        String where = hosts != null && hosts.isArray() ? hosts.asArray().toString(", ") : e.getString("host", "");
+                        if(!where.isEmpty()) sb.append(" [lightgray][[").append(escape(where)).append("][]");
                     }
                 }
                 postRaw(sb.toString());
@@ -378,24 +515,28 @@ public class GlobalChat{
     }
 
     private static void postRaw(String text){
-        postRaw(text, Strings.stripColors(text), "", "");
+        postRaw(text, Strings.stripColors(text), "", "", kindSystem);
     }
 
-    private static void postRaw(String text, String copy, String from, String name){
+    private static void postRaw(String text, String copy, String from, String name, int kind){
         Core.app.post(() -> {
             log.add(text);
             copies.add(copy);
             lineTags.add(from);
             lineNames.add(name);
-            if(log.size > maxLog){
-                log.remove(0);
-                copies.remove(0);
-                lineTags.remove(0);
-                lineNames.remove(0);
-            }
+            lineKinds.add(kind);
+            if(log.size > maxLog) removeLine(0);
             if(ui != null && ui.chatfrag != null) ui.chatfrag.addMessage(text);
             if(listener != null) listener.run();
         });
+    }
+
+    private static void removeLine(int i){
+        log.remove(i);
+        copies.remove(i);
+        lineTags.remove(i);
+        lineNames.remove(i);
+        lineKinds.removeIndex(i);
     }
 
     private static void closeSocket(){

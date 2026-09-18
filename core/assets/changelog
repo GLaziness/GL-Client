@@ -4,6 +4,8 @@
  * Fork of Foo's Client with the FD client features, data is kept in the MindustryGL folder
  * GL side panel: mining, view, combat, automation and server commands in one window
  * GL global chat: a chat shared by every GL Client player on any server (!g text, the !g mode with Tab, a window from Alt + left click), turn it on in the settings
+ * Server chat in the global chat: the Server tab and !gs to talk between the modes of one server
+ * Global chat moderation: the owner, curators and server moderators; mutes, bans on a server and in the whole chat, forever too
  * Recommended add-ons in the GL Client menu: install the GL Admin Mode mod and turn on the global chat
  * Alt + left click tile menu: coordinates to chat, tile logs, teleport, client windows, toggles, waypoints
  * Poly mode: your unit rebuilds, heals and helps building by itself, mines when idle and avoids enemy turrets

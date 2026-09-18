@@ -22,6 +22,10 @@
  * Pick the !g mode in the chat with {chat_mode} to write without the command, like /t and /a
  * Alt + left click, Global chat - a floating window with the global chat only; click a message to copy it
  * The short tag after the name (#ab12cd) is given by the server and cannot be faked
+ * The Server tab in the window and {p}gs text (the !gs mode with {chat_mode}) - the chat of the server you are on: GL players in every mode of this server see it. Works only while you are on a server
+ * A click on the GL label of a message or the online list (the chat icon in the window) - actions for a player: copy the tag, punishments for moderators
+ * Moderators are appointed for their server and punish only in its chat; curators and the owner punish in the whole chat. Bans on a server: 7 days or forever, in the whole chat: 7 and 30 days (curators) and forever (the owner); {p}gm - moderation commands
+ * Your own tag is copied with a button in the chat window; a banned player sees it too, to send it to a moderator
 
 # Keybinds
  * {tile_actions_menu_modifier} - display actions for a tile

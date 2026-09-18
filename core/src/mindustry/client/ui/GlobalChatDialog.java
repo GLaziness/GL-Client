@@ -16,7 +16,8 @@ import static mindustry.Vars.*;
 
 /**
  * GL: a floating window with the global chat only, opened from the Alt + left click menu. It can be dragged by the
- * move button like the log history window, and the game keeps running under it.
+ * move button like the log history window, and the game keeps running under it. Two tabs: the global chat and the
+ * chat of the server the player is on (all modes of that server, available only while playing there).
  */
 public class GlobalChatDialog extends Table{
     private static GlobalChatDialog instance;
@@ -30,7 +31,8 @@ public class GlobalChatDialog extends Table{
     private final Table lines = new Table();
     private ScrollPane pane;
     private TextField field;
-    private boolean shown, placed;
+    private boolean shown, placed, serverTab;
+    private String lastChannel = "";
     private @Nullable Table popup;
     private float lastX, lastY;
 
@@ -69,6 +71,16 @@ public class GlobalChatDialog extends Table{
                     .tooltip("@client.globalchat.onlinehint").get().getImage().setColor(Pal.accent);
                 head.add("@client.globalchat.title").color(Pal.accent);
                 head.add().growX();
+                head.button(Icon.copy, Styles.clearNonei, () -> {
+                    // my tag, also when banned: it is what a moderator needs to lift a punishment
+                    if(GlobalChat.tag().isEmpty()){
+                        ui.showInfoFade("@client.globalchat.mytag.none");
+                    }else{
+                        Core.app.setClipboardText(GlobalChat.tag());
+                        ui.showInfoFade(Core.bundle.format("client.globalchat.mytag.copied", GlobalChat.tag()));
+                    }
+                }).size(36f).tooltip(t -> t.background(Styles.black8).margin(4f).label(() ->
+                    GlobalChat.tag().isEmpty() ? Core.bundle.get("client.globalchat.mytag.none") : Core.bundle.format("client.globalchat.mytag.hint", GlobalChat.tag())));
                 head.button(Icon.power, Styles.clearNoneTogglei, () -> {
                     boolean on = !GlobalChat.enabled();
                     Core.settings.put("globalchat", on);
@@ -77,7 +89,20 @@ public class GlobalChatDialog extends Table{
                 head.button(Icon.cancel, Styles.cleari, this::toggle).size(36f);
             }).growX().row();
 
-            root.label(() -> GlobalChat.enabled() ? GlobalChat.status() : Core.bundle.get("client.globalchat.off.window")).fontScale(0.85f).wrap().growX().left().padTop(2f).row();
+            root.table(tabs -> {
+                tabs.defaults().height(34f).growX();
+                tabs.button("", Styles.flatTogglet, () -> setTab(false)).checked(b -> !serverTab)
+                    .update(b -> b.setText(Core.bundle.format("client.globalchat.tab.global", GlobalChat.connected() ? GlobalChat.online() : 0)));
+                tabs.button("", Styles.flatTogglet, () -> setTab(true)).checked(b -> serverTab).padLeft(4f)
+                    .disabled(b -> GlobalChat.channel().isEmpty())
+                    .update(b -> b.setText(GlobalChat.channel().isEmpty() ? Core.bundle.get("client.globalchat.tab.server.off") :
+                        Core.bundle.format("client.globalchat.tab.server", GlobalChat.serverOnline())))
+                    .tooltip("@client.globalchat.tab.server.hint");
+            }).growX().padTop(4f).row();
+
+            root.label(() -> !GlobalChat.enabled() ? Core.bundle.get("client.globalchat.off.window") :
+                serverTab && GlobalChat.connected() ? Core.bundle.format("client.globalchat.serverstatus", GlobalChat.channel(), GlobalChat.serverOnline()) :
+                GlobalChat.status()).fontScale(0.85f).wrap().growX().left().padTop(2f).row();
             root.add("@client.globalchat.copyhint").color(Color.gray).fontScale(0.75f).left().padTop(2f).row();
             root.image().color(Pal.accent).height(2f).growX().padTop(4f).padBottom(4f).row();
 
@@ -91,6 +116,7 @@ public class GlobalChatDialog extends Table{
             root.table(input -> {
                 field = input.field("", t -> {}).growX().height(42f).maxTextLength(200).get();
                 field.setMessageText(Core.bundle.get("client.globalchat.hint"));
+                field.update(() -> field.setMessageText(Core.bundle.get(serverTab ? "client.globalchat.hint.server" : "client.globalchat.hint")));
                 field.keyDown(KeyCode.enter, this::send);
                 field.keyDown(KeyCode.escape, () -> Core.scene.setKeyboardFocus(null));
                 input.button(Icon.right, Styles.flati, this::send).size(42f).padLeft(4f);
@@ -102,7 +128,21 @@ public class GlobalChatDialog extends Table{
                 setPosition(Core.scene.getWidth() / 2f, Core.scene.getHeight() / 2f, Align.center);
                 placed = true;
             }
+            // left the server: back to the global chat
+            String ch = GlobalChat.channel();
+            if(!ch.equals(lastChannel)){
+                lastChannel = ch;
+                if(ch.isEmpty() && serverTab) setTab(false);
+            }
         });
+    }
+
+    private void setTab(boolean server){
+        if(server && GlobalChat.channel().isEmpty()) return;
+        if(serverTab == server) return;
+        serverTab = server;
+        closePopup();
+        if(shown) rebuild();
     }
 
     private void toggle(){
@@ -127,10 +167,13 @@ public class GlobalChatDialog extends Table{
         String text = field.getText().trim();
         if(text.isEmpty()) return;
         if(!GlobalChat.enabled()) return; // the status line above already says to press the power button
-        if(GlobalChat.send(text)) field.setText("");
+        if(GlobalChat.send(text, serverTab)) field.setText("");
     }
 
-    /** Actions for one player: moderators punish and lift punishments, the owner also appoints moderators. */
+    /**
+     * Actions for one player: moderators punish and lift punishments (in the chat of their server), curators punish
+     * in the whole chat and appoint moderators for the server they are on, the owner also appoints curators.
+     */
     private void playerMenu(String target, String name){
         if(popup != null) popup.remove();
         Table menu = new Table(Tex.pane);
@@ -139,14 +182,28 @@ public class GlobalChatDialog extends Table{
         menu.margin(6f);
         menu.defaults().size(250f, 38f).left();
         menu.add("[accent]" + name.replace("[", "[[") + " [gray]#" + target).left().padBottom(4f).row();
-        if(GlobalChat.moderator()){
+        if(GlobalChat.moderator(serverTab)){
             menuItem(menu, Icon.lock, "@client.globalchat.btn.mute", () -> confirm("client.globalchat.confirm.mute", "mute", target, name));
             menuItem(menu, Icon.lockOpen, "@client.globalchat.btn.unmute", () -> GlobalChat.moderate("unmute", target));
-            menuItem(menu, Icon.hammer, "@client.globalchat.btn.ban", () -> confirm("client.globalchat.confirm.ban", "ban", target, name));
+            // bans in the chat of this server: moderators, curators and the owner, for 7 days or forever
+            if(serverTab){
+                menuItem(menu, Icon.hammer, "@client.globalchat.btn.sban", () -> confirm("client.globalchat.confirm.sban", "sban", target, name));
+                menuItem(menu, Icon.hammer, "@client.globalchat.btn.sbanforever", () -> confirm("client.globalchat.confirm.sbanforever", "sbanforever", target, name));
+            }
+            // bans in the whole chat: curators for 7 or 30 days, the owner also forever
+            if(GlobalChat.curator()){
+                menuItem(menu, Icon.hammer, "@client.globalchat.btn.ban", () -> confirm("client.globalchat.confirm.ban", "ban", target, name));
+                menuItem(menu, Icon.hammer, "@client.globalchat.btn.ban30", () -> confirm("client.globalchat.confirm.ban30", "ban30", target, name));
+                if(GlobalChat.owner()){
+                    menuItem(menu, Icon.hammer, "@client.globalchat.btn.banforever", () -> confirm("client.globalchat.confirm.banforever", "banforever", target, name));
+                }
+            }
             menuItem(menu, Icon.refresh, "@client.globalchat.btn.unban", () -> GlobalChat.moderate("unban", target));
         }
         if(GlobalChat.curator()){
-            menuItem(menu, Icon.admin, "@client.globalchat.btn.addmod", () -> confirm("client.globalchat.confirm.addmod", "addmod", target, name));
+            if(!GlobalChat.channel().isEmpty()){
+                menuItem(menu, Icon.admin, "@client.globalchat.btn.addmod", () -> confirm("client.globalchat.confirm.addmod", "addmod", target, name));
+            }
             menuItem(menu, Icon.cancel, "@client.globalchat.btn.delmod", () -> GlobalChat.moderate("delmod", target));
         }
         if(GlobalChat.owner()){
@@ -167,16 +224,17 @@ public class GlobalChatDialog extends Table{
         menu.setPosition(Math.min(mx, Core.scene.getWidth() - menu.getWidth()), Math.max(0f, my - menu.getHeight()));
     }
 
-    /** Everyone in the global chat now, with their tags; a click on one opens the same actions as [GL]. */
+    /** Everyone in the global chat (or on this server) now, with their tags; a click on one opens the same actions as [GL]. */
     private void showOnline(){
-        GlobalChat.requestWho(players -> {
+        boolean server = serverTab;
+        GlobalChat.requestWho(server, players -> {
             if(!shown) return;
             closePopup();
             Table menu = new Table(Tex.pane);
             popup = menu;
             menu.touchable = Touchable.enabled;
             menu.margin(6f);
-            menu.add(Core.bundle.format("client.globalchat.onlinelist", players.size)).color(Pal.accent).left().padBottom(4f).row();
+            menu.add(Core.bundle.format(server ? "client.globalchat.onlinelist.server" : "client.globalchat.onlinelist", players.size)).color(Pal.accent).left().padBottom(4f).row();
             menu.pane(list -> {
                 list.defaults().width(280f).height(34f).left();
                 for(var p : players){
@@ -220,26 +278,38 @@ public class GlobalChatDialog extends Table{
     }
 
     private void confirm(String key, String action, String target, String name){
-        ui.showConfirm("@confirm", Core.bundle.format(key, name.replace("[", "[["), target), () -> GlobalChat.moderate(action, target));
+        String text = Core.bundle.format(key, name.replace("[", "[["), target, GlobalChat.channel());
+        // where the punishment works: curators and the owner punish in the whole chat, moderators on their server
+        String scope = switch(action){
+            case "mute" -> GlobalChat.curator() ? "all" : "server";
+            case "ban", "ban30", "banforever" -> "all";
+            case "sban", "sbanforever" -> "server";
+            default -> null;
+        };
+        if(scope != null) text += "\n\n[lightgray]" + Core.bundle.get("client.globalchat.scope." + scope);
+        ui.showConfirm("@confirm", text, () -> GlobalChat.moderate(action, target));
     }
 
     private void rebuild(){
         lines.clear();
-        if(GlobalChat.log.isEmpty()){
-            lines.add("@client.globalchat.empty").color(Color.lightGray).pad(10f);
+        int hide = serverTab ? GlobalChat.kindGlobal : GlobalChat.kindServer;
+        if(!GlobalChat.lineKinds.contains(serverTab ? GlobalChat.kindServer : GlobalChat.kindGlobal)){
+            lines.add(serverTab ? "@client.globalchat.empty.server" : "@client.globalchat.empty").color(Color.lightGray).wrap().width(400f).pad(10f).row();
         }
         // a click on a line copies its text
         for(int i = 0; i < GlobalChat.log.size; i++){
+            if(GlobalChat.lineKinds.get(i) == hide) continue;
             String copy = GlobalChat.copies.get(i), line = GlobalChat.log.get(i);
             String from = GlobalChat.lineTags.get(i), name = GlobalChat.lineNames.get(i);
             // owner and moderators: a click (left or right) on [GL] of someone's message opens the actions for that player
-            boolean menu = !from.isEmpty() && line.startsWith(GlobalChat.prefix);
+            String start = line.startsWith(GlobalChat.serverPrefix) ? GlobalChat.serverPrefix : GlobalChat.prefix;
+            boolean menu = !from.isEmpty() && line.startsWith(start);
             lines.table(row -> {
                 row.top().left();
                 String text = line;
                 if(menu){
-                    text = line.substring(GlobalChat.prefix.length());
-                    TextButton gl = row.button("[#7fd3ff][[GL]", lineStyle, () -> playerMenu(from, name)).top().get();
+                    text = line.substring(start.length());
+                    TextButton gl = row.button(start.substring(0, start.length() - 3), lineStyle, () -> playerMenu(from, name)).top().get();
                     gl.margin(2f, 4f, 2f, 2f);
                     gl.addListener(new ClickListener(KeyCode.mouseRight){
                         @Override
@@ -250,7 +320,7 @@ public class GlobalChatDialog extends Table{
                     gl.addListener(new Tooltip(t -> t.background(Styles.black8).margin(4f).add("@client.globalchat.menuhint")));
                 }
                 String shown = text;
-                row.button(b -> b.add(shown).left().wrap().width(menu ? 370f : 410f), lineStyle, () -> {
+                row.button(b -> b.add(shown).left().wrap().width(menu ? (start == GlobalChat.prefix ? 370f : 355f) : 410f), lineStyle, () -> {
                     Core.app.setClipboardText(copy);
                     ui.showInfoFade("@client.globalchat.copied");
                 }).left().growX().get().left().margin(2f, 4f, 2f, 4f);
