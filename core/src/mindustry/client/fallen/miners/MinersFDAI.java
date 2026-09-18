@@ -154,6 +154,8 @@ public class MinersFDAI {
 
     private static Interval miningTimer = new Interval();
     private static Interval assistTimer = new Interval();
+    private static Interval panicTimer = new Interval();
+
     public static int AIMiningUpdateTime = Core.settings.getInt("AIUpTime", 5);
     public static float AIHelpRad = Core.settings.getFloat("AIHelpRad", 10);
     public static boolean resetDisabledUnits = Core.settings.getBool("resetDisabledUnits", false);
@@ -203,8 +205,9 @@ public class MinersFDAI {
         assistingUnits.remove(id);
         healingUnits.remove(id);
         healingItem.remove(id);
-        OreSafety.forget(id);
+        retreating.remove(id);
     }
+
     public static void init() {
         loadPermissions();
         Events.on(EventType.WorldLoadEvent.class, e -> {
@@ -215,6 +218,7 @@ public class MinersFDAI {
             lastAiCommand.clear();
             healingUnits.clear();
             healingItem.clear();
+            retreating.clear();
             if (resetMatrixOnWorldLoad) {
                 resetPermissionsToDefaults();
             }
@@ -230,8 +234,12 @@ public class MinersFDAI {
         Events.run(EventType.Trigger.update, () -> {
             if (Vars.state.isMenu()) return;
 
+            // === 1. БЫСТРЫЙ ЧЕК ПАНИКИ (4 раза в секунду) ===
+            if (autoMiningActive && oreSafetyEnabled && panicTimer.get(15f)) {
+                handleEmergencyPanicRetreat();
+            }
 
-            // === ЗАПУСК КОПКИ ПРИ ВКЛЮЧЕНИИ ИИ ===
+            // === 2. ЗАПУСК КОПКИ ПРИ ВКЛЮЧЕНИИ ===
             if (autoMiningActive && !wasAutoMiningActive) {
                 IntSeq toTakeOver = new IntSeq();
                 IntSeq polysToAssist = new IntSeq(); // поли не копают - сразу в помощь стройке
@@ -259,6 +267,7 @@ public class MinersFDAI {
                 wasAutoMiningActive = true;
                 miningTimer.clear();
                 assistTimer.clear();
+                panicTimer.clear();
 
                 // Распределяем по квотам сразу, не ждём первого тика таймера.
                 autoAssignMiningUnitsEqually();
@@ -266,7 +275,7 @@ public class MinersFDAI {
                 wasAutoMiningActive = false;
             }
 
-            // === ВОЗВРАТ ЮНИТОВ ИЗ АССИСТА ПРИ ВЫКЛЮЧЕНИИ ПОМОЩИ СТРОЙКЕ ===
+            // === 3. ВОЗВРАТ ИЗ АССИСТА ПРИ ВЫКЛЮЧЕНИИ ПОМОЩИ СТРОЙКЕ ===
             if (autoMiningActive && !autoAssistBuild && assistingUnits.notEmpty()) {
                 IntSeq backToMine = new IntSeq();
                 assistingUnits.each(id -> {
@@ -280,19 +289,63 @@ public class MinersFDAI {
                 assistingUnits.clear();
             }
 
+            // === 4. РЕМОНТ ПОВРЕЖДЁННЫХ ЮНИТОВ ===
             if (autoMiningActive && repairTimer.get(60f)) {
                 if (autoUnitRepair) handleUnitRepair();
                 else if (healingUnits.notEmpty()) releaseHealing(null);
             }
 
+            // === 5. АССИСТ СТРОЙКИ ===
             if (autoMiningActive && autoAssistBuild && assistTimer.get(60f)) {
                 handleAssistNearPlayer();
             }
 
+            // === 5. ПЛАНОВЫЙ ПЕРЕСЧЕТ КВОТ ===
             if (autoMiningActive && miningTimer.get(AIMiningUpdateTime * 60f)) {
                 autoAssignMiningUnitsEqually();
             }
         });
+    }
+
+    /** Юниты, уже отведённые к безопасному ядру: повторно им команду не шлём, пока не назначим руду. */
+    private static final IntSet retreating = new IntSet();
+
+    /** Экстренный отвод юнитов к ближайшему ядру, которое не под огнём **/
+    private static void handleEmergencyPanicRetreat() {
+        // Группируем ID юнитов по их ближайшему безопасному ядру: Core -> список ID
+        ObjectMap<Building, IntSeq> retreatGroups = new ObjectMap<>();
+
+        for (Unit u : Groups.unit) {
+            if (u.team != player.team() || !u.isCommandable() || !isManagedMinerType(u.type)) continue;
+            // ручных, лечащихся и уже отведённых не дёргаем
+            if (manualUnits.contains(u.id) || healingUnits.contains(u.id) || retreating.contains(u.id)) continue;
+
+            if (OreSafety.isThreatened(u.x, u.y)) {
+                // GL: к ядру под огнём не ведём, иначе юнит мечется. Нет безопасного ядра — оставляем как есть.
+                Building closeCore = OreSafety.nearestSafeCore(u);
+                if (closeCore == null) continue;
+                retreating.add(u.id);
+
+                if (!retreatGroups.containsKey(closeCore)) {
+                    retreatGroups.put(closeCore, new IntSeq());
+                }
+                retreatGroups.get(closeCore).add(u.id);
+            }
+        }
+
+        // Отправляем одной пачкой для каждого ядра
+        for (var entry : retreatGroups.entries()) {
+            Building core = entry.key;
+            int[] ids = entry.value.toArray();
+
+            Call.setUnitCommand(player, ids, UnitCommand.moveCommand);
+            Call.setUnitStance(player, ids, UnitStance.boost, true);
+            Call.commandUnits(player, ids, null, null, new Vec2(core.x, core.y), false, true);
+
+            for (int id : ids) {
+                lastAiCommand.put(id, UnitCommand.moveCommand);
+            }
+        }
     }
 
     private static boolean isManagedMinerType(UnitType type) {
@@ -366,7 +419,7 @@ public class MinersFDAI {
             }
         }
 
-        // --- Обновляем пушки врага и угрозу по жилам (для фильтра и отводов) ---
+        // --- Обновляем карту угроз
         OreSafety.refreshThreat(oreSafetyEnabled);
 
         int megaCounter = 0; // Счетчик для разделения Мег пополам
@@ -396,8 +449,6 @@ public class MinersFDAI {
         if (totalWeight <= 0) return;
 
         ObjectMap<Item, IntSeq> toBatchSend = new ObjectMap<>();
-        // Отводы к безопасным жилам: жила -> пакет юнитов (массовая отправка).
-        ObjectMap<OreSafety.Cluster, IntSeq> moveBatches = new ObjectMap<>();
 
         // ============================================================
         // 2. ГЛОБАЛЬНОЕ ОПРЕДЕЛЕНИЕ КРИЗИСА
@@ -477,9 +528,6 @@ public class MinersFDAI {
 
             if (manualUnits.contains(u.id) || assistingUnits.contains(u.id) || healingUnits.contains(u.id)) continue;
 
-            // Юнит в отводе к безопасной жиле — не трогаем, пока не прилетит.
-            if (oreSafetyEnabled && OreSafety.isRedirecting(u)) continue;
-
             if (u.type == UnitTypes.mega) {
                 if (!mineMegas) continue;
                 megaCounter++;
@@ -500,12 +548,8 @@ public class MinersFDAI {
 
         // Разовая отправка сервисных команд
         if (resetDisabledUnits) {
-            if (toReleaseAsAssist.size > 0) {
-                Call.setUnitCommand(player, toReleaseAsAssist.toArray(), UnitCommand.assistCommand);
-            }
-            if (toReleaseAsMine.size > 0) {
-                Call.setUnitCommand(player, toReleaseAsMine.toArray(), UnitCommand.mineCommand);
-            }
+            if (toReleaseAsAssist.size > 0) Call.setUnitCommand(player, toReleaseAsAssist.toArray(), UnitCommand.assistCommand);
+            if (toReleaseAsMine.size > 0) Call.setUnitCommand(player, toReleaseAsMine.toArray(), UnitCommand.mineCommand);
         }
         if (toForceRestore.size > 0) Call.setUnitCommand(player, toForceRestore.toArray(), UnitCommand.mineCommand);
         if (toRepair.size > 0) {
@@ -550,7 +594,6 @@ public class MinersFDAI {
 
             for (Item it : possible) {
                 int target;
-
                 if (isCrisisMode) {
                     if (!targets.contains(it)) {
                         target = 0;
@@ -593,43 +636,30 @@ public class MinersFDAI {
                 } else break;
             }
 
-            // --- ЛОГИКА "ЛИПКОСТИ" ---
-            Seq<Unit> unassignedUnits = new Seq<>();
-
+            // Назначение конкретных юнитов с проверкой БЕЗОПАСНОСТИ ДЛЯ ИХ ЯДРА
             for (Unit u : units) {
+                // Выбираем только те ресурсы, которые БЕЗОПАСНЫ для конкретного ядра этого юнита
+                Seq<Item> safeForUnit = possible.select(it -> !oreSafetyEnabled || OreSafety.isItemSafeForUnit(u, it));
+                if (safeForUnit.isEmpty()) continue; // В районе ядра всё простреливается — не трогаем
+
                 Item currentItem = currentMinedItem(u);
-                if (currentItem == null || !possible.contains(currentItem)) currentItem = null;
 
-                if (currentItem != null && quotas.get(currentItem, 0) > 0) {
+                // Липкость: если юнит уже копает безопасный нужный ресурс — оставляем
+                if (currentItem != null && safeForUnit.contains(currentItem) && quotas.get(currentItem, 0) > 0) {
                     quotas.put(currentItem, quotas.get(currentItem, 0) - 1);
-                    // Отвод: юнит копает по плану, но оказался под огнём врага.
-                    if (oreSafetyEnabled && OreSafety.isThreatened(u.x, u.y)) {
-                        Log.info("Юнит @ [@, @] испугался и убегает!", u.type.name, (int)u.x/8, (int)u.y/8);
-                        handleOreSafety(u, currentItem, moveBatches);
-                    }
-                } else {
-                    unassignedUnits.add(u);
+                    continue;
                 }
-            }
 
-            for (Unit u : unassignedUnits) {
-                Item bestTarget = possible.max(it -> quotas.get(it, 0));
-
+                // Иначе выбираем лучший из доступных безопасных
+                Item bestTarget = safeForUnit.max(it -> quotas.get(it, 0));
                 if (bestTarget != null && quotas.get(bestTarget, 0) > 0) {
                     quotas.put(bestTarget, quotas.get(bestTarget, 0) - 1);
-
-                    // Проверка безопасности цели: отвод либо отказ от смены руды.
-                    if (oreSafetyEnabled && handleOreSafety(u, bestTarget, moveBatches)) continue;
 
                     if (!toBatchSend.containsKey(bestTarget)) toBatchSend.put(bestTarget, new IntSeq());
                     toBatchSend.get(bestTarget).add(u.id);
                 } else {
-                    Item fallback = possible.max(it -> itemWeights.get(it, fullCoreWeight));
-
-                    if (oreSafetyEnabled && handleOreSafety(u, fallback, moveBatches)) continue;
-
-                    // Не слать команду повторно, если юнит уже и так копает fallback-ресурс
-                    if (!(u.controller() instanceof CommandAI cai && cai.command == UnitCommand.mineCommand && cai.hasStance(ItemUnitStance.getByItem(fallback)))) {
+                    Item fallback = safeForUnit.max(it -> itemWeights.get(it, fullCoreWeight));
+                    if (fallback != null && !(u.controller() instanceof CommandAI cai && cai.command == UnitCommand.mineCommand && cai.hasStance(ItemUnitStance.getByItem(fallback)))) {
                         if (!toBatchSend.containsKey(fallback)) toBatchSend.put(fallback, new IntSeq());
                         toBatchSend.get(fallback).add(u.id);
                     }
@@ -637,23 +667,16 @@ public class MinersFDAI {
             }
         }
 
-        // 6. Отправка пакетов
+        // 5. Массовая отправка команд
         for (var entry : toBatchSend.entries()) {
             int[] ids = entry.value.toArray();
             Call.setUnitCommand(player, ids, UnitCommand.mineCommand);
             Call.setUnitStance(player, ids, UnitStance.mineAuto, false);
             Call.setUnitStance(player, ids, ItemUnitStance.getByItem(entry.key), true);
-            for (int id : ids) lastAiCommand.put(id, UnitCommand.mineCommand);
-        }
-
-        // Отвод к безопасным жилам: по одному массовому пакету на жилу.
-        for (var entry : moveBatches.entries()) {
-            int[] ids = entry.value.toArray();
-            OreSafety.Cluster vein = entry.key;
-            Call.setUnitCommand(player, ids, UnitCommand.moveCommand);
-            Call.setUnitStance(player, ids, UnitStance.boost, true);
-            Call.commandUnits(player, ids, null, null, new Vec2(vein.x, vein.y), false, true);
-            for (int id : ids) lastAiCommand.put(id, UnitCommand.moveCommand);
+            for (int id : ids) {
+                lastAiCommand.put(id, UnitCommand.mineCommand);
+                retreating.remove(id);
+            }
         }
     }
 
@@ -666,35 +689,6 @@ public class MinersFDAI {
             if (cai.hasStance(ItemUnitStance.getByItem(it))) return it;
         }
         return null;
-    }
-
-    /**
-     * Решает, что делать с юнитом, которого хотят отправить копать item:
-     * если ближайшая к нему руда этого типа под огнём врага — отводит его
-     * к ближайшей безопасной жиле (пакетом, отдельно от обычных команд).
-     * Возвращает true, если команду копки слать не надо: юнит отведён,
-     * либо путь до безопасной жилы тоже простреливается, а юнит уже занят копкой
-     * (в этом случае оставляем его на текущей руде).
-     */
-    private static boolean handleOreSafety(Unit u, Item item, ObjectMap<OreSafety.Cluster, IntSeq> moveBatches) {
-        Tile near = Vars.indexer.findClosestOre(u, item);
-        if (near == null) return false; // Руды нет физически — пусть решает ванила
-        if (!OreSafety.isThreatened(near.worldx(), near.worldy())) return false; // Ближайшая безопасна
-
-        OreSafety.Cluster safe = OreSafety.nearestAvailable(item, u.x, u.y, true);
-        if (safe == null) return false; // Безопасных жил нет — ресурс исключён из квот
-
-        if (!OreSafety.pathSafe(u.x, u.y, safe.x, safe.y)) {
-            // Путь до безопасной жилы тоже под огнём: если юнит уже что-то копает — не меняем.
-            return currentMinedItem(u) != null;
-        }
-
-        if (!moveBatches.containsKey(safe)) moveBatches.put(safe, new IntSeq());
-        moveBatches.get(safe).add(u.id);
-        //OreSafety.markRedirect(u.id, u.dst(safe.x, safe.y));
-        OreSafety.markRedirect(u.id, safe); // передаём кластер вместо времени
-
-        return true;
     }
 
     // ================== РЕМОНТ: ПОВРЕЖДЁННЫЕ ЮНИТЫ ЛЕТЯТ К РЕМОНТНОЙ ТОЧКЕ ==================
@@ -796,6 +790,7 @@ public class MinersFDAI {
         float bestD = Float.MAX_VALUE, bestAnyD = Float.MAX_VALUE;
         for (Building b : repairPads) {
             if (!b.isValid()) continue;
+            if (oreSafetyEnabled && OreSafety.isThreatened(b.x, b.y)) continue; // GL: не лечиться под огнём
             float d = u.dst2(b);
             if (d < bestAnyD) { bestAnyD = d; bestAny = b; }
             if (b.efficiency > 0.01f && d < bestD) { bestD = d; best = b; }
@@ -813,17 +808,13 @@ public class MinersFDAI {
         Unit u = player.unit();
         if (u == null) return false;
 
-        // Дистанция, в пределах которой стройка считается "рядом" (2 * радиус ассиста)
-        // AIHelpRad у вас в клетках, поэтому умножаем на 8 (пиксели) и на 2 (условие)
         float maxDist = (AIHelpRad * 8f) * 2f;
 
-        // 1. Проверяем то, что строится прямо сейчас (луч зажат)
         if (u.activelyBuilding()) {
             var plan = u.buildPlan();
             if (plan != null && u.dst(plan.drawx(), plan.drawy()) <= maxDist) return true;
         }
 
-        // 2. Проверяем очередь планов (чертежи на земле)
         if (u.plans.size > 0) {
             for (var plan : u.plans) {
                 if (u.dst(plan.drawx(), plan.drawy()) <= maxDist) {

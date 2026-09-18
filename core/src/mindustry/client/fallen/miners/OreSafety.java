@@ -2,7 +2,6 @@ package mindustry.client.fallen.miners;
 
 import arc.Core;
 import arc.struct.FloatSeq;
-import arc.struct.IntMap;
 import arc.struct.IntSeq;
 import arc.struct.Seq;
 import arc.util.Log;
@@ -57,23 +56,19 @@ public class OreSafety {
     private static final float PATH_STEP = 16f;
     /** Максимум точек на линии пути. */
     private static final int MAX_PATH_SAMPLES = 64;
+    /** Максимальное количество тайлов в одной жиле/кластере. */
+    private static final int MAX_CLUSTER_TILES = 64;
+    /** Максимальный радиус жилы от стартовой точки (в тайлах). */
+    private static final int MAX_CLUSTER_RADIUS = 10;
 
     static final Seq<Cluster> clusters = new Seq<>();
-    /** Юниты в полёте к безопасной жиле: id -> момент (мс), до которого их не трогаем. */
-    private static final IntMap<Long> redirectUntil = new IntMap<>();
-    //private static final IntMap<Cluster> redirectTargets = new IntMap<>();
     /** Вражеские пушки тройками [x, y, радиус+запас], обновляется раз в цикл ИИ. */
     private static final FloatSeq dangerTilesData = new FloatSeq();
-
-    private static final IntMap<Cluster> redirectTargets = new IntMap<>();
-    private static final IntMap<Long> redirectStartTime = new IntMap<>(); // время начала редиректа
-    private static final long REDIRECT_TIMEOUT_MS = 30000L; // 30 секунд
 
     private OreSafety() {}
 
     public static void reset() {
         clusters.clear();
-        redirectUntil.clear();
         dangerTilesData.clear();
     }
 
@@ -83,13 +78,12 @@ public class OreSafety {
     /** Строит жилы по всей карте. Вызывать один раз на WorldLoadEvent. */
     public static void scan() {
         clusters.clear();
-        redirectUntil.clear();
 
         if (Vars.world == null || Vars.world.width() == 0 || Vars.world.height() == 0) return;
 
         int w = Vars.world.width(), h = Vars.world.height();
 
-        // Один проход по карте.
+        // Один проход по карте для снятия карты дропов.
         Item[] dropGrid = new Item[w * h];
         for (int y = 0; y < h; y++) {
             for (int x = 0; x < w; x++) {
@@ -100,23 +94,24 @@ public class OreSafety {
         }
 
         boolean[] visited = new boolean[w * h];
-        IntSeq stack = new IntSeq();
-        IntSeq fill = new IntSeq();
+        // Используем IntSeq как BFS-очередь (быстро и без аллокаций памяти)
+        IntSeq queue = new IntSeq();
 
         for (int start = 0; start < w * h; start++) {
             if (visited[start] || dropGrid[start] == null) continue;
 
             Item item = dropGrid[start];
-            fill.clear();
-            stack.clear();
-            stack.add(start);
+            queue.clear();
+            queue.add(start);
             visited[start] = true;
-            long sumX = 0, sumY = 0;
 
-            // Flood fill по 8 соседям на совпадение ресурса.
-            while (stack.size > 0) {
-                int cur = stack.pop();
-                fill.add(cur);
+            int startX = start % w, startY = start / w;
+            long sumX = 0, sumY = 0;
+            int head = 0;
+
+            // BFS-обход с ограничением по размеру и радиусу
+            while (head < queue.size && queue.size < MAX_CLUSTER_TILES) {
+                int cur = queue.get(head++);
                 int cx = cur % w, cy = cur / w;
                 sumX += cx;
                 sumY += cy;
@@ -126,27 +121,46 @@ public class OreSafety {
                         if (dx == 0 && dy == 0) continue;
                         int nx = cx + dx, ny = cy + dy;
                         if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+
+                        // Ограничение: не уходим дальше MAX_CLUSTER_RADIUS от начала жилы
+                        if (Math.abs(nx - startX) > MAX_CLUSTER_RADIUS || Math.abs(ny - startY) > MAX_CLUSTER_RADIUS) continue;
+
                         int nidx = nx + ny * w;
                         if (visited[nidx] || dropGrid[nidx] != item) continue;
+
                         visited[nidx] = true;
-                        stack.add(nidx);
+                        queue.add(nidx);
+
+                        // Если достигли лимита тайлов на жилу — прекращаем расширение
+                        if (queue.size >= MAX_CLUSTER_TILES) break;
                     }
+                    if (queue.size >= MAX_CLUSTER_TILES) break;
                 }
             }
 
+            // Досчитываем координаты для оставшихся в очереди тайлов (если вышли по брейку)
+            while (head < queue.size) {
+                int cur = queue.get(head++);
+                sumX += (cur % w);
+                sumY += (cur / w);
+            }
+
+            int count = queue.size;
+            if (count == 0) continue;
+
             Cluster c = new Cluster();
             c.item = item;
-            c.tiles = fill.size;
-            c.x = (sumX / (float) fill.size) * 8f + 4f;
-            c.y = (sumY / (float) fill.size) * 8f + 4f;
+            c.tiles = count;
+            c.x = (sumX / (float) count) * 8f + 4f;
+            c.y = (sumY / (float) count) * 8f + 4f;
 
-            // Образцы раскидываем равномерно по порядку заполнения.
-            int sampleCount = Math.min(MAX_SAMPLES, fill.size);
-            int stride = Math.max(1, fill.size / sampleCount);
+            // Образцы раскидываем равномерно внутри этого локального кластера
+            int sampleCount = Math.min(MAX_SAMPLES, count);
+            int stride = Math.max(1, count / sampleCount);
             c.sampleX = new int[sampleCount];
             c.sampleY = new int[sampleCount];
             for (int i = 0; i < sampleCount; i++) {
-                int idx = fill.get(i * stride);
+                int idx = queue.get(i * stride);
                 c.sampleX[i] = idx % w;
                 c.sampleY[i] = idx / w;
             }
@@ -154,7 +168,7 @@ public class OreSafety {
             clusters.add(c);
         }
 
-        Log.info("OreSafety: found @ veins until first cycle.", clusters.size);
+        Log.info("OreSafety: found @ veins after clustering.", clusters.size);
     }
 
     // ================== УГРОЗА ==================
@@ -213,87 +227,88 @@ public class OreSafety {
         return false;
     }
 
+    // ================== ЗАПРОСЫ ==================
+
     /**
-     * Безопасен ли перелёт по прямой до точки: доля пути под огнём
-     * не должна превышать PATH_BLOCKED_FRACTION.
+     * Глобальная проверка: есть ли на карте ХОТЯ БЫ ОДНО ядро,
+     * у которого ближайшая жила этого ресурса БЕЗОПАСНА.
      */
+    public static boolean itemAvailable(Item item, boolean safetyEnabled) {
+        if (player == null || player.team() == null) return false;
+        var cores = player.team().cores();
+        if (cores.isEmpty()) return false;
+
+        if (!safetyEnabled) {
+            // Если безопасность выключена — смотрим просто физическое наличие
+            for (Cluster c : clusters) {
+                if (c.item == item && c.freeTiles) return true;
+            }
+            return false;
+        }
+
+        // Ищем, есть ли хоть одно ядро с безопасной ближайшей рудой
+        for (Building core : cores) {
+            if (isCoreOreSafe(core, item)) return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Локальная проверка для конкретного юнита:
+     * Безопасна ли эта руда для этого юнита с учетом его позиции и ближайшего ядра?
+     */
+    public static boolean isItemSafeForUnit(Unit u, Item item) {
+        if (u == null) return false;
+        Building nearestCore = u.closestCore();
+        if (nearestCore == null) return false;
+
+        return isCoreOreSafe(nearestCore, item);
+    }
+
+    /** Вспомогательный метод: проверяет, безопасна ли ближайшая жила ресурса от конкретного ядра */
+    public static boolean isCoreOreSafe(Building core, Item item) {
+        Cluster nearest = null;
+        float minDst = Float.MAX_VALUE;
+
+        for (Cluster c : clusters) {
+            if (c.item != item || !c.freeTiles) continue;
+            float dst = (c.x - core.x) * (c.x - core.x) + (c.y - core.y) * (c.y - core.y);
+            if (dst < minDst) {
+                minDst = dst;
+                nearest = c;
+            }
+        }
+
+        // Если жилы нет вообще или ближайшая к ядру жила простреливается — небезопасно.
+        // GL: юниты возят руду между ядром и жилой, поэтому и дорога туда-обратно не должна идти через огонь.
+        return nearest != null && !nearest.threatened && pathSafe(core.x, core.y, nearest.x, nearest.y);
+    }
+
+    /** GL: safe flight along a straight line: at most PATH_BLOCKED_FRACTION of the samples under fire. */
     public static boolean pathSafe(float fromX, float fromY, float toX, float toY) {
         float dist = (float) Math.sqrt((toX - fromX) * (toX - fromX) + (toY - fromY) * (toY - fromY));
         int steps = Math.min(MAX_PATH_SAMPLES, Math.max(2, (int) (dist / PATH_STEP)));
         int blocked = 0;
         for (int i = 0; i <= steps; i++) {
             float t = i / (float) steps;
-            float px = fromX + (toX - fromX) * t;
-            float py = fromY + (toY - fromY) * t;
-            if (isThreatened(px, py)) blocked++;
+            if (isThreatened(fromX + (toX - fromX) * t, fromY + (toY - fromY) * t)) blocked++;
         }
         return blocked / (float) (steps + 1) <= PATH_BLOCKED_FRACTION;
     }
 
-    // ================== ЗАПРОСЫ ==================
-
-    /**
-     * Есть ли у ресурса хоть одна пригодная жила: руда существует физически,
-     * в ней есть свободные тайлы, и (при включённой защите) она не под огнём.
-     */
-    public static boolean itemAvailable(Item item, boolean safetyEnabled) {
-        for (Cluster c : clusters) {
-            if (c.item != item) continue;
-            if (!c.freeTiles) continue;
-            if (safetyEnabled && c.threatened) continue;
-            return true;
-        }
-        return false;
-    }
-
-    /** Ближайшая пригодная жила ресурса к точке или null. */
-    public static Cluster nearestAvailable(Item item, float x, float y, boolean safetyEnabled) {
-        Cluster best = null;
+    /** GL: nearest core of the team that is not under enemy fire, or null. */
+    public static Building nearestSafeCore(Unit u) {
+        Building best = null;
         float bestDst = Float.MAX_VALUE;
-        for (Cluster c : clusters) {
-            if (c.item != item || !c.freeTiles) continue;
-            if (safetyEnabled && c.threatened) continue;
-            float dst = (c.x - x) * (c.x - x) + (c.y - y) * (c.y - y);
+        for (Building core : u.team.cores()) {
+            if (isThreatened(core.x, core.y)) continue;
+            float dst = u.dst2(core);
             if (dst < bestDst) {
                 bestDst = dst;
-                best = c;
+                best = core;
             }
         }
         return best;
     }
-
-    // ================== ОТВОД ЮНИТОВ ==================
-
-    public static void forget(int unitId) {
-        redirectTargets.remove(unitId);
-        redirectStartTime.remove(unitId);
-    }
-
-    public static void markRedirect(int unitId, Cluster target) {
-        redirectTargets.put(unitId, target);
-        redirectStartTime.put(unitId, Time.millis());
-    }
-
-    public static boolean isRedirecting(Unit unit) {
-        Cluster target = redirectTargets.get(unit.id);
-        if (target == null) return false;
-
-        // Если юнит достиг цели (радиус 20 пикселей) – редирект завершён
-        if (unit.dst(target.x, target.y) < 20f) {
-            redirectTargets.remove(unit.id);
-            redirectStartTime.remove(unit.id);
-            return false;
-        }
-
-        // Запасной вариант: если прошло больше 30 секунд – сбрасываем
-        Long start = redirectStartTime.get(unit.id);
-        if (start != null && Time.millis() - start > REDIRECT_TIMEOUT_MS) {
-            redirectTargets.remove(unit.id);
-            redirectStartTime.remove(unit.id);
-            return false;
-        }
-
-        return true;
-    }
-//
 }
