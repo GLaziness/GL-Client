@@ -770,7 +770,7 @@ public class ChatFragment extends Table{
     public ChatMessage addMessage(String message, String sender, Color background, String prefix, String unformatted){
         if(sender == null && message == null) return null;
 
-        if((Core.settings.getBool("hidejoinleave") ||  Core.settings.getBool("shift_nick"))&& sender == null && message != null){
+        if(Core.settings.getBool("hidejoinleave") && sender == null && message != null){
             String clean = Strings.stripColors(message);
             if(clean.contains("joined!") || clean.contains("left!") || clean.contains("присоединился") || clean.contains("покинул")){
                 return new ChatMessage(null, null, null, null, null);

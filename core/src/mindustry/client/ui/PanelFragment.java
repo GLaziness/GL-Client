@@ -104,7 +104,6 @@ public class PanelFragment extends Table{
     public static final Seq<Unit> followers = new Seq<>();
     private static int syncTimer = 0;
 
-    String temp_name = Core.settings.getString("mynickshifter", "nani");
     public static boolean polyAiMode = Core.settings.getBool("polyAiMode", false);
     public static final BuilderAI aiNotPolyAi = new BuilderAI();
 
@@ -179,56 +178,6 @@ public class PanelFragment extends Table{
                 }
             }
         });
-    }
-
-    public static String shiftColorsRight(String input) {
-        if (input == null || input.isEmpty()) {
-            return input;
-        }
-
-        List<String> colors = new ArrayList<>();
-        List<String> texts = new ArrayList<>();
-        StringBuilder currentText = new StringBuilder();
-
-        int i = 0;
-        int len = input.length();
-        while (i < len) {
-            // Ищем начало тега цвета: "[#"
-            if (input.charAt(i) == '[' && i + 2 < len && input.charAt(i + 1) == '#') {
-                int endBracket = input.indexOf(']', i + 2);
-                if (endBracket != -1) {
-                    // Нашли валидный тег [#...]
-                    colors.add(input.substring(i, endBracket + 1));
-                    texts.add(currentText.toString());
-                    currentText.setLength(0); // Очищаем буфер для следующего сегмента текста
-                    i = endBracket + 1;
-                    continue;
-                }
-            }
-            // Обычный символ
-            currentText.append(input.charAt(i));
-            i++;
-        }
-        // Добавляем остаток текста после последнего цвета
-        texts.add(currentText.toString());
-
-        // Если цветов 0 или 1, сдвигать нечего
-        if (colors.size() <= 1) {
-            return input;
-        }
-
-        // Циклический сдвиг коллекции вправо на 1 позицию
-        Collections.rotate(colors, 1);
-
-        // Собираем строку обратно, чередуя сдвинутые цвета и исходные тексты
-        StringBuilder result = new StringBuilder(input.length());
-        result.append(texts.get(0)); // Текст до первого цвета (обычно пустой)
-        for (int k = 0; k < colors.size(); k++) {
-            result.append(colors.get(k));
-            result.append(texts.get(k + 1));
-        }
-
-        return result.toString();
     }
 
     public static void startInit() {
@@ -432,22 +381,13 @@ public class PanelFragment extends Table{
 
     private void buildServer(Table root){
         header(root, "fdpanel.tab.server");
-        Seq<GridEntry> entries = Seq.with(
+        iconGrid(root,
             action(Icon.refresh, "fdpanel.sync", () -> Call.sendChatMessage("/sync")),
             action(Icon.ok, "fdpanel.vote", () -> Call.sendChatMessage("/vote y")),
             autoAction(Icon.map, "fdpanel.rtv", () -> Call.sendChatMessage("/rtv"), () -> rtvKey, () -> rtvKey = !rtvKey),
             autoAction(Icon.waves, "fdpanel.rtvwave", () -> Call.sendChatMessage("/rtv wave"), () -> rtvWaveKey, () -> rtvWaveKey = !rtvWaveKey),
             action(Icon.book, "fdpanel.history", () -> Call.sendChatMessage("/history"))
         );
-
-        if(settings.getBool("OneLoliToRuleThemAll", false)){
-            entries.add(toggle(Icon.warning, "fdpanel.shiftnick", () -> settings.getBool("shift_nick", false), () -> {
-                temp_name = shiftColorsRight(settings.getString("mynickshifter", "nani"));
-                settings.put("shift_nick", !settings.getBool("shift_nick"));
-            }));
-        }
-
-        iconGrid(root, entries.toArray(GridEntry.class));
     }
 
     // region panel widgets

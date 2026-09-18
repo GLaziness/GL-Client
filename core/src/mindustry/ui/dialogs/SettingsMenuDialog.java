@@ -574,23 +574,13 @@ public class SettingsMenuDialog extends BaseDialog{
         client.sliderPref("alarmgriefblocksbuild", 10, 0, 500, 1, String::valueOf);
         client.sliderPref("alarmgriefblocksbreake", 100, 0, 500, 1, String::valueOf);
 
-        if(Core.settings.getBool("OneLoliToRuleThemAll", false)) {
-            client.category("FD_LOLI");
-            client.updateUuid();
-            client.textPref("uchatcolor", "");
-            client.textPref("uchatgradientstart", "");
-            client.textPref("uchatgradientend", "");
-            client.sliderPref("uchatgradientstep", 3, 1, 10, 1, String::valueOf);
-            client.sliderPref("uchatmode", 0, 0, 4, i -> {
-                if(i == 0) return "Выкл";
-                if(i == 1) return "Обычный";
-                if(i == 2) return "Градиент";
-                if(i == 3) return "Радуга";
-                return "Оптимизированный Красный";
-            });
-            client.textPref("mynickshifter", "");
-            client.addGradientNicknameGenerator();
-        }
+        client.updateUuid();
+        client.textPref("uchatcolor", "");
+        client.textPref("uchatgradientstart", "");
+        client.textPref("uchatgradientend", "");
+        client.sliderPref("uchatgradientstep", 3, 1, 10, 1, String::valueOf);
+        client.sliderPref("uchatmode", 0, 0, 4, i -> "@client.slider.uchatmode." + i);
+        client.addGradientNicknameGenerator();
 
         if (settings.getBool("client-experimentals") || OS.hasProp("policone")) {
             client.category("experimental");
@@ -1171,11 +1161,11 @@ public class SettingsMenuDialog extends BaseDialog{
                     // Основная панель еще шире для удобства
                     table.table(Styles.grayPanel, t -> {
                         t.margin(14);
-                        t.add("Генератор градиента").color(Pal.accent).padBottom(10).row();
+                        t.add("@client.gradgen.title").color(Pal.accent).padBottom(10).row();
 
                         // 1. Поле ввода
                         t.table(it -> {
-                            it.add("Текст ника:").left().expandX().row();
+                            it.add("@client.gradgen.text").left().expandX().row();
                             it.field(Core.settings.getString("grad_nick_raw"), text -> {
                                 Core.settings.put("grad_nick_raw", text);
                             }).width(400).height(45);
@@ -1191,7 +1181,7 @@ public class SettingsMenuDialog extends BaseDialog{
                             }).size(55).get();
                             bStart.update(() -> bStart.getStyle().imageUpColor = startC);
 
-                            ct.add(" Градиент ").pad(0, 15, 0, 15);
+                            ct.add("@client.gradgen.gradient").pad(0, 15, 0, 15);
 
                             ImageButton bEnd = ct.button(Icon.fill, () -> {
                                 Vars.ui.picker.show(endC, res -> {
@@ -1204,7 +1194,7 @@ public class SettingsMenuDialog extends BaseDialog{
 
                         // 3. Слайдер
                         t.table(st -> {
-                            st.add("Символов на цвет: ").left();
+                            st.add("@client.gradgen.step").left();
                             Label stepLabel = st.add("").color(Pal.accent).width(35).get();
                             stepLabel.update(() -> stepLabel.setText(String.valueOf(Core.settings.getInt("grad_step"))));
 
@@ -1214,7 +1204,7 @@ public class SettingsMenuDialog extends BaseDialog{
                         }).width(400).padTop(10).row();
 
                         // 5. Кнопка Генерации
-                        t.button("Сгенерировать градиент", Icon.refresh, () -> {
+                        t.button("@client.gradgen.generate", Icon.refresh, () -> {
                             result[0] = generateGradient(
                                     Core.settings.getString("grad_nick_raw"),
                                     startC,
@@ -1224,19 +1214,19 @@ public class SettingsMenuDialog extends BaseDialog{
                         }).width(400).height(50).padTop(10).color(Pal.accent).row();
 
                         // 4. Поле ПРЕДВЫБОРА / КОПИРОВАНИЯ
-                        t.add("Нажми, чтобы скопировать:").padTop(20).left().row();
+                        t.add("@client.gradgen.copyhint").padTop(20).left().row();
 
                         TextButton resBtn = t.button("", Styles.flatBordert, () -> {
                             if(!result[0].isEmpty()){
                                 Core.app.setClipboardText(result[0]);
-                                Vars.ui.showInfoFade("Ник скопирован в буфер!");
+                                Vars.ui.showInfoFade("@client.gradgen.copied");
                             }
                         }).width(400).height(55).get();
 
                         // Кнопка всегда видна, но меняет текст
                         resBtn.update(() -> {
                             if(result[0].isEmpty()){
-                                resBtn.setText("[gray]Тут появится результат...");
+                                resBtn.setText("[gray]" + Core.bundle.get("client.gradgen.placeholder"));
                                 resBtn.setDisabled(true);
                             } else {
                                 resBtn.setText(result[0]);
@@ -1251,7 +1241,7 @@ public class SettingsMenuDialog extends BaseDialog{
                                 int len = result[0].length();
                                 if(len == 0) l.setText("");
                                 else {
-                                    l.setText("Длина: " + len + " / 70");
+                                    l.setText(Core.bundle.format("client.gradgen.length", len));
                                     l.setColor(len > 70 ? Color.scarlet : Color.lightGray);
                                 }
                             });
