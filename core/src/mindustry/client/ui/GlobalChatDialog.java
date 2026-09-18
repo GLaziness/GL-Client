@@ -153,7 +153,8 @@ public class GlobalChatDialog extends Table{
     }
 
     /** Lines and statuses without the [GL] / [GL-S] label: the window shows icons instead. */
-    private static String noPrefix(String line){
+    private static String noPrefix(String text){
+        String line = GlobalChat.icons(text);
         if(line.startsWith(GlobalChat.serverPrefix)) return line.substring(GlobalChat.serverPrefix.length());
         if(line.startsWith(GlobalChat.prefix)) return line.substring(GlobalChat.prefix.length());
         return line;

@@ -31,9 +31,11 @@ public class GlobalChat{
     private static final String pin = "5373188ec5a8d68d4f930a38f2aadb8b9606ac35819d8ddcecb8865e4d81971e";
     private static final int maxText = 200, maxLog = 150;
     /** Start of every line of the global chat. */
-    public static final String prefix = "[#7fd3ff][[GL][] ";
+    public static final String prefix = "[#7fd3ff]" + Iconc.planet + "[] ";
     /** Start of every line of the chat of the server the player is on. */
-    public static final String serverPrefix = "[#a3e87a][[GL-S][] ";
+    public static final String serverPrefix = "[#a3e87a]" + Iconc.host + "[] ";
+    /** How the lines start in the bundles; {@link #icons(String)} turns these labels into the icons above. */
+    private static final String bundlePrefix = "[#7fd3ff][[GL][] ", bundleServerPrefix = "[#a3e87a][[GL-S][] ";
     /** Kinds of {@link #lineKinds}: system lines are shown in both tabs. */
     public static final int kindSystem = 0, kindGlobal = 1, kindServer = 2;
 
@@ -275,8 +277,19 @@ public class GlobalChat{
         return sb.toString().trim();
     }
 
+    /** A line from the bundles with the planet / server icon instead of the [GL] / [GL-S] label. */
+    public static String icons(String text){
+        if(text.startsWith(bundlePrefix)) return prefix + text.substring(bundlePrefix.length());
+        if(text.startsWith(bundleServerPrefix)) return serverPrefix + text.substring(bundleServerPrefix.length());
+        return text;
+    }
+
     /** One line saying what the chat is doing: off, connected, or what went wrong. */
     public static String status(){
+        return icons(statusText());
+    }
+
+    private static String statusText(){
         if(!enabled()) return Core.bundle.get("client.globalchat.off");
         if(connected) return globalOn() ? Core.bundle.format("client.globalchat.status", online) : Core.bundle.get("client.globalchat.status.serveronly");
         String e = error;
@@ -535,7 +548,7 @@ public class GlobalChat{
                         escape(msg.getString("host", "")));
                     // actions of server moderators are about the chat of one server
                     boolean server = msg.getString("ch", "").equals("server");
-                    if(server && text.startsWith(prefix)) text = serverPrefix + text.substring(prefix.length());
+                    if(server && text.startsWith(bundlePrefix)) text = bundleServerPrefix + text.substring(bundlePrefix.length());
                     postRaw(text, Strings.stripColors(text), "", "", server ? kindServer : kindGlobal);
                 }
             }
@@ -589,7 +602,8 @@ public class GlobalChat{
     }
 
     /** Main thread only. */
-    private static void addLine(String text, String copy, String from, String name, int kind){
+    private static void addLine(String line, String copy, String from, String name, int kind){
+        String text = icons(line);
         log.add(text);
         copies.add(copy);
         lineTags.add(from);
