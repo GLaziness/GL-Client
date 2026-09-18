@@ -246,6 +246,7 @@ public class Net{
         if(server){
             provider.sendAllServer(object, reliable);
         }else{
+            if(object instanceof mindustry.gen.SendChatMessageCallPacket chat) mindustry.client.utils.CursorHider.onChatSent(chat.message); // GL
             provider.sendClient(object, reliable);
         }
     }

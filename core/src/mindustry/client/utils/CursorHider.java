@@ -3,6 +3,7 @@ package mindustry.client.utils;
 import arc.*;
 import arc.math.*;
 import mindustry.entities.units.*;
+import mindustry.game.*;
 import mindustry.gen.*;
 
 import static mindustry.Vars.*;
@@ -17,9 +18,24 @@ public class CursorHider{
     private static boolean swapped;
     private static float mouseX, mouseY;
     private static float[] mountAims = new float[0];
+    /** The server's /history mode is on: it shows the history of the block under the cursor, so the real cursor is sent. */
+    private static boolean historyMode;
+
+    static{
+        Events.on(EventType.ResetEvent.class, e -> historyMode = false);
+    }
 
     public static boolean hiding(){
-        return Core.settings.getBool("hidecursor", false) && player != null && !player.dead() && !player.shooting;
+        return Core.settings.getBool("hidecursor", false) && !historyMode && player != null && !player.dead() && !player.shooting;
+    }
+
+    /** Every chat message sent to the server (typed, from the client or from mods) goes through here. */
+    public static void onChatSent(String message){
+        if(message == null || !message.trim().equalsIgnoreCase("/history")) return;
+        historyMode = !historyMode;
+        if(Core.settings.getBool("hidecursor", false)){
+            player.sendMessage(Core.bundle.get(historyMode ? "client.hidecursor.history.on" : "client.hidecursor.history.off"));
+        }
     }
 
     public static float hiddenX(Unit unit){
