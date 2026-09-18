@@ -19,6 +19,8 @@ import mindustry.world.blocks.production.Drill.*
 import mindustry.world.blocks.production.GenericCrafter.*
 import mindustry.world.blocks.storage.*
 import mindustry.world.blocks.storage.Unloader.*
+import mindustry.world.blocks.units.Reconstructor
+import mindustry.world.blocks.units.UnitFactory
 import mindustry.world.consumers.*
 import kotlin.math.*
 
@@ -37,18 +39,28 @@ class AutoTransfer {
         var drain = false
         var drainToContainers = false
 
+        var targetTurrets = false
+        var targetProduction = false
+        var targetUnitFactories = false
+        var targetReconstructors = false
+
         fun init() {
             // Main settings
             enabled = Core.settings.getBool("autotransfer", false)
             fromCores = Core.settings.getBool("autotransfer-fromcores", true)
             fromContainers = Core.settings.getBool("autotransfer-fromcontainers", true)
-            minCoreItems = Core.settings.getInt("autotransfer-mincoreitems", 100)
+            minCoreItems = Core.settings.getInt("autotransfer-mincoreitems", 10)
             delay = Core.settings.getFloat("autotransfer-transferdelay", 60F)
             minTransferTotal = Core.settings.getInt("autotransfer-mintransfertotal", 10)
             minTransfer = Core.settings.getInt("autotransfer-mintransfer", 2)
             // Drain settings, undocumented for now as drain is still experimental
             drain = Core.settings.getBool("autotransfer-drain", false)
             drainToContainers = Core.settings.getBool("autotransfer-draintocontainers", false)
+
+            targetTurrets = Core.settings.getBool("autotransfer-t-turrets", false)
+            targetProduction = Core.settings.getBool("autotransfer-t-prod", false)
+            targetUnitFactories = Core.settings.getBool("autotransfer-t-units", false)
+            targetReconstructors = Core.settings.getBool("autotransfer-t-recons", false)
         }
     }
 
@@ -75,7 +87,7 @@ class AutoTransfer {
         if (state.rules.onlyDepositCore) return
         if (ratelimitRemaining <= 1) return // Leave one config for other stuff
         if (player.dead()) return
-        player.unit()?.item() ?: return
+        //player.unit()?.item() ?: return
         timer += Time.delta
         if (timer < delay) return
         timer -= delay
@@ -101,7 +113,27 @@ class AutoTransfer {
 
         if (fromContainers && (core == null || !player.within(core, itemTransferRange))) core = containers.selectFrom(builds) { it.block is StorageBlock && (item == null || it.items.has(item)) }.min { it -> it.dst(player) }
 
-        builds.retainAll { it.block.findConsumer<Consume?> { it is ConsumeItems || it is ConsumeItemFilter || it is ConsumeItemDynamic } != null && it !is NuclearReactorBuild && player.within(it, itemTransferRange) }
+        val anyFilterSelected = targetTurrets || targetProduction || targetUnitFactories || targetReconstructors
+        //builds.retainAll { it.block.findConsumer<Consume?> { it is ConsumeItems || it is ConsumeItemFilter || it is ConsumeItemDynamic } != null && it !is NuclearReactorBuild && player.within(it, itemTransferRange) }
+
+        builds.retainAll { build ->
+            // 1. Стандартные проверки (потребление, радиус, реакторы)
+            val baseValid = build.block.findConsumer<Consume?> { it is ConsumeItems || it is ConsumeItemFilter || it is ConsumeItemDynamic } != null
+                    && build !is NuclearReactorBuild
+                    && player.within(build, itemTransferRange)
+
+            if (!baseValid) return@retainAll false
+
+            // 2. Логика фильтров категорий
+            if (!anyFilterSelected) return@retainAll true // Если ничего не выбрано - работаем со всеми
+
+            // Если выбрано, проверяем соответствие включенным фильтрам
+            return@retainAll (targetTurrets && build.block is Turret) ||
+                    (targetProduction && build.block is GenericCrafter) ||
+                    (targetUnitFactories && build.block is UnitFactory) ||
+                    (targetReconstructors && build.block is Reconstructor)
+        }
+
             .sort { b -> -b.acceptStack(player.unit().item(), player.unit().stack.amount, player.unit()).toFloat() }
             .forEach {
                 if (ratelimitRemaining <= 1) return@forEach
@@ -285,8 +317,8 @@ class AutoTransfer {
     /** Attempts to make a deposit. Returns the remaining [held] value. */
     private fun depositIntoBuilding(build: Building, held: Int): Int {
         if (held <= 0
-        || player.unit().item() == Items.blastCompound && build.block.findConsumer<ConsumeItems> { it is ConsumeItemExplode } != null // Don't explode things
-        || build.block.findConsumer<ConsumeItems> { it.booster && it is ConsumeItems && it.items.any { it.item == player.unit().item()} } != null // Don't provide boosters
+            || player.unit().item() == Items.blastCompound && build.block.findConsumer<ConsumeItems> { it is ConsumeItemExplode } != null // Don't explode things
+            || build.block.findConsumer<ConsumeItems> { it.booster && it is ConsumeItems && it.items.any { it.item == player.unit().item()} } != null // Don't provide boosters
         ) return held
         val accepted = build.acceptStack(player.unit().item(), player.unit().stack.amount, player.unit())
 

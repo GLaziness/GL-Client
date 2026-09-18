@@ -446,6 +446,8 @@ public class SettingsMenuDialog extends BaseDialog{
         client.sliderPref("weatheropacity", 50, 0, 100, s -> s + "%");
         client.sliderPref("beamdrillopacity", 100, 0, 100, 1, s -> s + "%");
         client.sliderPref("junctionview", 0, -1, 1, 1, s -> { Junction.setBaseOffset(s); return s == -1 ? "@client.left" : s == 1 ? "@client.right" : "Do not show"; });
+        client.sliderPref("itembridgeview", 0, 0, 1, 1, s -> {ItemBridge.setDrawItems(s == 1);return s == 1 ? "Show" : "Do not show";});
+        client.sliderPref("liquidbridgeview", 0, 0, 1, 1, s -> {mindustry.world.blocks.liquid.LiquidBridge.setDrawLiquids(s == 1);return s == 1 ? "Show" : "Do not show";});
         client.sliderPref("spawntime", 5, -1, 60, s -> { ClientVars.spawnTime = 60 * s; if (Vars.pathfinder.thread == null) Vars.pathfinder.start(); return s == -1 ? "Solid Line" : s == 0 ? "@off" : String.valueOf(s); });
         client.sliderPref("traveltime", 10, 0, 60, s -> { ClientVars.travelTime = 60f / s; return s == 0 ? "@off" : String.valueOf(s); });
         client.sliderPref("formationopacity", 30, 10, 100, 5, s -> { UnitType.formationAlpha = s / 100f; return s + "%"; });
@@ -511,7 +513,7 @@ public class SettingsMenuDialog extends BaseDialog{
         client.textPref("gamejointext", "");
         client.textPref("gamewintext", "");
         client.textPref("gamelosetext", "");
-        client.checkPref("autoupdate", true, i -> becontrol.checkUpdates = i);
+        client.checkPref("autoupdate", false, i -> becontrol.checkUpdates = i);
         client.checkPref("discordrpc", true, i -> platform.toggleDiscord(i));
         client.checkPref("confirmexit", true, i -> Vars.confirmExit = i);
         client.checkPref("pathnav", true);
@@ -540,6 +542,55 @@ public class SettingsMenuDialog extends BaseDialog{
         client.checkPref("betterenemyblocktapping", false);
         client.checkPref("autoohno", false);
         client.checkPref("client-experimentals", false);
+
+        client.category("fallen");
+        client.sliderPref("placefragwidth", 7,  3, 10, 1, String::valueOf);
+        client.checkPref("tilefragment", true);
+        client.checkPref("historyfragment", false);
+        client.checkPref("quickschems", false);
+        client.checkPref("wavefragment", false);
+        client.checkPref("mapinfofrag", false);
+        client.checkPref("unitcontrolfragment", false);
+        client.checkPref("hidejoinleave", false);
+        client.checkPref("placeSchematicWithCleanup", false);
+        client.checkPref("no_collisions", false);
+        client.checkPref("unitcontrolalarm", false);
+        client.checkPref("unitcontrolselfalarm", false);
+        client.sliderPref("unitcontrolalarmcount", 100, 1, 1000, 1, String::valueOf);
+        client.checkPref("coredeathalarm", true);
+        client.checkPref("coredeathalarmrecap", true);
+        client.checkPref("playerunitdeathalarm", false);
+        client.sliderPref("playerunitdeathalarmhp", 15000, 0, 24000, 50, String::valueOf);
+        client.sliderPref("yoffssetfdpamel", -200, -900, 900, 10, String::valueOf);
+        client.sliderPref("buttonsizefdpamel", 30, 10, 70, 5, String::valueOf);
+        client.sliderPref("fadedblockallplayers", 10, 0, 100, 1, String::valueOf);
+        client.checkPref("resetschetags", false);
+        //client.checkPref("steal_map", false);
+        //client.checkPref("fd_autofill", false);
+        client.checkPref("forcechat", false);
+        client.checkPref("ihateattems", true);
+        client.checkPref("assistfixfd", false);
+        client.checkPref("alarmgriefblocks", false);
+        client.sliderPref("alarmgriefblocksbuild", 10, 0, 500, 1, String::valueOf);
+        client.sliderPref("alarmgriefblocksbreake", 100, 0, 500, 1, String::valueOf);
+
+        if(Core.settings.getBool("OneLoliToRuleThemAll", false)) {
+            client.category("FD_LOLI");
+            client.updateUuid();
+            client.textPref("uchatcolor", "");
+            client.textPref("uchatgradientstart", "");
+            client.textPref("uchatgradientend", "");
+            client.sliderPref("uchatgradientstep", 3, 1, 10, 1, String::valueOf);
+            client.sliderPref("uchatmode", 0, 0, 4, i -> {
+                if(i == 0) return "Выкл";
+                if(i == 1) return "Обычный";
+                if(i == 2) return "Градиент";
+                if(i == 3) return "Радуга";
+                return "Оптимизированный Красный";
+            });
+            client.textPref("mynickshifter", "");
+            client.addGradientNicknameGenerator();
+        }
 
         if (settings.getBool("client-experimentals") || OS.hasProp("policone")) {
             client.category("experimental");
@@ -1100,6 +1151,204 @@ public class SettingsMenuDialog extends BaseDialog{
                 searchBar.requestKeyboard();
             }
             isRebuilding = false;
+        }
+
+
+        private void addGradientNicknameGenerator() {
+            Core.settings.defaults("grad_nick_raw", "Test Nick");
+            Core.settings.defaults("grad_start_hex", "ff0000");
+            Core.settings.defaults("grad_end_hex", "ffffff");
+            Core.settings.defaults("grad_step", 1);
+
+            pref(new Setting("grad_nickname_gen") {
+                Color startC = Color.valueOf(Core.settings.getString("grad_start_hex"));
+                Color endC = Color.valueOf(Core.settings.getString("grad_end_hex"));
+                final String[] result = {""};
+
+                @Override
+                public void add(SettingsTable table) {
+                    table.row();
+                    // Основная панель еще шире для удобства
+                    table.table(Styles.grayPanel, t -> {
+                        t.margin(14);
+                        t.add("Генератор градиента").color(Pal.accent).padBottom(10).row();
+
+                        // 1. Поле ввода
+                        t.table(it -> {
+                            it.add("Текст ника:").left().expandX().row();
+                            it.field(Core.settings.getString("grad_nick_raw"), text -> {
+                                Core.settings.put("grad_nick_raw", text);
+                            }).width(400).height(45);
+                        }).row();
+
+                        // 2. Выбор цветов
+                        t.table(ct -> {
+                            ImageButton bStart = ct.button(Icon.fill, () -> {
+                                Vars.ui.picker.show(startC, res -> {
+                                    startC.set(res);
+                                    Core.settings.put("grad_start_hex", res.toString());
+                                });
+                            }).size(55).get();
+                            bStart.update(() -> bStart.getStyle().imageUpColor = startC);
+
+                            ct.add(" Градиент ").pad(0, 15, 0, 15);
+
+                            ImageButton bEnd = ct.button(Icon.fill, () -> {
+                                Vars.ui.picker.show(endC, res -> {
+                                    endC.set(res);
+                                    Core.settings.put("grad_end_hex", res.toString());
+                                });
+                            }).size(55).get();
+                            bEnd.update(() -> bEnd.getStyle().imageUpColor = endC);
+                        }).padTop(10).row();
+
+                        // 3. Слайдер
+                        t.table(st -> {
+                            st.add("Символов на цвет: ").left();
+                            Label stepLabel = st.add("").color(Pal.accent).width(35).get();
+                            stepLabel.update(() -> stepLabel.setText(String.valueOf(Core.settings.getInt("grad_step"))));
+
+                            st.slider(1, 10, 1, Core.settings.getInt("grad_step"), val -> {
+                                Core.settings.put("grad_step", (int)val);
+                            }).width(200).padLeft(10);
+                        }).width(400).padTop(10).row();
+
+                        // 5. Кнопка Генерации
+                        t.button("Сгенерировать градиент", Icon.refresh, () -> {
+                            result[0] = generateGradient(
+                                    Core.settings.getString("grad_nick_raw"),
+                                    startC,
+                                    endC,
+                                    Core.settings.getInt("grad_step")
+                            );
+                        }).width(400).height(50).padTop(10).color(Pal.accent).row();
+
+                        // 4. Поле ПРЕДВЫБОРА / КОПИРОВАНИЯ
+                        t.add("Нажми, чтобы скопировать:").padTop(20).left().row();
+
+                        TextButton resBtn = t.button("", Styles.flatBordert, () -> {
+                            if(!result[0].isEmpty()){
+                                Core.app.setClipboardText(result[0]);
+                                Vars.ui.showInfoFade("Ник скопирован в буфер!");
+                            }
+                        }).width(400).height(55).get();
+
+                        // Кнопка всегда видна, но меняет текст
+                        resBtn.update(() -> {
+                            if(result[0].isEmpty()){
+                                resBtn.setText("[gray]Тут появится результат...");
+                                resBtn.setDisabled(true);
+                            } else {
+                                resBtn.setText(result[0]);
+                                resBtn.setDisabled(false);
+                            }
+                        });
+                        t.row();
+
+                        // Счетчик символов
+                        t.table(lt -> {
+                            lt.add("").update(l -> {
+                                int len = result[0].length();
+                                if(len == 0) l.setText("");
+                                else {
+                                    l.setText("Длина: " + len + " / 70");
+                                    l.setColor(len > 70 ? Color.scarlet : Color.lightGray);
+                                }
+                            });
+                        }).height(20).row();
+
+
+
+                    }).width(440).pad(10).expandX();
+                    table.row();
+                }
+            });
+        }
+
+        private String generateGradient(String text, Color start, Color end, int step) {
+            if (text == null || text.isEmpty()) return "";
+
+            StringBuilder sb = new StringBuilder();
+            String cleanText = text.replace(" ", "");
+
+            // Если в нике всего 1 буква или шаг больше длины
+            if (cleanText.length() <= 1 || cleanText.length() <= step) {
+                return "[#" + start.toString().substring(0, 6) + "]" + text;
+            }
+
+            int totalBlocks = (int) Math.ceil((double) cleanText.length() / step);
+            int cleanCharIdx = 0;
+
+            for (int i = 0; i < text.length(); i++) {
+                char c = text.charAt(i);
+
+                if (c == ' ') {
+                    sb.append(c);
+                    continue;
+                }
+
+                if (cleanCharIdx % step == 0) {
+                    // Рассчитываем t от 0.0 до 1.0
+                    float t = (float) (cleanCharIdx / step) / (totalBlocks - 1);
+
+                    // Самый надежный способ lerp для Mindustry
+                    int r = (int) ((start.r + (end.r - start.r) * t) * 255);
+                    int g = (int) ((start.g + (end.g - start.g) * t) * 255);
+                    int b = (int) ((start.b + (end.b - start.b) * t) * 255);
+
+                    sb.append(String.format("[#%02x%02x%02x]",
+                            Math.max(0, Math.min(255, r)),
+                            Math.max(0, Math.min(255, g)),
+                            Math.max(0, Math.min(255, b))));
+                }
+
+                sb.append(c);
+                cleanCharIdx++;
+            }
+
+            return sb.toString();
+        }
+
+        private void updateUuid() {
+            settings.defaults("updateuuid", settings.getString("uuid"));
+
+            pref(new Setting("updateuuid") {
+                @Override
+                public void add(SettingsTable table) {
+                    name = "updateuuid";
+                    title = bundle.get("setting." + name + ".name");
+
+                    table.table(t -> {
+                        t.left();
+                        t.button(Icon.refresh, Styles.settingTogglei, 32, () -> {
+                            String val = settings.getString("updateuuid");
+                            if(!val.isEmpty()) {
+                                Core.settings.put("uuid", val);
+                                ui.showInfo("UUID применен! Перезайди на сервер.");
+                            }
+                        }).padRight(4);
+
+                        t.add(title).padRight(10);
+
+                        TextField field = t.field(settings.getString(name), text -> {
+                            settings.put(name, text);
+                        }).width(400).get();
+
+                        field.setMessageText("UUID...");
+
+                        t.button(Icon.box, Styles.cleari, () -> {
+                            byte[] bytes = new byte[8];
+                            new java.util.Random().nextBytes(bytes);
+                            String newGen = new String(arc.util.serialization.Base64Coder.encode(bytes));
+
+                            settings.put("updateuuid", newGen);
+                            field.setText(newGen);
+                        }).size(32).padLeft(8).tooltip("Random UUID");
+
+                    }).left().expandX();
+                    table.row();
+                }
+            });
         }
 
         public abstract static class Setting{

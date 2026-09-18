@@ -74,6 +74,7 @@ public class Units{
         }
 
         if(unit != null){
+            Events.fire(new EventType.UnitRealDeathEvent(unit));
             unit.killed();
         }
     }

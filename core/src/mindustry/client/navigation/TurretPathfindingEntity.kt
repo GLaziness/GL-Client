@@ -15,7 +15,14 @@ import kotlin.concurrent.*
 class TurretPathfindingEntity(@JvmField val entity: Ranged, @JvmField val range: Floatp, @JvmField val targetGround: Boolean, @JvmField val targetAir: Boolean, private val canShoot: Boolp) : QuadTreeObject {
     var id = 0L
 
-    fun range() = range.get()
+    //fun range() = range.get()
+    fun range(): Float {
+        return try {
+            range.get()
+        } catch (e: Exception) {
+            0f
+        }
+    }
     fun canShoot() = canShoot.get()
     fun canHitPlayer() = if (player.unit()?.isFlying ?: false) targetAir else targetGround
     fun isObstacle() = canShoot() && canHitPlayer() && !ignoreDamageSource(player.unit()?.type ?: UnitTypes.alpha, entity)

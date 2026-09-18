@@ -41,9 +41,13 @@ class MinePath @JvmOverloads constructor(
             if (split.none { Strings.parseInt(it) > 0 }) player.sendMessage("client.path.miner.allinvalid".bundle())
         }
         else if (cap >= 0) {
-            player.sendMessage(Core.bundle.format("client.path.miner.tobuild", items.joinToString(), if (cap == 0) "∞" else cap))
+            if(!Core.settings.getBool("afkmode")) {
+                player.sendMessage(Core.bundle.format("client.path.miner.tobuild", items.joinToString(), if (cap == 0) "∞" else cap))
+            }
         } else {
-            player.sendMessage(Core.bundle.format("client.path.miner.toidle", items.joinToString(), player.closestCore()?.storageCapacity ?: "-∞"))
+            if(!Core.settings.getBool("afkmode")) {
+                player.sendMessage(Core.bundle.format("client.path.miner.toidle", items.joinToString(), player.closestCore()?.storageCapacity ?: "-∞"))
+            }
         }
 
         addListener { AutoTransfer.enabled = Core.settings.getBool("autotransfer") && !(state.rules.pvp && Server.io()) } // Re-enable autoTransfer if we turned it off during the path
@@ -74,8 +78,10 @@ class MinePath @JvmOverloads constructor(
 
         if (!newGame && core.items[bestItem] >= maxCap && cap >= 0) {  // Auto switch to BuildPath when core is sufficiently full
             coreIdle = false
-            player.sendMessage(Core.bundle.format("client.path.miner.build", maxCap))
-            Navigation.follow(BuildPath(items, cap))
+            if(!Core.settings.getBool("afkmode")) {
+                player.sendMessage(Core.bundle.format("client.path.miner.build", maxCap))
+                Navigation.follow(BuildPath(items, cap))
+            }
         }
 
         // idle at core
@@ -85,7 +91,9 @@ class MinePath @JvmOverloads constructor(
             if (player.unit().hasItem()) player.unit().clearItem() // clear items to prepare for MinePath resumption
 
             if (core.items[bestItem] < maxCap / 2) {
-                player.sendMessage(Core.bundle.get("client.path.miner.resume"))
+                if(!Core.settings.getBool("afkmode")) {
+                    player.sendMessage(Core.bundle.get("client.path.miner.resume"))
+                }
                 coreIdle = false
             }
 
@@ -101,7 +109,9 @@ class MinePath @JvmOverloads constructor(
 
                 // idle at core if cap < 0 (never switch to build path)
                 if (core.items[bestItem] >= maxCap && cap < 0) {
-                    player.sendMessage(Core.bundle.format("client.path.miner.idle", maxCap))
+                    if(!Core.settings.getBool("afkmode")) {
+                        player.sendMessage(Core.bundle.format("client.path.miner.idle", maxCap))
+                    }
                     coreIdle = true
                 }
             } else {

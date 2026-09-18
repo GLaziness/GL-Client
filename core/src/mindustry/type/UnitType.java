@@ -760,6 +760,9 @@ public class UnitType extends UnlockableContent implements Senseable{
         }else if(net.active() && unit.lastCommanded != null){
             table.row();
             table.add(Core.bundle.format("lastcommanded", unit.lastCommanded)).width(260f).wrap().left();
+        } else {
+            table.row();
+            table.label(() -> Iconc.settings + " " + (long)unit.flag).color(Color.lightGray).wrap().left();
         }
 
         table.row();

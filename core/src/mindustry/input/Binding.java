@@ -118,7 +118,7 @@ public class Binding{
     undo = KeyBind.add("undo", KeyCode.z, KeyCode.controlLeft),
     redo = KeyBind.add("save", KeyCode.y, KeyCode.controlLeft),
     saveSchematic = KeyBind.add("save_schematic", KeyCode.enter, KeyCode.controlLeft),
-    
+
     //Map editor
     editorGrid = KeyBind.add("editor_grid", KeyCode.g, KeyCode.controlLeft),
     editorHideBlocks = KeyBind.add("editor_hide_blocks", KeyCode.i, KeyCode.controlLeft),
@@ -137,6 +137,14 @@ public class Binding{
     console = KeyBind.add("console", KeyCode.f8),
     debugHitboxes = KeyBind.add("debug_hitboxes", KeyCode.unset),
     performanceMetrics = KeyBind.add("performance_metrics", KeyCode.unset),
+
+    //FD Stuff
+    toogle_fdlsit_frag = KeyBind.add("toogle_fdlsit_frag", KeyCode.p, "fallen"),
+    block_show_plans = KeyBind.add("block_show_plans", KeyCode.plus, "fallen"),
+    death_show_plans = KeyBind.add("death_show_plans", KeyCode.asterisk, "fallen"),
+    deselect_half_units = KeyBind.add("deselect_half_units", KeyCode.j, "fallen"),
+    select_last_units = KeyBind.add("select_last_units", KeyCode.r, "fallen"),
+    replace_bridge = KeyBind.add("replace_bridge", KeyCode.altLeft, "fallen"),
 
     //Client stuff
     tileActionsMenuModifier = KeyBind.add("tile_actions_menu_modifier", KeyCode.altLeft, "client"),
@@ -178,6 +186,7 @@ public class Binding{
     assistPlayerBuildpath = KeyBind.add("assist_player_buildpath", KeyCode.mouseLeft, KeyCode.controlLeft, KeyCode.altLeft),
     assistPlayerFreemove = KeyBind.add("assist_player_freemove", KeyCode.mouseLeft, KeyCode.shiftLeft, KeyCode.altLeft),
     runJS = KeyBind.add("run_js", KeyCode.u)
+
     ;
 
     //dummy static class initializer

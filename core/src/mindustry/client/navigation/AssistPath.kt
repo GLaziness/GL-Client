@@ -92,19 +92,32 @@ class AssistPath(val assisting: Player?, val type: Type = Type.Regular, var circ
             }
         }
 
-        if (assisting.isBuilder && player.isBuilder && assisting.unit().updateBuilding && assisting.team() == player.team()) {
-            plans.forEach { player.unit().removeBuild(it.x, it.y, it.breaking) }
-            plans.clear()
-            for (plan in assisting.unit().plans) {
-                if (BuildPlanCommunicationSystem.isNetworking(plan)) continue
-                plans.add(plan)
-                player.unit().addBuild(plan, false)
+        if (assisting.isBuilder && player.isBuilder /* && build */) {
+            if (assisting.unit().updateBuilding && assisting.team() == player.team()) {
+                plans.forEach { player.unit().removeBuild(it.x, it.y, it.breaking) }
+                plans.clear()
+
+                val fixFd = Core.settings.getBool("assistfixfd", false)
+
+                for (plan in assisting.unit().plans) {
+                    if (BuildPlanCommunicationSystem.isNetworking(plan)) continue
+                    if (fixFd) {
+                        val b = plan.block
+                        if (b is mindustry.world.blocks.power.PowerNode ||
+                            b is mindustry.world.blocks.distribution.ItemBridge ||
+                            b is mindustry.world.blocks.liquid.LiquidBridge) {
+                            continue
+                        }
+
+                    }
+                    plans.add(plan)
+                    player.unit().addBuild(plan, false)
+                }
             }
         } else { // The player isn't building, we shouldn't be either.
             plans.forEach { player.unit().removeBuild(it.x, it.y, it.breaking) }
             plans.clear()
         }
-
     }
 
     private fun handleInput() {

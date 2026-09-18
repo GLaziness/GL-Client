@@ -128,14 +128,15 @@ public abstract class InputHandler implements InputProcessor, GestureListener{
     public boolean followGameEndPan = true;
 
     //for RTS controls
-    public Seq<Unit> selectedUnits = new Seq<>();
-    public Seq<Building> commandBuildings = new Seq<>(false);
+    public static Seq<Unit> selectedUnits = new Seq<>();
+    public static Seq<Building> commandBuildings = new Seq<>(false);
     public boolean commandMode = false;
     public boolean commandRect = false;
     public boolean tappedOne = false;
     public float commandRectX, commandRectY;
     /** Groups of units saved to different hotkeys */
     public IntSeq[] controlGroups = new IntSeq[controlGroupBindings.length];
+    public static UnitType last_select_units_type = null;
 
     private Seq<BuildPlan> plansOut = new Seq<>(BuildPlan.class);
     public QuadTree<BuildPlan> playerPlanTree = new QuadTree<>(new Rect());
@@ -439,6 +440,11 @@ public abstract class InputHandler implements InputProcessor, GestureListener{
                 Fx.moveCommand.at(posTarget);
             }
         }
+
+        if(finalBatch && player != null){
+            Teamc target = buildTarget != null ? buildTarget : unitTarget;
+            Events.fire(new UnitCommandPositionEvent(player, unitIds, posTarget, target));
+        }
     }
 
     @Remote(called = Loc.server, targets = Loc.both, forward = true)
@@ -473,6 +479,10 @@ public abstract class InputHandler implements InputProcessor, GestureListener{
                     }
                 }
             }
+        }
+
+        if(player != null && unitIds != null && command != null){
+            Events.fire(new UnitStateChangeEvent(player, unitIds, command));
         }
     }
 
@@ -1210,6 +1220,7 @@ public abstract class InputHandler implements InputProcessor, GestureListener{
         if(commandMode){
             Unit unit = selectedCommandUnit(input.mouseWorldX(), input.mouseWorldY());
             if(unit != null){
+                last_select_units_type = unit.type;
                 selectedUnits.clear();
                 camera.bounds(Tmp.r1);
                 selectedUnits.addAll(selectedCommandUnits(Tmp.r1.x, Tmp.r1.y, Tmp.r1.width, Tmp.r1.height, u -> u.type == unit.type));
@@ -1224,6 +1235,7 @@ public abstract class InputHandler implements InputProcessor, GestureListener{
             Unit unit = selectedCommandUnit(input.mouseWorldX(), input.mouseWorldY());
             Building build = world.buildWorld(input.mouseWorldX(), input.mouseWorldY());
             if(unit != null){
+                last_select_units_type = unit.type;
                 if(!selectedUnits.contains(unit)){
                     selectedUnits.add(unit);
                 }else{
@@ -2273,11 +2285,23 @@ public abstract class InputHandler implements InputProcessor, GestureListener{
 
     protected void updateLine(int x1, int y1, int x2, int y2){
         linePlans.clear();
+        Block old = block;
         if(block.group == BlockGroup.walls && Core.input.shift()) updateWallLine(x1, y1, x2, y2);
         else
-        iterateLine(x1, y1, x2, y2, l -> {
+            if(Core.input.keyDown(Binding.replace_bridge)){        //if(Core.input.alt()){
+                if(old == Blocks.duct){
+                block = (x1 == x2 && y1 == y2) ? Blocks.ductRouter : Blocks.ductBridge;
+            }else if(old == Blocks.conveyor || old == Blocks.titaniumConveyor){
+                block = (x1 == x2 && y1 == y2) ? Blocks.router : Blocks.itemBridge;
+            }else if(old == Blocks.conduit || old == Blocks.pulseConduit){
+                block = (x1 == x2 && y1 == y2) ? Blocks.liquidRouter : Blocks.bridgeConduit;
+            }else if(old == Blocks.reinforcedConduit){
+                block = (x1 == x2 && y1 == y2) ? Blocks.reinforcedLiquidRouter : Blocks.reinforcedBridgeConduit;
+            }
+        }
+        iterateLine(x1, y1, x2, y2, (l) -> {
             rotation = l.rotation;
-            var plan = new BuildPlan(l.x, l.y, l.rotation, block, block.nextConfig());
+            BuildPlan plan = new BuildPlan(l.x, l.y, l.rotation, this.block, this.block.nextConfig());
             plan.animScale = 1f;
             linePlans.add(plan);
         });
@@ -2292,6 +2316,7 @@ public abstract class InputHandler implements InputProcessor, GestureListener{
 
             block.handlePlacementLine(linePlans);
         }
+        block = old;
     }
 
     protected void updateLine(int x1, int y1){
@@ -2423,7 +2448,7 @@ public abstract class InputHandler implements InputProcessor, GestureListener{
         return !Core.scene.hasMouse()
         && !player.dead()
         && player.unit().validMine(tile)
-        && player.unit().acceptsItem(player.unit().getMineResult(tile))
+        && player.unit().acceptsItem(player.unit().getMineResult(tile)) //исправить потом
         && !((!Core.settings.getBool("doubletapmine") && tile.floor().playerUnmineable) && tile.overlay().itemDrop == null)
         && !((!Core.settings.getBool("doubletapmine") && tile.overlay().playerUnmineable) && tile.overlay().itemDrop != null);
     }
@@ -2976,6 +3001,16 @@ public abstract class InputHandler implements InputProcessor, GestureListener{
                 }
             }
             return null;
+        }
+    }
+
+    public static void selectUnitsType(UnitType seltype) {
+        selectedUnits.clear();
+        commandBuildings.clear();
+        for(var unit : player.team().data().units){
+            if(unit.isCommandable()&&(unit.type == seltype)){
+                selectedUnits.add(unit);
+            }
         }
     }
 }

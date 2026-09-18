@@ -22,6 +22,8 @@ import mindustry.ai.types.*;
 import mindustry.client.*;
 import mindustry.client.antigrief.*;
 import mindustry.client.communication.*;
+import mindustry.client.fallen.CustomBuildLogic;
+import mindustry.client.fallen.HistoryRenderer;
 import mindustry.client.navigation.*;
 import mindustry.client.navigation.waypoints.*;
 import mindustry.client.ui.*;
@@ -33,6 +35,10 @@ import mindustry.game.EventType.*;
 import mindustry.game.*;
 import mindustry.gen.*;
 import mindustry.graphics.*;
+import mindustry.type.Item;
+import mindustry.type.ItemStack;
+import mindustry.type.Liquid;
+import mindustry.type.UnitType;
 import mindustry.ui.*;
 import mindustry.ui.dialogs.*;
 import mindustry.ui.fragments.*;
@@ -40,11 +46,16 @@ import mindustry.world.*;
 import mindustry.world.blocks.logic.*;
 import mindustry.world.blocks.payloads.*;
 import mindustry.world.blocks.storage.*;
+import mindustry.world.consumers.Consume;
+import mindustry.world.consumers.ConsumeItems;
+import mindustry.world.consumers.ConsumeLiquid;
 
+import java.util.Objects;
 import static arc.Core.*;
 import static arc.Core.camera;
 import static mindustry.Vars.*;
 import static mindustry.client.ClientVars.*;
+import static mindustry.client.ui.PlayerBlockListFragment.name_for_plans;
 import static mindustry.input.PlaceMode.*;
 
 public class DesktopInput extends InputHandler{
@@ -150,6 +161,12 @@ public class DesktopInput extends InputHandler{
                         if (hidingPlans) {
                             str.append("\n").append(bundle.format("client.toggleplans", Binding.hideBlocks.value.key.toString()));
                         }
+                        if(HistoryRenderer.showBlocks || (name_for_plans != null)){
+                            str.append("\n").append(bundle.format("client.showplblplan", Binding.block_show_plans.value.key.toString()));
+                        }
+                        if(HistoryRenderer.showDeaths){
+                            str.append("\n").append(bundle.format("client.showdeathlplan", Binding.death_show_plans.value.key.toString()));
+                        }
                         if(Navigation.state == NavigationState.RECORDING){
                             str.append("\n").append(bundle.format("client.waypoint", Binding.placeWaypoint.value.key.toString()));
                         }else if(Navigation.state == NavigationState.FOLLOWING){
@@ -210,12 +227,30 @@ public class DesktopInput extends InputHandler{
         }
 
         if(!Core.scene.hasKeyboard() && mode != breaking && mode != freezing && mode != dequeue){
+            boolean schemDown = Core.input.keyDown(Binding.schematicSelect) && schemX != -1 && schemY != -1;
+            boolean prodAnalEnabled = Core.settings.getBool("prod-anal");
 
-            if(Core.input.keyDown(Binding.schematicSelect) && schemX != -1 && schemY != -1){
-                drawSelection(schemX, schemY, cursorX, cursorY, Vars.maxSchematicSize);
-            }else if(Core.input.keyDown(Binding.rebuildSelect)){
-                drawRebuildSelection(schemX, schemY, cursorX, cursorY);
+            if(schemDown){
+                if(Core.input.alt() && !prodAnalEnabled){
+                    drawSelection(schemX, schemY, cursorX, cursorY, Vars.maxSchematicSize, Pal.accent, Color.white, false);
+                } else {
+                    drawSelection(schemX, schemY, cursorX, cursorY, Vars.maxSchematicSize);
+                }
+
+                if(prodAnalEnabled){
+                    ui.prodAnalyzer.updateStats(schemX, schemY, cursorX, cursorY);
+                }
+            } else {
+                if(Core.input.keyDown(Binding.rebuildSelect)){
+                    drawRebuildSelection(schemX, schemY, cursorX, cursorY);
+                }
+
+                if(prodAnalEnabled && ui.prodAnalyzer != null && ui.prodAnalyzer.isShown()){
+                    ui.prodAnalyzer.hide();
+                }
             }
+        } else if(Core.settings.getBool("prod-anal") && ui.prodAnalyzer != null && ui.prodAnalyzer.isShown()){
+            ui.prodAnalyzer.hide();
         }
 
         Draw.reset();
@@ -428,7 +463,7 @@ public class DesktopInput extends InputHandler{
                     new Toast(1).add(bundle.get("client.autotransfer") + ": " + bundle.get(AutoTransfer.enabled ? "mod.enabled" : "mod.disabled"));
                 } else if(input.keyTap(Binding.toggleAutoTarget) && (selectPlans.isEmpty() || !input.keyTap(Binding.schematicFlipY))){
                     player.shooting = false;
-                    settings.put("autotarget", !settings.getBool("autotarget"));
+                    settings.put("autotarget", !settings.getBool("autotarget"));//smarttargeting
                     new Toast(1).add(bundle.get("setting.autotarget.name") + ": " + bundle.get((settings.getBool("autotarget") ? "mod.enabled" : "mod.disabled")));
                 }
 
@@ -519,7 +554,12 @@ public class DesktopInput extends InputHandler{
         }
 
         if (input.keyRelease(Binding.find) && scene.getKeyboardFocus() == null && !(commandMode && input.keyDown(Binding.selectUnitTypeModifier) && selectedUnits.any())) {
-            FindDialog.INSTANCE.show();
+            if(input.keyDown(Binding.boost)){
+                if (ui.logicSearchFrag != null) ui.logicSearchFrag.toggle();
+            }
+            else{
+                FindDialog.INSTANCE.show();
+            }
         }
 
         if(!locked){
@@ -609,6 +649,15 @@ public class DesktopInput extends InputHandler{
                 }
             }
 
+            if(commandMode && input.keyTap(Binding.select_last_units) && !scene.hasField() && !scene.hasDialog()){
+                selectedUnits.clear();
+                commandBuildings.clear();
+                for(var unit : player.team().data().units){
+                    if(unit.isCommandable() && unit.type == last_select_units_type){
+                        selectedUnits.add(unit);
+                    }
+                }
+            }
             for(int i = 0; i < controlGroupBindings.length; i++){
                 if(input.keyTap(controlGroupBindings[i])){
 
@@ -688,8 +737,39 @@ public class DesktopInput extends InputHandler{
                 } catch (Exception e) { ui.chatfrag.addMessage(e.getMessage(), null, Color.scarlet, "", e.getMessage()); }
 
                 table.row().fill();
+                table.button("@client.coordsatchat", () -> { // Cursor at chat
+                    Call.sendChatMessage(cursor.x + ", " + cursor.y);
+                    Call.pingLocation(Vars.player, cursor.worldx(), cursor.worldy(), null);
+                    table.remove();
+                });
+
+                table.row().fill();
                 table.button("@client.log", () -> { // Tile Logs
                     TileRecords.INSTANCE.show(cursor);
+                    table.remove();
+                });
+
+                table.row().fill();
+                table.button("Log history lists", () -> {
+                    ui.historyFrag.toggle();
+                    table.remove();
+                });
+
+                table.row().fill();
+                table.button("Favorite servers", () -> {
+                    ui.favFrag.toggle();
+                    table.remove();
+                });
+
+                table.row().fill();
+                table.button("Quick schems", () -> {
+                    ui.quickSchemFrag.toggle();
+                    table.remove();
+                });
+
+                table.row().fill();
+                table.button("Unit Controls", () -> {
+                    Core.settings.put("unitcontrolfragment", !Core.settings.getBool("unitcontrolfragment", false));
                     table.remove();
                 });
 
@@ -852,7 +932,7 @@ public class DesktopInput extends InputHandler{
             return;
         }
 
-        if(input.keyTap(Binding.resetCamera) && scene.getKeyboardFocus() == null && (cursor == null || cursor.build == null || !(cursor.build.block.rotate && cursor.build.block.quickRotate && cursor.build.interactable(player.team()))) && !input.alt()){
+        if(!commandMode && input.keyTap(Binding.resetCamera) && scene.getKeyboardFocus() == null && (cursor == null || cursor.build == null || !(cursor.build.block.rotate && cursor.build.block.quickRotate && cursor.build.interactable(player.team()))) && !input.alt()){
             panning = false;
             Spectate.INSTANCE.setPos(null); // FINISHME: Vanilla has a spectate feature now
             if(ui.listfrag.shown()) ui.listfrag.rebuild();
@@ -912,6 +992,25 @@ public class DesktopInput extends InputHandler{
                 changedCursor = false;
             }
         }
+
+        if(Core.input.keyTap(Binding.deselect_half_units) && scene.getKeyboardFocus() == null){
+            if(selectedUnits.size > 1){
+                ObjectMap<UnitType, Seq<Unit>> groups = new ObjectMap<>();
+                for(Unit unit : selectedUnits){
+                    if(!groups.containsKey(unit.type)) groups.put(unit.type, new Seq<>());
+                    groups.get(unit.type).add(unit);
+                }
+                selectedUnits.clear();
+                for(var entry : groups.entries()){
+                    Seq<Unit> typeSeq = entry.value;
+                    int keepCount = Math.max(1, typeSeq.size / 2);
+                    for(int i = 0; i < keepCount; i++){
+                        selectedUnits.add(typeSeq.get(i));
+                    }
+                }
+                Events.fire(Trigger.unitCommandChange);
+            }
+        }
     }
 
     @Override
@@ -942,10 +1041,34 @@ public class DesktopInput extends InputHandler{
             ui.database.show();
         }).tooltip("@database");
 
+//        table.button(Icon.map, Styles.clearNonei, () -> {
+//            if (state.isCampaign() && !Vars.net.client()) ui.planet.show();
+//            else MarkerDialog.INSTANCE.show();
+//        }).tooltip(t -> t.background(Styles.black6).margin(4f).label(() -> state.isCampaign() ? "@planetmap" : "Map Markers"));
+
+        if (state.isCampaign()){
+            table.button(Icon.map, Styles.clearNonei, () -> {
+               ui.planet.show();
+            }).tooltip(t -> t.background(Styles.black6).margin(4f).label(() -> state.isCampaign() ? "@planetmap" : "Map Markers"));
+        }
+
         table.button(Icon.map, Styles.clearNonei, () -> {
-            if (state.isCampaign() && !Vars.net.client()) ui.planet.show();
-            else MarkerDialog.INSTANCE.show();
-        }).tooltip(t -> t.background(Styles.black6).margin(4f).label(() -> state.isCampaign() ? "@planetmap" : "Map Markers"));
+            ui.mapInfoFrag.toggle();
+        }).tooltip("@mapInfoFrag");
+
+        table.button(Icon.waves, Styles.clearNonei, () -> {
+            ui.waveInfoFrag.toggle();
+        }).tooltip("@waveInfoFrag");
+
+
+//        table.button(Icon.units, Styles.clearNonei, () -> {
+//            ui.logicInfoFrag.toggle();
+//        }).tooltip("@unitcontrol");
+
+        table.button(Icon.units, Styles.clearNonei, () -> {
+            ui.trashbase.show();
+        }).tooltip("@trashbase");
+
 
         table.button(Icon.tree, Styles.clearNonei, () -> {
             ui.research.show();
@@ -1105,9 +1228,13 @@ public class DesktopInput extends InputHandler{
             if(Core.input.keyDown(Binding.breakBlock)){
                 mode = none;
             }else if(selectPlans.any()){
+                if(Core.settings.getBool("placeSchematicWithCleanup")){
+                    CustomBuildLogic.placeSchematicWithCleanup(selectPlans);
+                } else {
                 flushPlans(
                     temp.selectFrom(selectPlans, s -> (state.rules.editor || s.block.isVisible()) || s.block instanceof CoreBlock),
                     isFreezeQueueing, Core.input.keyDown(Binding.forcePlaceModifier), isFreezeQueueing);
+                }
                 temp.clear();
                 movedPlan = true;
             }else if(isPlacing()){
