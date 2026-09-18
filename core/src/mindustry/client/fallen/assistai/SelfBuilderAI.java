@@ -32,6 +32,9 @@ public class SelfBuilderAI extends AIController{
     public static boolean healDamaged = Core.settings.getBool("poly-heal", true);
     public static boolean findClosestPlan = Core.settings.getBool("poly-closest", true);
     public static boolean rebuildBlocks = Core.settings.getBool("poly-rebuild-blocks", true);
+    /** GL: AFK mode, the unit goes mining after helping nobody for {@link #afkMineDelay} seconds. */
+    public static boolean afkMine = Core.settings.getBool("poly-afk-mine", false);
+    public static int afkMineDelay = Core.settings.getInt("poly-afk-delay", 5);
 
     public @Nullable Unit assistFollowing;
     public @Nullable Unit following;
@@ -43,6 +46,10 @@ public class SelfBuilderAI extends AIController{
     public boolean onlyAssist;
 
     boolean found = false;
+    /** GL: ticks spent with nothing to do, and the mining path started by the AFK mode. */
+    private float idleTime;
+    private @Nullable mindustry.client.navigation.MinePath afkPath;
+    private final Interval workTimer = new Interval();
     /** GL: damaged block the unit is flying to and repairing. */
     public @Nullable Building healTarget;
     /** GL: how often an idle player unit looks for destroyed blocks, and how many it queues at once. */
@@ -315,6 +322,80 @@ public class SelfBuilderAI extends AIController{
     public boolean healing(){
         return healTarget != null && unit != null && healTarget.isValid() && healTarget.damaged() && unit.within(healTarget, healRange());
     }
+
+    // region GL: AFK mining
+
+    /** Called every frame in poly mode instead of {@link #updateMovement()} decisions: mine while idle, come back when there is work. */
+    public boolean updateAfk(){
+        if(afkPath != null && mindustry.client.navigation.Navigation.currentlyFollowing != afkPath){
+            // the player stopped or replaced the path by hand
+            afkPath = null;
+            idleTime = 0f;
+        }
+
+        if(afkPath != null){
+            if(!afkMine || workTimer.get(30f) && hasWork()) stopAfk();
+            return afkPath != null;
+        }
+
+        boolean idle = unit.plans.isEmpty() && following == null && healTarget == null && (assistFollowing == null || !assistFollowing.activelyBuilding());
+        idleTime = idle ? idleTime + Time.delta : 0f;
+
+        if(afkMine && idleTime >= afkMineDelay * 60f && unit.canMine() && unit.type.mineTier >= 0 && unit.closestCore() != null
+            && mindustry.client.navigation.Navigation.currentlyFollowing == null){
+            arc.struct.Seq<Item> items = mindustry.client.ui.PanelFragment.itemtomine.isEmpty() ?
+                unit.type.mineItems.select(unit::canMine) : mindustry.client.ui.PanelFragment.itemtomine.copy();
+            if(items.isEmpty()) return false;
+            afkPath = new mindustry.client.navigation.MinePath(items, -1, false, "", true);
+            mindustry.client.navigation.Navigation.follow(afkPath);
+            return true;
+        }
+        return false;
+    }
+
+    public boolean afkMining(){
+        return afkPath != null;
+    }
+
+    public void stopAfk(){
+        if(afkPath != null && mindustry.client.navigation.Navigation.currentlyFollowing == afkPath){
+            mindustry.client.navigation.Navigation.stopFollowing();
+        }
+        afkPath = null;
+        idleTime = 0f;
+        if(unit != null){
+            unit.mineTile = null;
+        }
+    }
+
+    /** Something to rebuild, a damaged block to heal or a player to help nearby. */
+    private boolean hasWork(){
+        if(rebuildBlocks && !onlyAssist){
+            for(BlockPlan bp : unit.team.data().plans){
+                Tile tile = world.tile(bp.x, bp.y);
+                if(tile == null || tile.block() == bp.block) continue;
+                if(!Build.validPlace(bp.block, unit.team(), bp.x, bp.y, bp.rotation)) continue;
+                if(checkEnemyTurrets && isInEnemyTurretRange(bp.x * tilesize, bp.y * tilesize)) continue;
+                if(checkResources && !hasResources(bp.block)) continue;
+                return true;
+            }
+        }
+
+        if(healDamaged && unit.type.canHeal){
+            for(Building b : indexer.getDamaged(unit.team)){
+                if(b.within(unit, buildRadius) && !isInEnemyTurretRange(b.x, b.y)) return true;
+            }
+        }
+
+        for(Player p : Groups.player){
+            if(p.unit() == unit || p.team() != unit.team || p.dead() || !PolyFilter.canAssist(p)) continue;
+            Unit u = p.unit();
+            if(u.activelyBuilding() && u.within(unit, buildRadius) && isPlanSafeAndAffordable(u.buildPlan())) return true;
+        }
+        return false;
+    }
+
+    // endregion
 
     public boolean isPlanSafeAndAffordable(BuildPlan plan){
         if(plan == null) return false;

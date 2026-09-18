@@ -59,6 +59,32 @@ public class PolySettingsDialog extends BaseDialog{
             });
         });
 
+        section(Icon.production, "@client.polyai.afk", t -> {
+            check(t, "@client.polyai.afk.mine", SelfBuilderAI.afkMine, b -> {
+                SelfBuilderAI.afkMine = b;
+                Core.settings.put("poly-afk-mine", b);
+                if(!b) mindustry.client.ui.PanelFragment.aiNotPolyAi.stopAfk();
+            });
+
+            Slider slider = new Slider(2, 60, 1, false);
+            slider.setValue(SelfBuilderAI.afkMineDelay);
+            Label value = new Label("", Styles.outlineLabel);
+            Runnable text = () -> value.setText(SelfBuilderAI.afkMineDelay + " " + Core.bundle.get("unit.seconds"));
+            text.run();
+            Table content = new Table();
+            content.add("@client.polyai.afk.delay", Styles.outlineLabel).left().growX().wrap();
+            content.add(value).padLeft(10f).right();
+            content.margin(3f, 33f, 3f, 33f);
+            content.touchable = Touchable.disabled;
+            slider.changed(() -> {
+                SelfBuilderAI.afkMineDelay = (int)slider.getValue();
+                Core.settings.put("poly-afk-delay", SelfBuilderAI.afkMineDelay);
+                text.run();
+            });
+            t.stack(slider, content).growX().padTop(6f).row();
+            t.add("@client.polyai.afk.hint").color(Color.lightGray).wrap().growX().left().padTop(4f).row();
+        });
+
         section(Icon.players, "@client.polyai.filter", t -> {
             check(t, "@client.polyai.onlywhitelist", PolyFilter.onlyWhitelist, b -> {
                 PolyFilter.onlyWhitelist = b;

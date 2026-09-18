@@ -385,7 +385,10 @@ public class PanelFragment extends Table{
             withSettings(toggle(icon(UnitTypes.poly), "fdpanel.polyai", () -> polyAiMode, () -> {
                 polyAiMode = !polyAiMode;
                 settings.put("polyAiMode", polyAiMode);
-                if(!polyAiMode && player.unit() != null) player.unit().plans.clear();
+                if(!polyAiMode){
+                    aiNotPolyAi.stopAfk();
+                    if(player.unit() != null) player.unit().plans.clear();
+                }
             }), () -> PolySettingsDialog.instance.show())
         );
     }

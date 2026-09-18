@@ -1432,6 +1432,14 @@ public class DesktopInput extends InputHandler{
         if(PanelFragment.polyAiMode){ // GL: poly mode, the player's unit is driven by SelfBuilderAI
             if(unit == null || player.dead()) return;
             PanelFragment.aiNotPolyAi.unit(unit);
+            if(PanelFragment.aiNotPolyAi.updateAfk()){
+                // AFK mining: the mining path moves the unit and mines, the AI only watches for work
+                player.shooting = false;
+                unit.controlWeapons(true, false);
+                player.mouseX = unit.aimX();
+                player.mouseY = unit.aimY();
+                return;
+            }
             PanelFragment.aiNotPolyAi.updateMovement();
             // the AI only moves the unit; repairing blocks means shooting them with the heal weapons
             boolean healing = PanelFragment.aiNotPolyAi.healing();
