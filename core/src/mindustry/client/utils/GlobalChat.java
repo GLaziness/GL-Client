@@ -4,6 +4,7 @@ import arc.*;
 import arc.struct.*;
 import arc.util.*;
 import arc.util.serialization.*;
+import mindustry.gen.*;
 
 import javax.net.ssl.*;
 import java.io.*;
@@ -33,6 +34,8 @@ public class GlobalChat{
     private static volatile boolean connected;
     private static volatile int online;
     private static volatile String tag = "";
+    /** "owner", "mod" or "": given by the server, it checks the rights itself on every action. */
+    private static volatile String role = "";
     /** Why the chat is not connected (shown to the player), null when there is no problem. */
     private static volatile @Nullable String error;
     private static Thread thread;
@@ -41,6 +44,8 @@ public class GlobalChat{
     public static final Seq<String> log = new Seq<>();
     /** Text copied when a line of {@link #log} is clicked (the message itself, without the name). */
     public static final Seq<String> copies = new Seq<>();
+    /** Tag and name of the player who wrote each line of {@link #log} ("" for system lines), for the moderation buttons. */
+    public static final Seq<String> lineTags = new Seq<>(), lineNames = new Seq<>();
     /** Called on the main thread when a line is added to {@link #log}. */
     public static @Nullable Runnable listener;
 
@@ -64,6 +69,42 @@ public class GlobalChat{
 
     public static int online(){
         return online;
+    }
+
+    /** The chat owner or a moderator: can mute and ban. */
+    public static boolean moderator(){
+        return connected && !role.isEmpty();
+    }
+
+    public static boolean owner(){
+        return connected && role.equals("owner");
+    }
+
+    public static String tag(){
+        return tag;
+    }
+
+    /** Moderation request; the server checks the rights and answers in the chat. */
+    public static void moderate(String action, String target){
+        if(!enabled() || !connected){
+            postRaw(status());
+            return;
+        }
+        Jval msg = Jval.newObject();
+        msg.put("t", "mod");
+        msg.put("action", action);
+        msg.put("target", target == null ? "" : target.trim());
+        if(!write(msg)) postRaw(Core.bundle.format("client.globalchat.failed", Core.bundle.get("client.globalchat.err.send")));
+    }
+
+    /** 600 seconds: "10 min", 7 days: "7 d." */
+    public static String duration(int seconds){
+        int d = seconds / 86400, h = seconds % 86400 / 3600, m = Math.max(seconds % 3600 / 60, d == 0 && h == 0 ? 1 : 0);
+        StringBuilder sb = new StringBuilder();
+        if(d > 0) sb.append(Core.bundle.format("client.globalchat.time.d", d)).append(' ');
+        if(h > 0) sb.append(Core.bundle.format("client.globalchat.time.h", h)).append(' ');
+        if(m > 0 && d == 0) sb.append(Core.bundle.format("client.globalchat.time.m", m));
+        return sb.toString().trim();
     }
 
     /** One line saying what the chat is doing: off, connected, or what went wrong. */
@@ -232,6 +273,7 @@ public class GlobalChat{
         switch(msg.getString("t", "")){
             case "welcome" -> {
                 tag = msg.getString("tag", "");
+                role = msg.getString("role", "");
                 online = msg.getInt("online", 0);
                 connected = true;
                 error = null;
@@ -243,16 +285,47 @@ public class GlobalChat{
                 String from = msg.getString("tag", "");
                 String raw = msg.getString("text", "");
                 String self = from.equals(tag) ? "[accent]" : "[white]";
-                postRaw("[#7fd3ff][[GL][] " + self + name + "[] [gray]#" + escape(from) + "[]: [white]" + escape(raw), raw);
+                String badge = switch(msg.getString("role", "")){
+                    case "owner" -> "[gold]" + Iconc.admin + "[] ";
+                    case "mod" -> "[sky]" + Iconc.admin + "[] ";
+                    default -> "";
+                };
+                postRaw("[#7fd3ff][[GL][] " + badge + self + name + "[] [gray]#" + escape(from) + "[]: [white]" + escape(raw), raw, from, msg.getString("name", "?"));
             }
             case "sys" -> {
                 String code = msg.getString("code", "");
                 String key = "client.globalchat.sys." + code;
-                String text = Core.bundle.has(key) ? Core.bundle.get(key) : "[#7fd3ff][[GL][] [scarlet]" + escape(msg.getString("text", ""));
+                int left = msg.getInt("left", 0);
+                String text = left > 0 && Core.bundle.has(key + ".left") ? Core.bundle.format(key + ".left", duration(left)) :
+                    Core.bundle.has(key) ? Core.bundle.get(key) : "[#7fd3ff][[GL][] [scarlet]" + escape(msg.getString("text", ""));
                 if(code.equals("banned") || code.equals("kicked") || code.equals("full")){
                     error = Strings.stripColors(text.replace("[[GL]", "")).trim();
                 }
                 postRaw(text);
+            }
+            case "modevent" -> {
+                String action = msg.getString("action", "");
+                String key = "client.globalchat.mod." + action;
+                if(Core.bundle.has(key)){
+                    String name = msg.getString("name", "");
+                    String who = escape(name.isEmpty() ? "?" : name) + " [gray]#" + escape(msg.getString("tag", "")) + "[]";
+                    postRaw(Core.bundle.format(key, escape(msg.getString("by", "?")), who, duration(msg.getInt("minutes", 0) * 60)));
+                }
+                if(msg.getString("tag", "").equals(tag) && (action.equals("addmod") || action.equals("delmod"))) role = action.equals("addmod") ? "mod" : "";
+            }
+            case "modinfo" -> {
+                StringBuilder sb = new StringBuilder(Core.bundle.get("client.globalchat.list.title"));
+                for(String kind : new String[]{"mods", "mutes", "bans"}){
+                    sb.append("\n[accent]").append(Core.bundle.get("client.globalchat.list." + kind)).append("[] ");
+                    Jval.JsonArray arr = msg.get(kind) == null ? new Jval.JsonArray() : msg.get(kind).asArray();
+                    if(arr.isEmpty()) sb.append("[gray]-[]");
+                    for(int i = 0; i < arr.size; i++){
+                        Jval e = arr.get(i);
+                        sb.append(i == 0 ? "" : ", ").append(escape(e.getString("name", ""))).append(" [gray]#").append(escape(e.getString("tag", ""))).append("[]");
+                        if(e.getInt("left", 0) > 0) sb.append(" (").append(duration(e.getInt("left", 0))).append(")");
+                    }
+                }
+                postRaw(sb.toString());
             }
             default -> {}
         }
@@ -264,16 +337,20 @@ public class GlobalChat{
     }
 
     private static void postRaw(String text){
-        postRaw(text, Strings.stripColors(text));
+        postRaw(text, Strings.stripColors(text), "", "");
     }
 
-    private static void postRaw(String text, String copy){
+    private static void postRaw(String text, String copy, String from, String name){
         Core.app.post(() -> {
             log.add(text);
             copies.add(copy);
+            lineTags.add(from);
+            lineNames.add(name);
             if(log.size > maxLog){
                 log.remove(0);
                 copies.remove(0);
+                lineTags.remove(0);
+                lineNames.remove(0);
             }
             if(ui != null && ui.chatfrag != null) ui.chatfrag.addMessage(text);
             if(listener != null) listener.run();

@@ -437,6 +437,13 @@ fun setupCommands() {
         else mindustry.client.utils.GlobalChat.send(args[0]) // writes the reason to the chat when it cannot send
     }
 
+    register("gm [action] [target...]", Core.bundle.get("client.command.gm.description")) { args, player ->
+        // GL: global chat moderation, the chat server checks the rights
+        val actions = listOf("mute", "unmute", "ban", "unban", "addmod", "delmod", "list")
+        if (args.isEmpty() || args[0] !in actions) player.sendMessage(Core.bundle.get("client.globalchat.gmhelp"))
+        else mindustry.client.utils.GlobalChat.moderate(args[0], if (args.size > 1) args[1] else "")
+    }
+
     register("c <message...>", Core.bundle.get("client.command.c.description")) { args, _ ->
         Main.send(ClientMessageTransmission(args[0]).apply { addToChatfrag() })
     }

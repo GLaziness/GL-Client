@@ -125,6 +125,10 @@ public class GlobalChatDialog extends Table{
         if(GlobalChat.send(text)) field.setText("");
     }
 
+    private void confirm(String key, String action, String target, String name){
+        ui.showConfirm("@confirm", Core.bundle.format(key, name.replace("[", "[["), target), () -> GlobalChat.moderate(action, target));
+    }
+
     private void rebuild(){
         lines.clear();
         if(GlobalChat.log.isEmpty()){
@@ -133,10 +137,21 @@ public class GlobalChatDialog extends Table{
         // a click on a line copies its text
         for(int i = 0; i < GlobalChat.log.size; i++){
             String copy = GlobalChat.copies.get(i), line = GlobalChat.log.get(i);
-            lines.button(b -> b.add(line).left().wrap().width(410f), lineStyle, () -> {
-                Core.app.setClipboardText(copy);
-                ui.showInfoFade("@client.globalchat.copied");
-            }).left().growX().padBottom(2f).get().left().margin(2f, 4f, 2f, 4f);
+            String from = GlobalChat.lineTags.get(i), name = GlobalChat.lineNames.get(i);
+            boolean modButtons = GlobalChat.moderator() && !from.isEmpty() && !from.equals(GlobalChat.tag());
+            lines.table(row -> {
+                row.button(b -> b.add(line).left().wrap().width(modButtons ? 350f : 410f), lineStyle, () -> {
+                    Core.app.setClipboardText(copy);
+                    ui.showInfoFade("@client.globalchat.copied");
+                }).left().growX().get().left().margin(2f, 4f, 2f, 4f);
+                if(modButtons){
+                    // moderators: mute for 10 minutes or ban for 7 days, with a confirmation
+                    row.button(Icon.lockSmall, Styles.clearNonei, () -> confirm("client.globalchat.confirm.mute", "mute", from, name))
+                        .size(28f).top().tooltip("@client.globalchat.btn.mute");
+                    row.button(Icon.hammerSmall, Styles.clearNonei, () -> confirm("client.globalchat.confirm.ban", "ban", from, name))
+                        .size(28f).top().tooltip("@client.globalchat.btn.ban").get().getImage().setColor(Color.scarlet);
+                }
+            }).left().growX().padBottom(2f);
             lines.row();
         }
         Core.app.post(() -> {
