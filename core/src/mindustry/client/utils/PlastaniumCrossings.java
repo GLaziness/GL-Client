@@ -117,6 +117,17 @@ public class PlastaniumCrossings{
         }
         if(kept != null) bridge = kept;
 
+        // a bridge of another kind at an end (e.g. a bridge conveyor next to a phase bridge) can't be chained to:
+        // follow it to its far end and rebuild the whole jump with the chosen bridge
+        Seq<Tile> removed = new Seq<>();
+        if(bridge instanceof ItemBridge chosen){
+            Tile newSrc = followBack(src, chosen, removed);
+            Tile newDst = followForward(dst, chosen, removed);
+            if(Math.abs(newSrc.x - newDst.x) + Math.abs(newSrc.y - newDst.y) > chosen.range || removed.contains(t -> onLine(plans, t))) return false;
+            src = newSrc;
+            dst = newDst;
+        }
+
         // bridges first, so the crossed line never feeds into the new conveyor
         if(bridge instanceof ItemBridge){
             // both ends must be the same bridge: an existing one of that kind only gets relinked, anything else is replaced
@@ -132,7 +143,14 @@ public class PlastaniumCrossings{
             if(dst.block() != bridge) add(new BuildPlan(dst.x, dst.y, dir, bridge));
         }
 
-        if(plan.block.canReplace(tile.block())){
+        // the old middle of a rebuilt bridge chain goes away
+        for(Tile t : removed){
+            BuildPlan breaking = new BuildPlan(t.x, t.y);
+            breaking.block = t.block();
+            result.add(breaking);
+        }
+
+        if(Build.validPlace(plan.block, player.team(), plan.x, plan.y, plan.rotation)){
             result.add(plan);
         }else{
             // conduits can't be replaced by a conveyor: break it, the conveyor is placed once the tile is free
@@ -143,6 +161,32 @@ public class PlastaniumCrossings{
             result.add(breaking);
         }
         return true;
+    }
+
+    /** From the output of a bridge of another kind, walks back to the input feeding it. */
+    private static Tile followBack(Tile end, ItemBridge chosen, Seq<Tile> removed){
+        Tile t = end;
+        for(int i = 0; i < 4; i++){
+            if(!(t.block() instanceof ItemBridge other) || other == chosen || !(t.build instanceof ItemBridgeBuild b) || b.incoming.size == 0) break;
+            Tile in = world.tile(b.incoming.first());
+            if(in == null || in.block() != other) break;
+            removed.add(t);
+            t = in;
+        }
+        return t;
+    }
+
+    /** From the input of a bridge of another kind, walks forward to the output it feeds. */
+    private static Tile followForward(Tile end, ItemBridge chosen, Seq<Tile> removed){
+        Tile t = end;
+        for(int i = 0; i < 4; i++){
+            if(!(t.block() instanceof ItemBridge other) || other == chosen || !(t.build instanceof ItemBridgeBuild b)) break;
+            Tile link = world.tile(b.link);
+            if(link == null || !other.linkValid(t, link)) break;
+            removed.add(t);
+            t = link;
+        }
+        return t;
     }
 
     private static void add(BuildPlan plan){
