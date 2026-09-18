@@ -32,6 +32,7 @@ import mindustry.client.navigation.MinePath;
 import mindustry.client.navigation.Navigation;
 import mindustry.client.navigation.RepairPath;
 import mindustry.client.utils.AutoTransfer;
+import mindustry.client.utils.BuilderAssist;
 import mindustry.content.*;
 import mindustry.ctype.*;
 import mindustry.core.NetClient;
@@ -183,6 +184,7 @@ public class PanelFragment extends Table{
     public static void startInit() {
         mindustry.client.fallen.ActivityLogger.init();
         MinersFDAI.init();
+        BuilderAssist.init();
         AntiAttemPatcher.load();
         Log.info("Start init");
     }
@@ -379,6 +381,7 @@ public class PanelFragment extends Table{
                 autoFixPower = !autoFixPower;
                 fixPowerTimer.reset(0, 0f); // the first automatic run waits a full minute
             }),
+            toggle(icon(UnitTypes.nova), "fdpanel.novaassist", () -> BuilderAssist.enabled, BuilderAssist::toggle),
             action(Icon.logic, "fdpanel.fixcode", () -> ClientVars.clientCommandHandler.handleMessage("!fixcode r", player)),
             settingToggle(Icon.eraser, "fdpanel.schemcleanup", "placeSchematicWithCleanup"),
             settingToggle(icon(Blocks.itemBridge), "fdpanel.plastbridges", "plastbridges"),

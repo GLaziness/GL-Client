@@ -1447,6 +1447,11 @@ public class DesktopInput extends InputHandler{
                 Building target = PanelFragment.aiNotPolyAi.healTarget;
                 unit.aim(target.x, target.y);
                 if(unit.type.faceTarget) unit.lookAt(target);
+            }else if(unit.moving()){
+                // a player unit loses speed when it doesn't face where it flies (strafe penalty), so turn along the way
+                unit.lookAt(unit.vel().angle());
+            }else{
+                unit.lookAt(unit.prefRotation());
             }
             player.shooting = healing;
             unit.controlWeapons(true, healing);
