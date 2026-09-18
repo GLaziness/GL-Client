@@ -73,6 +73,20 @@ public class GlobalChat{
         return online;
     }
 
+    private static @Nullable arc.func.Cons<Seq<Jval>> whoListener;
+
+    /** Asks the server who is online; the answer comes on the main thread. */
+    public static void requestWho(arc.func.Cons<Seq<Jval>> listener){
+        if(!enabled() || !connected){
+            postRaw(status());
+            return;
+        }
+        whoListener = listener;
+        Jval msg = Jval.newObject();
+        msg.put("t", "who");
+        write(msg);
+    }
+
     /** The chat owner or a moderator: can mute and ban. */
     public static boolean moderator(){
         return connected && !role.isEmpty();
@@ -314,6 +328,14 @@ public class GlobalChat{
                     postRaw(Core.bundle.format(key, escape(msg.getString("by", "?")), who, duration(msg.getInt("minutes", 0) * 60)));
                 }
                 if(msg.getString("tag", "").equals(tag) && (action.equals("addmod") || action.equals("delmod"))) role = action.equals("addmod") ? "mod" : "";
+            }
+            case "who" -> {
+                Seq<Jval> players = new Seq<>();
+                Jval arr = msg.get("players");
+                if(arr != null && arr.isArray()) players.addAll(arr.asArray());
+                Core.app.post(() -> {
+                    if(whoListener != null) whoListener.get(players);
+                });
             }
             case "modinfo" -> {
                 StringBuilder sb = new StringBuilder(Core.bundle.get("client.globalchat.list.title"));

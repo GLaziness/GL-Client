@@ -65,7 +65,8 @@ public class GlobalChatDialog extends Table{
                         keepInside();
                     }
                 });
-                head.image(Icon.chat).color(Pal.accent).size(22f).padLeft(4f).padRight(6f);
+                head.button(Icon.chat, Styles.clearNonei, this::showOnline).size(36f).padLeft(2f).padRight(2f)
+                    .tooltip("@client.globalchat.onlinehint").get().getImage().setColor(Pal.accent);
                 head.add("@client.globalchat.title").color(Pal.accent);
                 head.add().growX();
                 head.button(Icon.power, Styles.clearNoneTogglei, () -> {
@@ -135,10 +136,12 @@ public class GlobalChatDialog extends Table{
         menu.margin(6f);
         menu.defaults().size(250f, 38f).left();
         menu.add("[accent]" + name.replace("[", "[[") + " [gray]#" + target).left().padBottom(4f).row();
-        menuItem(menu, Icon.lock, "@client.globalchat.btn.mute", () -> confirm("client.globalchat.confirm.mute", "mute", target, name));
-        menuItem(menu, Icon.lockOpen, "@client.globalchat.btn.unmute", () -> GlobalChat.moderate("unmute", target));
-        menuItem(menu, Icon.hammer, "@client.globalchat.btn.ban", () -> confirm("client.globalchat.confirm.ban", "ban", target, name));
-        menuItem(menu, Icon.refresh, "@client.globalchat.btn.unban", () -> GlobalChat.moderate("unban", target));
+        if(GlobalChat.moderator()){
+            menuItem(menu, Icon.lock, "@client.globalchat.btn.mute", () -> confirm("client.globalchat.confirm.mute", "mute", target, name));
+            menuItem(menu, Icon.lockOpen, "@client.globalchat.btn.unmute", () -> GlobalChat.moderate("unmute", target));
+            menuItem(menu, Icon.hammer, "@client.globalchat.btn.ban", () -> confirm("client.globalchat.confirm.ban", "ban", target, name));
+            menuItem(menu, Icon.refresh, "@client.globalchat.btn.unban", () -> GlobalChat.moderate("unban", target));
+        }
         if(GlobalChat.owner()){
             menuItem(menu, Icon.admin, "@client.globalchat.btn.addmod", () -> confirm("client.globalchat.confirm.addmod", "addmod", target, name));
             menuItem(menu, Icon.cancel, "@client.globalchat.btn.delmod", () -> GlobalChat.moderate("delmod", target));
@@ -155,6 +158,45 @@ public class GlobalChatDialog extends Table{
         menu.pack();
         float mx = Core.input.mouseX(), my = Core.input.mouseY();
         menu.setPosition(Math.min(mx, Core.scene.getWidth() - menu.getWidth()), Math.max(0f, my - menu.getHeight()));
+    }
+
+    /** Everyone in the global chat now, with their tags; a click on one opens the same actions as [GL]. */
+    private void showOnline(){
+        GlobalChat.requestWho(players -> {
+            if(!shown) return;
+            closePopup();
+            Table menu = new Table(Tex.pane);
+            popup = menu;
+            menu.touchable = Touchable.enabled;
+            menu.margin(6f);
+            menu.add(Core.bundle.format("client.globalchat.onlinelist", players.size)).color(Pal.accent).left().padBottom(4f).row();
+            menu.pane(list -> {
+                list.defaults().width(280f).height(34f).left();
+                for(var p : players){
+                    String name = p.getString("name", "?"), tag = p.getString("tag", ""), role = p.getString("role", "");
+                    String badge = role.equals("owner") ? "[gold]" + Iconc.admin + "[] " : role.equals("mod") ? "[sky]" + Iconc.admin + "[] " : "";
+                    String self = tag.equals(GlobalChat.tag()) ? "[accent]" : "[white]";
+                    TextButton b = list.button(badge + self + name.replace("[", "[[") + "[] [gray]#" + tag, lineStyle, () -> playerMenu(tag, name)).get();
+                    b.left();
+                    b.getLabel().setEllipsis(true);
+                    b.addListener(new ClickListener(KeyCode.mouseRight){
+                        @Override
+                        public void clicked(InputEvent event, float x, float y){
+                            playerMenu(tag, name);
+                        }
+                    });
+                    list.row();
+                }
+            }).maxHeight(320f).scrollX(false);
+            menu.update(() -> {
+                boolean outside = (Core.input.keyTap(KeyCode.mouseLeft) || Core.input.keyTap(KeyCode.mouseRight)) && !menu.hasMouse();
+                if((outside && popup == menu) || Core.input.keyTap(KeyCode.escape) || !shown) closePopup();
+            });
+            Core.scene.add(menu);
+            menu.pack();
+            float mx = Core.input.mouseX(), my = Core.input.mouseY();
+            menu.setPosition(Math.min(mx, Core.scene.getWidth() - menu.getWidth()), Math.max(0f, my - menu.getHeight()));
+        });
     }
 
     private void menuItem(Table menu, arc.scene.style.Drawable icon, String text, Runnable action){
@@ -184,7 +226,7 @@ public class GlobalChatDialog extends Table{
             String copy = GlobalChat.copies.get(i), line = GlobalChat.log.get(i);
             String from = GlobalChat.lineTags.get(i), name = GlobalChat.lineNames.get(i);
             // owner and moderators: a click (left or right) on [GL] of someone's message opens the actions for that player
-            boolean menu = GlobalChat.moderator() && !from.isEmpty() && line.startsWith(GlobalChat.prefix);
+            boolean menu = !from.isEmpty() && line.startsWith(GlobalChat.prefix);
             lines.table(row -> {
                 row.top().left();
                 String text = line;
