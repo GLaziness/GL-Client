@@ -226,6 +226,7 @@ object Main : ApplicationListener {
 
         if (Core.scene.keyboardFocus == null && Core.input?.keyTap(Binding.sendBuildQueue) == true) {
             ClientVars.dispatchingBuildPlans = !ClientVars.dispatchingBuildPlans
+            Core.settings.put("sendbuildplans", ClientVars.dispatchingBuildPlans)
         }
 
         if (ClientVars.dispatchingBuildPlans && Vars.player.unit() != null) {

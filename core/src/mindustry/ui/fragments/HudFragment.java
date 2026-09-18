@@ -567,7 +567,7 @@ public class HudFragment{
                     modeIcon(st, () -> control.input.isFreezeQueueing, () -> control.input.isFreezeQueueing ^= true, Icon.pause.tint(0.33f, 0.33f, 1, a), "@client.mode.freezequeue", Binding.pauseBuilding, "Shift");
                     modeIcon(st, () -> Core.settings.getBool("autotarget"), () -> Core.settings.put("autotarget", !Core.settings.getBool("autotarget")), Icon.modeAttack.tint(1f, 0.33f, 0.33f, a), "@client.mode.autotarget", Binding.toggleAutoTarget);
                     modeIcon(st, () -> AutoTransfer.enabled, () -> AutoTransfer.enabled ^= true, Icon.resize.tint(1, 0.33f, 1, a), "@client.mode.autotransfer", Binding.toggleAutoTarget, "Shift");
-                    modeIcon(st, () -> dispatchingBuildPlans, () -> dispatchingBuildPlans ^= true, Icon.tree.tint(1, 1, 1, a), "@client.mode.sendplans", Binding.sendBuildQueue);
+                    modeIcon(st, () -> dispatchingBuildPlans, () -> Core.settings.put("sendbuildplans", dispatchingBuildPlans ^= true), Icon.tree.tint(1, 1, 1, a), "@client.mode.sendplans", Binding.sendBuildQueue);
                     modeIcon(st, () -> Navigation.currentlyFollowing != null, Navigation::stopFollowing, Icon.android.tint(Color.cyan.cpy().a(a)), "@client.mode.navigating", Binding.stopFollowingPath);
                 }).marginTop(3).marginBottom(3).growX().get();
             }

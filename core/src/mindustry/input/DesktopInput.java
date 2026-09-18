@@ -133,9 +133,6 @@ public class DesktopInput extends InputHandler{
                                 .append("\n").append(bundle.format("cancelbuilding", Binding.clearBuilding.value.key.toString()))
                                 .append("\n").append(bundle.format("selectschematic", Binding.schematicSelect.value.key.toString()));
                         }
-                        if(isBuildingIgnoreNetworking() || dispatchingBuildPlans){
-                            str.append("\n").append(bundle.format(dispatchingBuildPlans ? "client.stopsendbuildplans" : "client.sendbuildplans", Binding.sendBuildQueue.value.key.toString()));
-                        }
                         if(hidingUnits || hidingAirUnits){
                             str.append("\n").append(bundle.format("client.toggleunits", Binding.invisibleUnits.value.key.toString()));
                             str.append("\n").append(bundle.format("client.toggleairunits", Binding.invisibleUnits.value.key.toString()));

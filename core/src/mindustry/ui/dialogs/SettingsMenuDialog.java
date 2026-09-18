@@ -440,6 +440,7 @@ public class SettingsMenuDialog extends BaseDialog{
         client.checkPref("decreasedrift", false);
         client.checkPref("zerodrift", false);
         client.checkPref("fastrespawn", false);
+        client.checkPref("sendbuildplans", true, b -> ClientVars.dispatchingBuildPlans = b);
 
         client.category("graphics");
         client.sliderPref("minzoom", 0, 0, 100, s -> Strings.fixed(Mathf.pow(10, 0.0217f * s) / 100f, 2) + "x");

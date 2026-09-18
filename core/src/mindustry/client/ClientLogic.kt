@@ -84,7 +84,7 @@ class ClientLogic {
             configs.clear()
             control.input.lastVirusWarning = null
             control.input.followGameEndPan = true
-            dispatchingBuildPlans = false
+            dispatchingBuildPlans = settings.getBool("sendbuildplans", true) // GL: a setting now, on by default
             hidingBlocks = false
             hidingUnits = false
             if (state.rules.pvp && !isDeveloper()) ui.announce("@client.nopvp", 5f)
