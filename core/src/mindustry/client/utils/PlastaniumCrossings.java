@@ -106,6 +106,16 @@ public class PlastaniumCrossings{
         int distance = Math.abs(src.x - dst.x) + Math.abs(src.y - dst.y);
         if(distance > maxRange) return false;
         Block bridge = distance > range ? phase : family;
+        // an end that already is a bridge (e.g. the input of a phase bridge next to the new line) is kept and chained to,
+        // so the new bridge has to be of the same kind; the bigger one wins if both ends are bridges
+        ItemBridge kept = null;
+        for(Tile end : new Tile[]{src, dst}){
+            if(end.block() instanceof ItemBridge existing && existing.unlockedNow() && existing.range >= distance
+                && (kept == null || existing.range > kept.range)){
+                kept = existing;
+            }
+        }
+        if(kept != null) bridge = kept;
 
         // bridges first, so the crossed line never feeds into the new conveyor
         if(bridge instanceof ItemBridge){
