@@ -515,7 +515,8 @@ public class GlobalChat{
                 String self = from.equals(tag) ? "[accent]" : "[white]";
                 String badge = badge(msg.getString("role", ""));
                 boolean server = msg.getString("ch", "").equals("server");
-                postRaw((server ? serverPrefix : prefix) + badge + self + name + "[] [gray]#" + escape(from) + "[]: [white]" + escape(raw), raw, from,
+                // like the other chats: [name] in coral brackets, then the tag
+                postRaw((server ? serverPrefix : prefix) + badge + "[coral][[[]" + self + name + "[][coral]][] [gray]#" + escape(from) + "[]: [white]" + escape(raw), raw, from,
                     msg.getString("name", "?"), server ? kindServer : kindGlobal);
             }
             case "sys" -> {
