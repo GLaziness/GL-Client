@@ -93,14 +93,14 @@ public class GlobalChatDialog extends Table{
             root.table(tabs -> {
                 tabs.defaults().height(34f).growX();
                 // the server first: it is the one opened by default when the player is on a server
-                tabs.button("", Styles.flatTogglet, () -> setTab(true)).checked(b -> serverTab)
-                    .disabled(b -> !GlobalChat.onServer())
-                    .update(b -> b.setText(!GlobalChat.onServer() ? Core.bundle.get("client.globalchat.tab.server.off") :
+                // one update for the text and the selection: a second update() would replace the one of checked()
+                tabs.button("", Styles.flatTogglet, () -> setTab(true))
+                    .update(b -> tab(b, serverTab, !GlobalChat.onServer(), !GlobalChat.onServer() ? Core.bundle.get("client.globalchat.tab.server.off") :
                         !GlobalChat.serverOn() ? Core.bundle.get("client.globalchat.tab.server.disabled") :
                         Core.bundle.format("client.globalchat.tab.server", GlobalChat.channel().isEmpty() ? 0 : GlobalChat.serverOnline())))
                     .tooltip("@client.globalchat.tab.server.hint");
-                tabs.button("", Styles.flatTogglet, () -> setTab(false)).checked(b -> !serverTab).padLeft(4f)
-                    .update(b -> b.setText(!GlobalChat.globalOn() ? Core.bundle.get("client.globalchat.tab.global.disabled") :
+                tabs.button("", Styles.flatTogglet, () -> setTab(false)).padLeft(4f)
+                    .update(b -> tab(b, !serverTab, false, !GlobalChat.globalOn() ? Core.bundle.get("client.globalchat.tab.global.disabled") :
                         Core.bundle.format("client.globalchat.tab.global", GlobalChat.connected() ? GlobalChat.online() : 0)));
             }).growX().padTop(4f).row();
 
@@ -138,6 +138,12 @@ public class GlobalChatDialog extends Table{
             // left the server: back to the global chat
             if(serverTab && !GlobalChat.onServer()) setTab(false);
         });
+    }
+
+    private void tab(TextButton b, boolean selected, boolean disabled, String text){
+        b.setChecked(selected);
+        b.setDisabled(disabled);
+        b.setText(text);
     }
 
     private void setTab(boolean server){
