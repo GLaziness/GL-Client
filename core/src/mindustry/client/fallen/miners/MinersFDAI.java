@@ -157,7 +157,7 @@ public class MinersFDAI {
     private static Interval panicTimer = new Interval();
 
     public static int AIMiningUpdateTime = Core.settings.getInt("AIUpTime", 5);
-    public static float AIHelpRad = Core.settings.getFloat("AIHelpRad", 10);
+    public static float AIHelpRad = Core.settings.getFloat("AIHelpRad", 50);
     public static boolean resetDisabledUnits = Core.settings.getBool("resetDisabledUnits", false);
 
     // Which builder types help build near the player (from Morj's client)
