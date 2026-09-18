@@ -272,12 +272,13 @@ public class MenuFragment{
                         new MenuButton("@loadgame", Icon.download, () -> checkPlay(ui.load::show))
                     ),
                     new MenuButton("@client.name", Icon.wrench,
-                        new MenuButton("Discord", Icon.discord, () -> { // Link to client discord
-                            if (!Core.app.openURI(clientDiscord)) {
-                                ui.showErrorMessage("@linkfail");
-                                Core.app.setClipboardText(clientDiscord);
-                            }
-                        }),
+                        // GL Client has no Discord server yet, clientDiscord still points to Foo's
+//                        new MenuButton("Discord", Icon.discord, () -> { // Link to client discord
+//                            if (!Core.app.openURI(clientDiscord)) {
+//                                ui.showErrorMessage("@linkfail");
+//                                Core.app.setClipboardText(clientDiscord);
+//                            }
+//                        }),
                         new MenuButton("Github", Icon.github, () -> { // Link to client github
                             if (!Core.app.openURI("https://github.com/GLaziness/GL-Client")) {
                                 ui.showErrorMessage("@linkfail");

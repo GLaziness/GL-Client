@@ -12,7 +12,7 @@ object FeaturesDialog : BaseDialog("@client.features") {
         buttons.clear()
         clearListeners()
 
-        var str = Core.files.internal("features").readString("UTF-8")
+        var str = localizedAsset("features").readString("UTF-8")
         str = str.replace("\\{\\w+}".toRegex()) { res ->
             val value = res.value.removeSurrounding("{", "}")
             if (value == "p") return@replace ClientVars.clientCommandHandler.prefix // {p} becomes the client command prefix
