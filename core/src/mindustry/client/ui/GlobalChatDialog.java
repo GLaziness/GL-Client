@@ -184,7 +184,7 @@ public class GlobalChatDialog extends Table{
             String copy = GlobalChat.copies.get(i), line = GlobalChat.log.get(i);
             String from = GlobalChat.lineTags.get(i), name = GlobalChat.lineNames.get(i);
             // owner and moderators: a click (left or right) on [GL] of someone's message opens the actions for that player
-            boolean menu = GlobalChat.moderator() && !from.isEmpty() && !from.equals(GlobalChat.tag()) && line.startsWith(GlobalChat.prefix);
+            boolean menu = GlobalChat.moderator() && !from.isEmpty() && line.startsWith(GlobalChat.prefix);
             lines.table(row -> {
                 row.top().left();
                 String text = line;
