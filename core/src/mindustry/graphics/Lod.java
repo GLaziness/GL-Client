@@ -17,7 +17,7 @@ public class Lod{
     public static float alpha2 = 1f;
 
     public static void update(){
-        if(disable){
+        if(disable || !settings.getBool("lodfade", true)){ // GL: "lodfade" off keeps power lasers visible when zoomed out
             l1 = l2 = true;
             alpha2 = alpha1 = 1f;
             return;

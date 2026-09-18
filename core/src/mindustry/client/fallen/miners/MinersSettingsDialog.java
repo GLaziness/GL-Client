@@ -1,218 +1,233 @@
 package mindustry.client.fallen.miners;
 
-import arc.Core;
-import arc.func.Cons;
-import arc.graphics.Color;
-import arc.scene.ui.Label;
-import arc.scene.ui.Slider;
-import arc.scene.ui.layout.Table;
-import arc.util.Strings;
-import mindustry.type.Item;
-import mindustry.type.UnitType;
-import mindustry.ui.Styles;
-import mindustry.ui.dialogs.BaseDialog;
+import arc.*;
+import arc.func.*;
+import arc.graphics.*;
+import arc.scene.event.*;
+import arc.scene.style.*;
+import arc.scene.ui.*;
+import arc.scene.ui.layout.*;
+import arc.util.*;
+import mindustry.gen.*;
+import mindustry.graphics.*;
+import mindustry.type.*;
+import mindustry.ui.*;
+import mindustry.ui.dialogs.*;
 
-
-public class MinersSettingsDialog extends BaseDialog {
-
+/** Settings of the unit auto-mining AI ({@link MinersFDAI}), in the same style as the other GL dialogs. */
+public class MinersSettingsDialog extends BaseDialog{
     private static MinersSettingsDialog instance;
 
-    public static MinersSettingsDialog get() {
-        if (instance == null) instance = new MinersSettingsDialog();
+    private final Table all = new Table();
+    private float width = 640f;
+
+    public static MinersSettingsDialog get(){
+        if(instance == null) instance = new MinersSettingsDialog();
         return instance;
     }
 
-    private MinersSettingsDialog() {
-        super(Core.bundle.get("client.fdmami.mining.settings", "Mining AI Settings"));
-
+    private MinersSettingsDialog(){
+        super("@client.fdmami.title");
         addCloseButton();
-        setup();
         shown(this::setup);
+        onResize(this::setup);
+        cont.pane(all).scrollX(false).grow();
     }
 
-    private void setup() {
-        cont.clear();
-        cont.pane(all -> {
-            all.add("@client.fdmami.mining").left().padTop(10).row();
+    private void setup(){
+        all.clear();
+        all.top().margin(10f).marginBottom(30f);
+        width = Math.min(640f, Core.graphics.getWidth() / Scl.scl(1f) - 60f);
 
-            all.table(tt -> {
-                tt.defaults().left().pad(4);
+        section(Icon.units, "@client.fdmami.types", t -> {
+            check(t, "@client.fdmami.mineMonos", MinersFDAI.mineMonos, b -> MinersFDAI.mineMonos = b);
+            check(t, "@client.fdmami.minePolys", MinersFDAI.minePolys, b -> MinersFDAI.minePolys = b);
+            check(t, "@client.fdmami.minePulss", MinersFDAI.minePulss, b -> MinersFDAI.minePulss = b);
+            check(t, "@client.fdmami.mineMegas", MinersFDAI.mineMegas, b -> MinersFDAI.mineMegas = b);
+            check(t, "@client.fdmami.mineQuazs", MinersFDAI.mineQuazs, b -> MinersFDAI.mineQuazs = b);
+            check(t, "@client.fdmami.resetDisabledUnits", MinersFDAI.resetDisabledUnits, b -> {
+                MinersFDAI.resetDisabledUnits = b;
+                Core.settings.put("resetDisabledUnits", b);
+            });
+        });
 
-                tt.check("@client.fdmami.buildAssist", MinersFDAI.autoAssistBuild, b -> MinersFDAI.autoAssistBuild = b).row();
-                tt.check("@client.fdmami.manualCommands", MinersFDAI.respectManualCommands, b -> {MinersFDAI.respectManualCommands = b; Core.settings.put("respmancommands", b);}).row();
+        section(Icon.list, "@client.fdmami.resources", t -> {
+            t.add("@client.fdmami.resources.hint").color(Color.lightGray).wrap().growX().left().padBottom(4f).row();
+            buildResourceMatrix(t);
+            check(t, "@client.fdmami.resetMatrixOnWorldLoad", MinersFDAI.resetMatrixOnWorldLoad, b -> {
+                MinersFDAI.resetMatrixOnWorldLoad = b;
+                Core.settings.put("resetMatrixOnWorldLoad", b);
+            });
+        });
 
-                addSlider(tt, "@client.fdmami.minUnitsPerResource", 0, 15, 1,
-                        (float) MinersFDAI.minUnitsPerResource,
-                        v -> minMinUnitsSet(v.intValue()), " x");
+        section(Icon.chartBar, "@client.fdmami.distribution", t -> {
+            slider(t, "@client.fdmami.minUnitsPerResource", 0, 15, 1, MinersFDAI.minUnitsPerResource,
+                v -> MinersFDAI.minUnitsPerResource = v.intValue(), "");
+            slider(t, "@client.fdmami.crisisThreshold", 1f, 50f, 1f, MinersFDAI.crisisThreshold * 100,
+                v -> MinersFDAI.crisisThreshold = v / 100f, "%");
+            slider(t, "@client.fdmami.fullWeight", 0f, 0.1f, 0.005f, MinersFDAI.fullCoreWeight,
+                v -> MinersFDAI.fullCoreWeight = v, "");
+            slider(t, "@client.fdmami.updatetime", 1, 20, 1, MinersFDAI.AIMiningUpdateTime, v -> {
+                MinersFDAI.AIMiningUpdateTime = v.intValue();
+                Core.settings.put("AIUpTime", v.intValue());
+            }, " " + Core.bundle.get("unit.seconds"));
+            check(t, "@client.fdmami.manualCommands", MinersFDAI.respectManualCommands, b -> {
+                MinersFDAI.respectManualCommands = b;
+                Core.settings.put("respmancommands", b);
+            });
+            check(t, "@client.fdmami.allManualCommands", MinersFDAI.allManualCommands, b -> {
+                MinersFDAI.allManualCommands = b;
+                Core.settings.put("allmancommands", b);
+            });
+        });
 
-                addSlider(tt, "@client.fdmami.crisisThreshold", 1f, 50f, 1f,
-                        MinersFDAI.crisisThreshold * 100,
-                        v -> MinersFDAI.crisisThreshold = v / 100f, " %");
+        section(Icon.warning, "@client.fdmami.safety", t -> {
+            check(t, "@client.fdmami.oreSafety", MinersFDAI.oreSafetyEnabled, b -> {
+                MinersFDAI.oreSafetyEnabled = b;
+                Core.settings.put("fdmai-oresafe", b);
+            });
+            slider(t, "@client.fdmami.turretSafeRadius", 0f, 60f, 1f, OreSafety.turretSafeRadius, v -> {
+                OreSafety.turretSafeRadius = v;
+                Core.settings.put("fdmai-turrad", v);
+            }, "");
+            slider(t, "@client.fdmami.spawnSafeRadius", 0f, 60f, 1f, OreSafety.spawnSafeRadius, v -> {
+                OreSafety.spawnSafeRadius = v;
+                Core.settings.put("fdmai-spawnrad", v);
+            }, "");
+        });
 
-                tt.check("@client.fdmami.mineMonos", MinersFDAI.mineMonos, b -> MinersFDAI.mineMonos = b).row();
-                tt.check("@client.fdmami.minePolys", MinersFDAI.minePolys, b -> MinersFDAI.minePolys = b).row();
-                tt.check("@client.fdmami.minePulss", MinersFDAI.minePulss, b -> MinersFDAI.minePulss = b).row();
-                tt.check("@client.fdmami.mineQuazs", MinersFDAI.mineQuazs, b -> MinersFDAI.mineQuazs = b).row();
-                tt.check("@client.fdmami.mineMegas", MinersFDAI.mineMegas, b -> MinersFDAI.mineMegas = b).row();
-                tt.check("@client.fdmami.megaAutoHeal", MinersFDAI.autoHealMegas, b -> MinersFDAI.autoHealMegas = b).row();
-                tt.check("@client.fdmami.resetDisabledUnits", Core.settings.getBool("resetDisabledUnits", false),
-                        b -> {
-                            MinersFDAI.resetDisabledUnits = b;
-                            Core.settings.put("resetDisabledUnits", b);
-                        }).row();
-                tt.check("@client.fdmami.allManualCommands", MinersFDAI.allManualCommands, b -> {MinersFDAI.allManualCommands = b; Core.settings.put("allmancommands", b);}).row();
+        section(Icon.add, "@client.fdmami.repair", t -> {
+            check(t, "@client.fdmami.autoUnitRepair", MinersFDAI.autoUnitRepair, b -> {
+                MinersFDAI.autoUnitRepair = b;
+                Core.settings.put("fd-autoUnitRepair", b);
+            });
+            slider(t, "@client.fdmami.unitRepairGoHp", 10f, 95f, 5f, MinersFDAI.unitRepairGoHp * 100, v -> {
+                MinersFDAI.unitRepairGoHp = v / 100f;
+                Core.settings.put("fd-unitRepairGoHp", v / 100f);
+            }, "%");
+            check(t, "@client.fdmami.megaAutoHeal", MinersFDAI.autoHealMegas, b -> MinersFDAI.autoHealMegas = b);
+            slider(t, "@client.fdmami.megadistheal", 10, 500, 10, MinersFDAI.autoHealDist,
+                v -> MinersFDAI.autoHealDist = v, "");
+        });
 
-                addSlider(tt, "@client.fdmami.megadistheal", 10, 500, 10,
-                        MinersFDAI.autoHealDist,
-                        v -> MinersFDAI.autoHealDist = v, " x");
-
-                addSlider(tt, "@client.fdmami.updatetime", 1, 20, 1,
-                        (float) MinersFDAI.AIMiningUpdateTime,
-                        v -> {
-                            MinersFDAI.AIMiningUpdateTime = v.intValue();
-                            Core.settings.put("AIUpTime", v.intValue());
-                        }, " x");
-
-                addSlider(tt, "@client.fdmami.helprad", 1, 50, 1,
-                        (float) MinersFDAI.AIHelpRad,
-                        v -> {
-                            MinersFDAI.AIHelpRad = v;
-                            Core.settings.put("AIHelpRad", v);
-                        }, " tile");
-
-                tt.add("@client.fdmami.resources").left().padTop(14).colspan(3).row();
-                buildResourceMatrix(tt);
-
-                tt.row();
-
-                tt.check("@client.fdmami.resetMatrixOnWorldLoad", MinersFDAI.resetMatrixOnWorldLoad, b -> {
-                    MinersFDAI.resetMatrixOnWorldLoad = b;
-                    Core.settings.put("resetMatrixOnWorldLoad", b);
-                }).row();
-
-                addSlider(tt, "@client.fdmami.fullWeight", 0f, 0.1f, 0.005f,
-                        MinersFDAI.fullCoreWeight,
-                        v -> MinersFDAI.fullCoreWeight = v, " ");
-
-                tt.check("@client.fdmami.oreSafety",Core.settings.getBool("fdmai-oresafe", false),
-                        b -> {
-                            MinersFDAI.oreSafetyEnabled = b;
-                            Core.settings.put("fdmai-oresafe", b);
-                        }).row();
-
-                addSlider(tt, "@client.fdmami.turretSafeRadius", 0f, 60f, 1f,
-                        OreSafety.turretSafeRadius,
-                        v -> {
-                            OreSafety.turretSafeRadius = v;
-                            Core.settings.put("fdmai-turrad", v);
-                        }, " t");
-
-                addSlider(tt, "@client.fdmami.spawnSafeRadius", 0f, 60f, 1f,
-                        OreSafety.spawnSafeRadius,
-                        v ->{
-                            OreSafety.spawnSafeRadius = v;
-                            Core.settings.put("fdmai-spawnrad", v);
-                        } , " t");
-
-            }).left().row();
-        }).fillX().fillY();
+        section(Icon.hammer, "@client.fdmami.assist", t -> {
+            check(t, "@client.fdmami.buildAssist", MinersFDAI.autoAssistBuild, b -> MinersFDAI.autoAssistBuild = b);
+            t.table(types -> {
+                types.left().defaults().left().padRight(20f).padTop(4f);
+                types.check("@client.fdmami.assistPoly", MinersFDAI.assistBuildPoly, b -> MinersFDAI.setAssistBuild("Poly", b));
+                types.check("@client.fdmami.assistPulsar", MinersFDAI.assistBuildPulsar, b -> MinersFDAI.setAssistBuild("Pulsar", b));
+                types.row();
+                types.check("@client.fdmami.assistMega", MinersFDAI.assistBuildMega, b -> MinersFDAI.setAssistBuild("Mega", b));
+                types.check("@client.fdmami.assistQuasar", MinersFDAI.assistBuildQuasar, b -> MinersFDAI.setAssistBuild("Quasar", b));
+            }).left().padLeft(20f).row();
+            slider(t, "@client.fdmami.helprad", 1, 50, 1, MinersFDAI.AIHelpRad, v -> {
+                MinersFDAI.AIHelpRad = v;
+                Core.settings.put("AIHelpRad", v);
+            }, "");
+        });
     }
 
-    public static void minMinUnitsSet(int min){
-        MinersFDAI.minUnitsPerResource = min;
-    }
-
-    // Таблица-матрица "тип юнита x ресурс": какие юниты каким ресурсам разрешено копать.
-    // Строки - типы юнитов, колонки - ресурсы.
-    private void buildResourceMatrix(Table tt) {
+    /** Unit type x ore table: which unit types may mine which ore. Row, column and corner buttons toggle many at once. */
+    private void buildResourceMatrix(Table tt){
         tt.table(grid -> {
-            grid.defaults().pad(4).left();
+            grid.defaults().pad(2f).size(52f, 40f);
 
-            // Угол таблицы: кнопка "Включить всё / Выключить всё" для всей матрицы
-            grid.button("All", Styles.flatt, () -> {
-                // Определяем, включено ли вообще хоть что-то
+            grid.button("@client.fdmami.all", Styles.flatt, () -> {
                 boolean anyOff = false;
-                for(UnitType t : MinersFDAI.MINER_TYPES) {
-                    for(Item i : MinersFDAI.MINE_ITEMS) {
+                for(UnitType t : MinersFDAI.MINER_TYPES){
+                    for(Item i : MinersFDAI.MINE_ITEMS){
                         if(!MinersFDAI.canMine(t, i)) anyOff = true;
                     }
                 }
-                // Если есть выключенные — включаем всё, иначе выключаем всё
-                for(UnitType t : MinersFDAI.MINER_TYPES) {
+                for(UnitType t : MinersFDAI.MINER_TYPES){
                     for(Item i : MinersFDAI.MINE_ITEMS) MinersFDAI.setCanMine(t, i, anyOff);
                 }
                 setup();
-            }).width(90f).color(Color.acid);
+            }).width(80f);
 
-            // Шапка: Названия ресурсов (кликабельные колонки)
-            for (Item item : MinersFDAI.MINE_ITEMS) {
-                grid.button(item.localizedName, Styles.flatt, () -> {
-                    boolean nextState = !isColumnFullyOn(item);
-                    for (UnitType type : MinersFDAI.MINER_TYPES) {
-                        MinersFDAI.setCanMine(type, item, nextState);
-                    }
+            for(Item item : MinersFDAI.MINE_ITEMS){
+                grid.button(new TextureRegionDrawable(item.uiIcon), Styles.flati, 28f, () -> {
+                    boolean next = !isColumnFullyOn(item);
+                    for(UnitType type : MinersFDAI.MINER_TYPES) MinersFDAI.setCanMine(type, item, next);
                     setup();
-                }).width(70f).center();
+                }).tooltip(item.localizedName);
             }
             grid.row();
 
-            // Строки юнитов
-            for (UnitType type : MinersFDAI.MINER_TYPES) {
-                // Название юнита слева (кликабельная строка)
-                grid.button(type.localizedName, Styles.flatt, () -> {
-                    boolean nextState = !isRowFullyOn(type);
-                    for (Item item : MinersFDAI.MINE_ITEMS) {
-                        MinersFDAI.setCanMine(type, item, nextState);
-                    }
+            for(UnitType type : MinersFDAI.MINER_TYPES){
+                grid.button(b -> {
+                    b.image(type.uiIcon).size(28f).padRight(6f);
+                }, Styles.flatt, () -> {
+                    boolean next = !isRowFullyOn(type);
+                    for(Item item : MinersFDAI.MINE_ITEMS) MinersFDAI.setCanMine(type, item, next);
                     setup();
-                }).width(90f).left();
+                }).width(80f).tooltip(type.localizedName);
 
-                // Чекбоксы на пересечении
-                for (Item item : MinersFDAI.MINE_ITEMS) {
-                    boolean on = MinersFDAI.canMine(type, item);
-                    grid.check("", on, b -> MinersFDAI.setCanMine(type, item, b)).width(70f);
+                for(Item item : MinersFDAI.MINE_ITEMS){
+                    grid.check("", MinersFDAI.canMine(type, item), b -> MinersFDAI.setCanMine(type, item, b));
                 }
                 grid.row();
             }
-        }).left().padTop(6f).row();
+        }).left().padTop(4f).row();
     }
 
-    // Вспомогательный метод для проверки состояния колонки
-    private boolean isColumnFullyOn(Item item) {
-        for (UnitType type : MinersFDAI.MINER_TYPES) {
-            if (!MinersFDAI.canMine(type, item)) return false;
+    private boolean isColumnFullyOn(Item item){
+        for(UnitType type : MinersFDAI.MINER_TYPES){
+            if(!MinersFDAI.canMine(type, item)) return false;
         }
         return true;
     }
 
-    // Вспомогательный метод для проверки состояния строки
-    private boolean isRowFullyOn(UnitType type) {
-        for (Item item : MinersFDAI.MINE_ITEMS) {
-            if (!MinersFDAI.canMine(type, item)) return false;
+    private boolean isRowFullyOn(UnitType type){
+        for(Item item : MinersFDAI.MINE_ITEMS){
+            if(!MinersFDAI.canMine(type, item)) return false;
         }
         return true;
     }
 
-    // Вспомогательный метод для создания слайдеров
-    private void addSlider(Table table, String text, float min, float max, float step, float def, Cons<Float> changed, String suffix) {
-        table.table(t -> {
-            Label val = new Label(formatSliderValue(def, step) + suffix);
-            t.add(text).left().width(180f); // Фиксированная ширина для выравнивания
-            Slider slider = new Slider(min, max, step, false);
-            slider.setValue(def);
-            slider.changed(() -> {
-                changed.get(slider.getValue());
-                val.setText(formatSliderValue(slider.getValue(), step) + suffix);
-            });
-            t.row();
-            t.add(slider).width(150f).padLeft(10);
-            t.add(val).padLeft(10).width(40f);
-        }).row();
+    /** Accent title, accent line and a dark panel, same as the other GL dialogs. */
+    private void section(Drawable icon, String title, Cons<Table> content){
+        all.table(head -> {
+            head.left();
+            head.image(icon).color(Pal.accent).size(24f).padRight(8f);
+            head.add(title).color(Pal.accent).left();
+        }).width(width).padTop(16f).left().row();
+        all.image().color(Pal.accent).height(3f).width(width).padTop(4f).padBottom(6f).row();
+
+        all.table(Styles.grayPanel, t -> {
+            t.left().top().margin(10f);
+            t.defaults().left();
+            content.get(t);
+        }).width(width).row();
     }
 
-    /** Целые значения для крупных шагов, два знака после запятой для дробных. */
-    private static String formatSliderValue(float value, float step) {
-        if (step >= 1f) return String.valueOf((int) value);
-        return Strings.autoFixed(value, 2);
+    private void check(Table t, String name, boolean current, Boolc changed){
+        t.check(name, current, changed).left().padTop(4f).row();
+    }
+
+    /** Slider with the name and value drawn over it, same as the vanilla settings sliders. */
+    private void slider(Table t, String name, float min, float max, float step, float current, Cons<Float> changed, String unit){
+        Slider slider = new Slider(min, max, step, false);
+        slider.setValue(current);
+
+        Label value = new Label("", Styles.outlineLabel);
+        Runnable update = () -> {
+            float v = slider.getValue();
+            value.setText((step >= 1f ? String.valueOf((int)v) : Strings.autoFixed(v, 3)) + unit);
+        };
+        update.run();
+
+        Table content = new Table();
+        content.add(name, Styles.outlineLabel).left().growX().wrap();
+        content.add(value).padLeft(10f).right();
+        content.margin(3f, 33f, 3f, 33f);
+        content.touchable = Touchable.disabled;
+
+        slider.changed(() -> {
+            changed.get(slider.getValue());
+            update.run();
+        });
+
+        t.stack(slider, content).growX().padTop(6f).row();
     }
 }

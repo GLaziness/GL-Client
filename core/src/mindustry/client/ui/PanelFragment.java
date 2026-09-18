@@ -341,6 +341,7 @@ public class PanelFragment extends Table{
             action(icon(Blocks.itemVoid), "fdpanel.scan.voids", this::checkvoids),
             action(icon(Blocks.itemSource), "fdpanel.scan.sources", this::checksources),
             action(icon(Blocks.worldProcessor), "fdpanel.scan.worldproc", this::checkworldprocc),
+            action(icon(UnitTypes.flare), "fdpanel.scan.wave", this::checkNextWave),
             settingToggle(Icon.chat, "fdpanel.unitatchat", "unitatchat")
         );
     }
@@ -821,6 +822,107 @@ public class PanelFragment extends Table{
                 }
             });
         });
+    }
+
+    /**
+     * Next wave enemy composition (side panel).
+     * Same routing as Eye of Sauron: public chat only when "Unit in chat" ({@code unitatchat}) is on.
+     */
+    private void checkNextWave(){
+        if(state.isMenu() || state.rules == null || state.rules.spawns == null) return;
+
+        int displayWave = Math.max(state.wave, 1);
+        int internalWave = displayWave - 1;
+        int spawnCount = Math.max(spawner.getSpawns() != null ? spawner.getSpawns().size : 0, 1);
+        boolean toChat = settings.getBool("unitatchat");
+
+        // Aggregate unit type (+ optional status) → count for this wave
+        ObjectMap<String, Integer> counts = new ObjectMap<>();
+        ObjectMap<String, UnitType> types = new ObjectMap<>();
+        ObjectMap<String, StatusEffect> effects = new ObjectMap<>();
+        int totalUnits = 0;
+        float totalHp = 0f, totalShield = 0f;
+
+        for(SpawnGroup group : state.rules.spawns){
+            if(group == null || group.type == null) continue;
+            int amt = group.getSpawned(internalWave);
+            if(amt <= 0) continue;
+
+            int finalAmt = amt * (group.spawn == -1 ? spawnCount : 1);
+            StatusEffect eff = (group.effect == null || group.effect == StatusEffects.none) ? null : group.effect;
+            String key = group.type.name + (eff != null ? ":" + eff.name : "");
+
+            counts.put(key, counts.get(key, 0) + finalAmt);
+            types.put(key, group.type);
+            if(eff != null) effects.put(key, eff);
+
+            totalUnits += finalAmt;
+            totalHp += group.type.health * finalAmt;
+            totalShield += group.getShield(internalWave) * finalAmt;
+        }
+
+        if(counts.isEmpty()){
+            postWaveInfo("W" + displayWave + ": —", toChat);
+            return;
+        }
+
+        // Sort keys by count desc for readable summary
+        Seq<String> keys = counts.keys().toSeq();
+        keys.sort((a, b) -> Integer.compare(counts.get(b), counts.get(a)));
+
+        StringBuilder body = new StringBuilder();
+        for(String key : keys){
+            UnitType type = types.get(key);
+            StatusEffect eff = effects.get(key);
+            int n = counts.get(key);
+            body.append(Fonts.getUnicodeStr(type.name)).append("x").append(n);
+            if(eff != null){
+                body.append(Fonts.getUnicodeStr(eff.name));
+            }
+            body.append(" ");
+        }
+
+        String hpStr = totalHp >= 1000 ? Strings.fixed(totalHp / 1000f, 1) + "k" : String.valueOf(Math.round(totalHp));
+        String shStr = totalShield >= 1000 ? Strings.fixed(totalShield / 1000f, 1) + "k" : String.valueOf(Math.round(totalShield));
+
+        String full = "W" + displayWave + " (" + totalUnits + ") HP:" + hpStr
+            + (totalShield > 0 ? " Sh:" + shStr : "")
+            + ": " + body.toString().trim();
+
+        // Split into chat-sized chunks when posting publicly
+        if(toChat && max_length > 0 && full.length() > max_length){
+            String rest = body.toString().trim();
+            int pos = 0;
+            int part = 0;
+            String prefix = "W" + displayWave + ": ";
+            while(pos < rest.length()){
+                int end = Math.min(pos + Math.max(20, max_length - prefix.length() - 4), rest.length());
+                if(end < rest.length()){
+                    int sp = rest.lastIndexOf(' ', end);
+                    if(sp > pos) end = sp;
+                }
+                String chunk = (part == 0 ? prefix : "W" + displayWave + "+ ") + rest.substring(pos, end).trim();
+                postWaveInfo(chunk, true);
+                pos = end;
+                while(pos < rest.length() && rest.charAt(pos) == ' ') pos++;
+                part++;
+            }
+        }else{
+            postWaveInfo(full, toChat);
+        }
+    }
+
+    private void postWaveInfo(String message, boolean toPublicChat){
+        if(message == null || message.isEmpty()) return;
+        if(toPublicChat){
+            String msg = message;
+            if(max_length > 0 && msg.length() > max_length) msg = msg.substring(0, max_length);
+            if(state.rules.pvp) Call.sendChatMessage("/t " + msg);
+            else Call.sendChatMessage(msg);
+        }else{
+            String local = message.length() > 1000 ? message.substring(0, 1000) + "..." : message;
+            ui.chatfrag.addMessage(local, null, null, "", local);
+        }
     }
 
     private void checkcores() {

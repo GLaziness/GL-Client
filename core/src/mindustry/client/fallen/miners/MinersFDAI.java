@@ -27,6 +27,9 @@ import mindustry.gen.Unit;
 import mindustry.type.Item;
 import mindustry.type.UnitType;
 import mindustry.world.Tile;
+import mindustry.world.blocks.units.RepairTower;
+import mindustry.world.blocks.units.RepairTurret;
+import mindustry.world.meta.BlockFlag;
 
 import static mindustry.Vars.player;
 
@@ -155,6 +158,41 @@ public class MinersFDAI {
     public static float AIHelpRad = Core.settings.getFloat("AIHelpRad", 10);
     public static boolean resetDisabledUnits = Core.settings.getBool("resetDisabledUnits", false);
 
+    // Which builder types help build near the player (from Morj's client)
+    public static boolean assistBuildPoly = Core.settings.getBool("AIAssistPoly", true);
+    public static boolean assistBuildPulsar = Core.settings.getBool("AIAssistPulsar", true);
+    public static boolean assistBuildMega = Core.settings.getBool("AIAssistMega", true);
+    public static boolean assistBuildQuasar = Core.settings.getBool("AIAssistQuasar", true);
+
+    // Damaged miners fly to a repair point and come back (from Morj's client)
+    public static boolean autoUnitRepair = Core.settings.getBool("fd-autoUnitRepair", true);
+    public static float unitRepairGoHp = Core.settings.getFloat("fd-unitRepairGoHp", 0.5f);
+    public static float unitRepairDoneHp = 0.98f;
+    private static final IntSet healingUnits = new IntSet();
+    /** Ore each healing unit was mining, to send it back to the same ore. */
+    private static final IntMap<Item> healingItem = new IntMap<>();
+    private static final Seq<Building> repairPads = new Seq<>();
+    private static final Interval repairTimer = new Interval();
+
+    /** name: Poly, Pulsar, Mega or Quasar. */
+    public static void setAssistBuild(String name, boolean value){
+        switch(name){
+            case "Poly" -> assistBuildPoly = value;
+            case "Pulsar" -> assistBuildPulsar = value;
+            case "Mega" -> assistBuildMega = value;
+            case "Quasar" -> assistBuildQuasar = value;
+        }
+        Core.settings.put("AIAssist" + name, value);
+    }
+
+    private static boolean isAssistBuilderType(UnitType type){
+        if(type == UnitTypes.poly) return assistBuildPoly;
+        if(type == UnitTypes.pulsar) return assistBuildPulsar;
+        if(type == UnitTypes.mega) return assistBuildMega;
+        if(type == UnitTypes.quasar) return assistBuildQuasar;
+        return true;
+    }
+
     private static final IntMap<UnitCommand> lastAiCommand = new IntMap<>();
     private static final IntSet manualUnits = new IntSet();
     private static final IntSet assistingUnits = new IntSet();
@@ -163,6 +201,8 @@ public class MinersFDAI {
         lastAiCommand.remove(id);
         manualUnits.remove(id);
         assistingUnits.remove(id);
+        healingUnits.remove(id);
+        healingItem.remove(id);
         OreSafety.forget(id);
     }
     public static void init() {
@@ -173,6 +213,8 @@ public class MinersFDAI {
             manualUnits.clear();
             assistingUnits.clear();
             lastAiCommand.clear();
+            healingUnits.clear();
+            healingItem.clear();
             if (resetMatrixOnWorldLoad) {
                 resetPermissionsToDefaults();
             }
@@ -238,6 +280,11 @@ public class MinersFDAI {
                 assistingUnits.clear();
             }
 
+            if (autoMiningActive && repairTimer.get(60f)) {
+                if (autoUnitRepair) handleUnitRepair();
+                else if (healingUnits.notEmpty()) releaseHealing(null);
+            }
+
             if (autoMiningActive && autoAssistBuild && assistTimer.get(60f)) {
                 handleAssistNearPlayer();
             }
@@ -272,14 +319,14 @@ public class MinersFDAI {
             if (u.team != player.team() || !u.isCommandable()) continue;
             if (u.type.buildSpeed <= 0f) continue;
             if (!isManagedMinerType(u.type)) continue; // Если тип выключен — не берем в ассист
-            if (manualUnits.contains(u.id)) continue; // Не трогаем ручных юнитов
+            if (manualUnits.contains(u.id) || healingUnits.contains(u.id)) continue; // Не трогаем ручных и лечащихся юнитов
             // Юниты на починке (авто-хил мег) не дёргаем в ассист, иначе флап ремонт/ассист.
             if (u.controller() instanceof CommandAI rep && rep.command == UnitCommand.repairCommand) continue;
 
             boolean inRange = u.dst(px, py) <= radiusPx;
             boolean isCurrentlyAssist = u.controller() instanceof CommandAI cai && cai.command == UnitCommand.assistCommand;
 
-            if (buildingNearby && inRange) {
+            if (buildingNearby && inRange && isAssistBuilderType(u.type)) {
                 if (!isCurrentlyAssist) toAssist.add(u.id);
                 assistingUnits.add(u.id);
             } else if (assistingUnits.contains(u.id) || isCurrentlyAssist) {
@@ -428,7 +475,7 @@ public class MinersFDAI {
                 }
             }
 
-            if (manualUnits.contains(u.id) || assistingUnits.contains(u.id)) continue;
+            if (manualUnits.contains(u.id) || assistingUnits.contains(u.id) || healingUnits.contains(u.id)) continue;
 
             // Юнит в отводе к безопасной жиле — не трогаем, пока не прилетит.
             if (oreSafetyEnabled && OreSafety.isRedirecting(u)) continue;
@@ -648,6 +695,118 @@ public class MinersFDAI {
         OreSafety.markRedirect(u.id, safe); // передаём кластер вместо времени
 
         return true;
+    }
+
+    // ================== РЕМОНТ: ПОВРЕЖДЁННЫЕ ЮНИТЫ ЛЕТЯТ К РЕМОНТНОЙ ТОЧКЕ ==================
+
+    /**
+     * Miners below {@link #unitRepairGoHp} fly to the nearest repair point / repair tower of the team,
+     * stay there until almost fully healed, then go back to the ore they were mining.
+     */
+    private static void handleUnitRepair() {
+        if (player.team().core() == null) return;
+
+        repairPads.clear();
+        Seq<Building> flagged = Vars.indexer.getFlagged(player.team(), BlockFlag.repair);
+        if (flagged != null) repairPads.addAll(flagged.select(b -> b.block instanceof RepairTurret || b.block instanceof RepairTower));
+        for (Building b : player.team().data().buildings) {
+            if (b.block instanceof RepairTower && !repairPads.contains(b)) repairPads.add(b);
+        }
+        if (repairPads.isEmpty()) {
+            if (healingUnits.notEmpty()) releaseHealing(null);
+            return;
+        }
+
+        ObjectMap<Building, IntSeq> moves = new ObjectMap<>();
+        IntSeq boost = new IntSeq(), healed = new IntSeq();
+
+        for (Unit u : Groups.unit) {
+            if (u.team != player.team() || !u.isCommandable() || !isManagedMinerType(u.type)) continue;
+            if (manualUnits.contains(u.id)) continue;
+
+            float hp = u.maxHealth <= 0f ? 1f : u.health / u.maxHealth;
+            Building pad = nearestPad(u);
+
+            if (healingUnits.contains(u.id)) {
+                if (pad == null || hp >= unitRepairDoneHp) {
+                    healed.add(u.id);
+                } else if (u.dst(pad) > repairRadius(pad) * 0.75f) {
+                    moves.get(pad, IntSeq::new).add(u.id);
+                }
+                continue;
+            }
+
+            if (pad != null && hp < unitRepairGoHp) {
+                healingUnits.add(u.id);
+                assistingUnits.remove(u.id);
+                Item mined = currentMinedItem(u);
+                if (mined != null) healingItem.put(u.id, mined);
+                moves.get(pad, IntSeq::new).add(u.id);
+                // mechs (pulsar/quasar) fly to the pad instead of walking
+                if (u.type.canBoost) boost.add(u.id);
+            }
+        }
+
+        for (var e : moves.entries()) {
+            int[] ids = e.value.toArray();
+            Call.setUnitCommand(player, ids, UnitCommand.moveCommand);
+            Call.commandUnits(player, ids, null, null, new Vec2(e.key.x, e.key.y), false, true);
+            for (int id : ids) lastAiCommand.put(id, UnitCommand.moveCommand);
+        }
+        if (boost.size > 0) Call.setUnitStance(player, boost.toArray(), UnitStance.boost, true);
+        if (healed.size > 0) releaseHealing(healed);
+    }
+
+    /** Sends healed units (or all healing units, if ids is null) back to mining. */
+    private static void releaseHealing(IntSeq ids) {
+        if (ids == null) {
+            ids = new IntSeq();
+            IntSeq all = ids;
+            healingUnits.each(all::add);
+        }
+        ObjectMap<Item, IntSeq> byItem = new ObjectMap<>();
+        IntSeq plain = new IntSeq(), unboost = new IntSeq();
+        for (int i = 0; i < ids.size; i++) {
+            int id = ids.get(i);
+            healingUnits.remove(id);
+            Item item = healingItem.remove(id);
+            Unit u = Groups.unit.getByID(id);
+            if (u == null) continue;
+            if (u.type.canBoost) unboost.add(id);
+            if (item != null) byItem.get(item, IntSeq::new).add(id);
+            else plain.add(id);
+        }
+        if (unboost.size > 0) Call.setUnitStance(player, unboost.toArray(), UnitStance.boost, false);
+        for (var e : byItem.entries()) {
+            int[] arr = e.value.toArray();
+            Call.setUnitCommand(player, arr, UnitCommand.mineCommand);
+            Call.setUnitStance(player, arr, UnitStance.mineAuto, false);
+            Call.setUnitStance(player, arr, ItemUnitStance.getByItem(e.key), true);
+            for (int id : arr) lastAiCommand.put(id, UnitCommand.mineCommand);
+        }
+        if (plain.size > 0) {
+            Call.setUnitCommand(player, plain.toArray(), UnitCommand.mineCommand);
+            for (int i = 0; i < plain.size; i++) lastAiCommand.put(plain.get(i), UnitCommand.mineCommand);
+        }
+    }
+
+    /** Nearest repair pad, preferring powered ones. */
+    private static Building nearestPad(Unit u) {
+        Building best = null, bestAny = null;
+        float bestD = Float.MAX_VALUE, bestAnyD = Float.MAX_VALUE;
+        for (Building b : repairPads) {
+            if (!b.isValid()) continue;
+            float d = u.dst2(b);
+            if (d < bestAnyD) { bestAnyD = d; bestAny = b; }
+            if (b.efficiency > 0.01f && d < bestD) { bestD = d; best = b; }
+        }
+        return best != null ? best : bestAny;
+    }
+
+    private static float repairRadius(Building b) {
+        if (b.block instanceof RepairTurret rt) return Math.max(24f, rt.repairRadius);
+        if (b.block instanceof RepairTower rt) return Math.max(24f, rt.range);
+        return 48f;
     }
 
     private static boolean isPlayerBuilding() {

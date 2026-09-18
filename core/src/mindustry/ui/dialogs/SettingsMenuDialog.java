@@ -545,6 +545,9 @@ public class SettingsMenuDialog extends BaseDialog{
 
         client.category("fallen");
         client.checkPref("hidecursor", false);
+        client.checkPref("blocksplayersplan", true);
+        client.checkPref("itemslog", true);
+        client.checkPref("unitlog", true);
         client.sliderPref("placefragwidth", 7,  3, 10, 1, String::valueOf);
         client.checkPref("tilefragment", true);
         client.checkPref("historyfragment", false);
@@ -739,6 +742,7 @@ public class SettingsMenuDialog extends BaseDialog{
         }
 
         graphics.checkPref("effects", true);
+        graphics.checkPref("lodfade", true);
         graphics.checkPref("atmosphere", true);
         graphics.checkPref("drawlight", true);
         graphics.checkPref("destroyedblocks", true);
