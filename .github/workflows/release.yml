@@ -1,8 +1,7 @@
 name: Release Update
 #this made me lose lots of braincells
 on:
-  push:
-    tags: v*
+  workflow_dispatch: # GL Client releases are published manually from a local build
 
 jobs:
   build:
