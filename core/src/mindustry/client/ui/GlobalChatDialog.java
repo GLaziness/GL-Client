@@ -69,7 +69,7 @@ public class GlobalChatDialog extends Table{
                 head.button(Icon.cancel, Styles.cleari, this::toggle).size(36f);
             }).growX().row();
 
-            root.label(GlobalChat::status).fontScale(0.85f).wrap().growX().left().padTop(2f).row();
+            root.label(() -> GlobalChat.enabled() ? GlobalChat.status() : Core.bundle.get("client.globalchat.off.window")).fontScale(0.85f).wrap().growX().left().padTop(2f).row();
             root.image().color(Pal.accent).height(2f).growX().padTop(4f).padBottom(4f).row();
 
             lines.top().left();
@@ -114,6 +114,7 @@ public class GlobalChatDialog extends Table{
     private void send(){
         String text = field.getText().trim();
         if(text.isEmpty()) return;
+        if(!GlobalChat.enabled()) return; // the status line above already says to press the power button
         if(GlobalChat.send(text)) field.setText("");
     }
 
