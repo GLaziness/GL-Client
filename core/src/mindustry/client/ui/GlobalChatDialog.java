@@ -145,9 +145,13 @@ public class GlobalChatDialog extends Table{
             menuItem(menu, Icon.hammer, "@client.globalchat.btn.ban", () -> confirm("client.globalchat.confirm.ban", "ban", target, name));
             menuItem(menu, Icon.refresh, "@client.globalchat.btn.unban", () -> GlobalChat.moderate("unban", target));
         }
-        if(GlobalChat.owner()){
+        if(GlobalChat.curator()){
             menuItem(menu, Icon.admin, "@client.globalchat.btn.addmod", () -> confirm("client.globalchat.confirm.addmod", "addmod", target, name));
             menuItem(menu, Icon.cancel, "@client.globalchat.btn.delmod", () -> GlobalChat.moderate("delmod", target));
+        }
+        if(GlobalChat.owner()){
+            menuItem(menu, Icon.star, "@client.globalchat.btn.addcur", () -> confirm("client.globalchat.confirm.addcur", "addcur", target, name));
+            menuItem(menu, Icon.cancel, "@client.globalchat.btn.delcur", () -> GlobalChat.moderate("delcur", target));
         }
         menuItem(menu, Icon.copy, "@client.globalchat.btn.copytag", () -> {
             Core.app.setClipboardText(target);
@@ -177,7 +181,7 @@ public class GlobalChatDialog extends Table{
                 list.defaults().width(280f).height(34f).left();
                 for(var p : players){
                     String name = p.getString("name", "?"), tag = p.getString("tag", ""), role = p.getString("role", "");
-                    String badge = role.equals("owner") ? "[gold]" + Iconc.admin + "[] " : role.equals("mod") ? "[sky]" + Iconc.admin + "[] " : "";
+                    String badge = GlobalChat.badge(role);
                     String self = tag.equals(GlobalChat.tag()) ? "[accent]" : "[white]";
                     TextButton b = list.button(badge + self + name.replace("[", "[[") + "[] [gray]#" + tag, lineStyle, () -> playerMenu(tag, name)).get();
                     b.left();

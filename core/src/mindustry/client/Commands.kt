@@ -439,7 +439,7 @@ fun setupCommands() {
 
     register("gm [action] [target...]", Core.bundle.get("client.command.gm.description")) { args, player ->
         // GL: global chat moderation, the chat server checks the rights
-        val actions = listOf("mute", "unmute", "ban", "unban", "addmod", "delmod", "list")
+        val actions = listOf("mute", "unmute", "ban", "unban", "addmod", "delmod", "addcur", "delcur", "list")
         if (args.isEmpty() || args[0] !in actions) player.sendMessage(Core.bundle.get("client.globalchat.gmhelp"))
         else mindustry.client.utils.GlobalChat.moderate(args[0], if (args.size > 1) args[1] else "")
     }

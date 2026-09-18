@@ -96,6 +96,21 @@ public class GlobalChat{
         return connected && role.equals("owner");
     }
 
+    /** Owner and curators: appoint and remove moderators. */
+    public static boolean curator(){
+        return connected && (role.equals("owner") || role.equals("curator"));
+    }
+
+    /** Colored badge shown before the name of the owner, curators and moderators. */
+    public static String badge(String role){
+        return switch(role){
+            case "owner" -> "[gold]" + Iconc.admin + "[] ";
+            case "curator" -> "[#c28cff]" + Iconc.admin + "[] ";
+            case "mod" -> "[sky]" + Iconc.admin + "[] ";
+            default -> "";
+        };
+    }
+
     public static String tag(){
         return tag;
     }
@@ -301,11 +316,7 @@ public class GlobalChat{
                 String from = msg.getString("tag", "");
                 String raw = msg.getString("text", "");
                 String self = from.equals(tag) ? "[accent]" : "[white]";
-                String badge = switch(msg.getString("role", "")){
-                    case "owner" -> "[gold]" + Iconc.admin + "[] ";
-                    case "mod" -> "[sky]" + Iconc.admin + "[] ";
-                    default -> "";
-                };
+                String badge = badge(msg.getString("role", ""));
                 postRaw("[#7fd3ff][[GL][] " + badge + self + name + "[] [gray]#" + escape(from) + "[]: [white]" + escape(raw), raw, from, msg.getString("name", "?"));
             }
             case "sys" -> {
@@ -327,7 +338,13 @@ public class GlobalChat{
                     String who = escape(name.isEmpty() ? "?" : name) + " [gray]#" + escape(msg.getString("tag", "")) + "[]";
                     postRaw(Core.bundle.format(key, escape(msg.getString("by", "?")), who, duration(msg.getInt("minutes", 0) * 60)));
                 }
-                if(msg.getString("tag", "").equals(tag) && (action.equals("addmod") || action.equals("delmod"))) role = action.equals("addmod") ? "mod" : "";
+                if(msg.getString("tag", "").equals(tag)){
+                    switch(action){
+                        case "addmod" -> role = "mod";
+                        case "addcur" -> role = "curator";
+                        case "delmod", "delcur" -> role = "";
+                    }
+                }
             }
             case "who" -> {
                 Seq<Jval> players = new Seq<>();
@@ -339,7 +356,7 @@ public class GlobalChat{
             }
             case "modinfo" -> {
                 StringBuilder sb = new StringBuilder(Core.bundle.get("client.globalchat.list.title"));
-                for(String kind : new String[]{"mods", "mutes", "bans"}){
+                for(String kind : new String[]{"curators", "mods", "mutes", "bans"}){
                     sb.append("\n[accent]").append(Core.bundle.get("client.globalchat.list." + kind)).append("[] ");
                     Jval.JsonArray arr = msg.get(kind) == null ? new Jval.JsonArray() : msg.get(kind).asArray();
                     if(arr.isEmpty()) sb.append("[gray]-[]");
