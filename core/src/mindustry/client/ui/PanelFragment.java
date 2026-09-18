@@ -370,7 +370,8 @@ public class PanelFragment extends Table{
             transferTarget(Blocks.additiveReconstructor, "fdpanel.target.recons", "autotransfer-t-recons", AutoTransfer.Settings::setTargetReconstructors),
             action(Icon.power, "fdpanel.fixpower", () -> ClientVars.clientCommandHandler.handleMessage("!fixpower c", player)),
             action(Icon.logic, "fdpanel.fixcode", () -> ClientVars.clientCommandHandler.handleMessage("!fixcode r", player)),
-            settingToggle(Icon.eraser, "fdpanel.schemcleanup", "placeSchematicWithCleanup")
+            settingToggle(Icon.eraser, "fdpanel.schemcleanup", "placeSchematicWithCleanup"),
+            settingToggle(icon(Blocks.itemBridge), "fdpanel.plastbridges", "plastbridges")
         );
     }
 
