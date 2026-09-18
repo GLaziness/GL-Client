@@ -158,11 +158,7 @@ class ClientLogic {
 
         Events.on(GameOverEventClient::class.java) {
             if (net.client()) {
-                // Afk players will start mining at the end of a game (kind of annoying but worth it)
-                if ((Navigation.currentlyFollowing as? BuildPath)?.mineItems == null && !CustomMode.defense()) {
-                    (control.input as? DesktopInput)?.moved = false
-                    Navigation.follow(MinePath(args = "copper lead beryllium graphite", newGame = true))
-                }
+                // GL: Foo's auto mining at the end of a game is removed, it took over the unit and broke poly mode
 
                 // Save maps on game over if the setting is enabled
                 if (settings.getBool("savemaponend")) control.saves.addSave(state.map.name())
