@@ -31,9 +31,9 @@ public class GlobalChat{
     private static final String pin = "5373188ec5a8d68d4f930a38f2aadb8b9606ac35819d8ddcecb8865e4d81971e";
     private static final int maxText = 200, maxLog = 150;
     /** Start of every line of the global chat. */
-    public static final String prefix = "[#7fd3ff]" + Iconc.planet + "[] ";
+    public static final String prefix = "[#7fd3ff]<" + Iconc.planet + ">[] ";
     /** Start of every line of the chat of the server the player is on. */
-    public static final String serverPrefix = "[#a3e87a]" + Iconc.host + "[] ";
+    public static final String serverPrefix = "[#a3e87a]<" + Iconc.host + ">[] ";
     /** How the lines start in the bundles; {@link #icons(String)} turns these labels into the icons above. */
     private static final String bundlePrefix = "[#7fd3ff][[GL][] ", bundleServerPrefix = "[#a3e87a][[GL-S][] ";
     /** Kinds of {@link #lineKinds}: system lines are shown in both tabs. */
