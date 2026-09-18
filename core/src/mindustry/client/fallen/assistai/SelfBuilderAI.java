@@ -43,6 +43,11 @@ public class SelfBuilderAI extends AIController{
     public boolean onlyAssist;
 
     boolean found = false;
+    /** GL: how often an idle player unit looks for destroyed blocks, and how many it queues at once. */
+    private static final float playerRebuildPeriod = 10f;
+    private static final int maxQueued = 12;
+    private final arc.struct.Seq<BlockPlan> queued = new arc.struct.Seq<>();
+    private final arc.struct.FloatSeq queuedWeights = new arc.struct.FloatSeq();
     float retreatTimer;
     private static final float maxTurretCheckRange = 600f;
 
@@ -218,12 +223,12 @@ public class SelfBuilderAI extends AIController{
             }
 
             // 4. ПОИСК УНИЧТОЖЕННЫХ БЛОКОВ В ОЧЕРЕДИ СТРОЙКИ
-            if(!onlyAssist && rebuildBlocks && !unit.team.data().plans.isEmpty() && following == null && timer.get(timerTarget3, rebuildPeriod)){
+            // GL: the player's unit takes the next blocks right away (vanilla builder AI waits rebuildPeriod = 2 s after every block)
+            // and queues several at once, so the builder component keeps building whatever is in range without idle gaps.
+            if(!onlyAssist && rebuildBlocks && !unit.team.data().plans.isEmpty() && following == null && timer.get(timerTarget3, playerRebuildPeriod)){
                 var blocks = unit.team.data().plans;
-
-                BlockPlan bestPlan = null;
-                int bestIndex = 0;
-                float bestWeight = Float.MAX_VALUE;
+                queued.clear();
+                queuedWeights.clear();
 
                 for(int i = 0; i < blocks.size; i++){
                     BlockPlan bp = blocks.get(i);
@@ -249,18 +254,32 @@ public class SelfBuilderAI extends AIController{
                     }
 
                     float weight = dist * priorityMultiplier;
-                    if(weight < bestWeight){
-                        bestWeight = weight;
-                        bestPlan = bp;
-                        bestIndex = i;
-                        if(!findClosestPlan) break;
+                    if(!findClosestPlan){
+                        queued.add(bp);
+                        if(queued.size >= maxQueued) break;
+                        continue;
+                    }
+
+                    // keep the maxQueued lightest plans, sorted by weight
+                    if(queued.size >= maxQueued && weight >= queuedWeights.peek()) continue;
+                    int at = 0;
+                    while(at < queuedWeights.size && queuedWeights.get(at) <= weight) at++;
+                    queued.insert(at, bp);
+                    queuedWeights.insert(at, weight);
+                    if(queued.size > maxQueued){
+                        queued.pop();
+                        queuedWeights.pop();
                     }
                 }
 
-                if(bestPlan != null){
-                    lastPlan = bestPlan;
-                    unit.addBuild(new BuildPlan(bestPlan.x, bestPlan.y, bestPlan.rotation, bestPlan.block, bestPlan.config));
-                    blocks.addLast(blocks.removeIndex(bestIndex));
+                if(queued.any()){
+                    lastPlan = queued.first();
+                    for(BlockPlan bp : queued){
+                        unit.addBuild(new BuildPlan(bp.x, bp.y, bp.rotation, bp.block, bp.config));
+                        // plans taken now go to the end of the team queue, so other builders get different ones
+                        blocks.remove(bp, true);
+                        blocks.addLast(bp);
+                    }
                 }
             }
 
