@@ -1041,7 +1041,8 @@ public class ChatFragment extends Table{
         // set disableadminchatifsolo to true if you want to hide admin chat as a solo admin.
         admin("/a", () -> (Server.current.adminui()) && (!settings.getBool("disableadminchatifsolo") || Groups.player.count(p -> p.admin) > 1)),
         staff("/s", () -> Server.fish.b() && settings.getBool("fish-staff", false)),
-        client("!c");
+        client("!c"),
+        global("!g", mindustry.client.utils.GlobalChat::enabled); // GL: global chat between GL Client players
 
         public String prefix;
         public Boolp valid;

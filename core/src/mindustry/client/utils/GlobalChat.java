@@ -1,6 +1,7 @@
 package mindustry.client.utils;
 
 import arc.*;
+import arc.struct.*;
 import arc.util.*;
 import arc.util.serialization.*;
 
@@ -24,7 +25,7 @@ public class GlobalChat{
     private static final int port = 7160;
     /** SHA-256 of the server certificate (DER). */
     private static final String pin = "5373188ec5a8d68d4f930a38f2aadb8b9606ac35819d8ddcecb8865e4d81971e";
-    private static final int maxText = 200;
+    private static final int maxText = 200, maxLog = 150;
 
     private static volatile boolean running;
     private static volatile SSLSocket socket;
@@ -32,10 +33,17 @@ public class GlobalChat{
     private static volatile boolean connected;
     private static volatile int online;
     private static volatile String tag = "";
+    /** Why the chat is not connected (shown to the player), null when there is no problem. */
+    private static volatile @Nullable String error;
     private static Thread thread;
 
+    /** Lines of the global chat for its window, main thread only. */
+    public static final Seq<String> log = new Seq<>();
+    /** Called on the main thread when a line is added to {@link #log}. */
+    public static @Nullable Runnable listener;
+
     public static void init(){
-        if(Core.settings.getBool("globalchat", false)) start();
+        if(enabled()) start();
     }
 
     public static boolean enabled(){
@@ -56,14 +64,20 @@ public class GlobalChat{
         return online;
     }
 
+    /** One line saying what the chat is doing: off, connected, or what went wrong. */
+    public static String status(){
+        if(!enabled()) return Core.bundle.get("client.globalchat.off");
+        if(connected) return Core.bundle.format("client.globalchat.status", online);
+        String e = error;
+        return e != null ? Core.bundle.format("client.globalchat.failed", e) : Core.bundle.get("client.globalchat.connecting");
+    }
+
     private static String token(){
         String token = Core.settings.getString("globalchat-token", "");
         if(!token.matches("[0-9a-f]{64}")){
             byte[] bytes = new byte[32];
             new SecureRandom().nextBytes(bytes);
-            StringBuilder sb = new StringBuilder();
-            for(byte b : bytes) sb.append(String.format("%02x", b));
-            token = sb.toString();
+            token = hex(bytes);
             Core.settings.put("globalchat-token", token);
         }
         return token;
@@ -72,6 +86,7 @@ public class GlobalChat{
     public static synchronized void start(){
         if(running) return;
         running = true;
+        error = null;
         thread = new Thread(GlobalChat::run, "GL-GlobalChat");
         thread.setDaemon(true);
         thread.start();
@@ -85,16 +100,26 @@ public class GlobalChat{
         thread = null;
     }
 
-    /** Sends a message; returns false when not connected. */
+    /** Sends a message. When it cannot be sent, the reason is written to the chat. */
     public static boolean send(String text){
         text = text.replace('\n', ' ').trim();
         if(text.isEmpty()) return true;
-        if(!connected) return false;
-        if(text.length() > maxText) text = text.substring(0, maxText);
+        if(!enabled() || !connected){
+            postRaw(status());
+            return false;
+        }
+        if(text.length() > maxText){
+            text = text.substring(0, maxText);
+            postRaw(Core.bundle.format("client.globalchat.cut", maxText));
+        }
         Jval msg = Jval.newObject();
         msg.put("t", "msg");
         msg.put("text", text);
-        return write(msg);
+        if(!write(msg)){
+            postRaw(Core.bundle.format("client.globalchat.failed", Core.bundle.get("client.globalchat.err.send")));
+            return false;
+        }
+        return true;
     }
 
     private static boolean write(Jval obj){
@@ -116,20 +141,29 @@ public class GlobalChat{
     private static void run(){
         int delay = 5;
         while(running){
+            String reason;
             try{
                 connect();
                 delay = 5;
                 read();
+                reason = Core.bundle.get("client.globalchat.err.closed");
             }catch(InterruptedException e){
                 break;
             }catch(Exception e){
+                reason = describe(e);
                 Log.debug("[GlobalChat] @", e.toString());
-            }finally{
-                if(connected) post("client.globalchat.disconnected");
-                connected = false;
-                closeSocket();
             }
+
+            boolean was = connected;
+            connected = false;
+            closeSocket();
             if(!running) break;
+
+            // tell the player once per problem, not on every retry
+            if(was) postRaw(Core.bundle.format("client.globalchat.lost", reason));
+            else if(!reason.equals(error)) postRaw(Core.bundle.format("client.globalchat.failed", reason));
+            error = reason;
+
             try{
                 Thread.sleep(delay * 1000L);
             }catch(InterruptedException e){
@@ -139,14 +173,27 @@ public class GlobalChat{
         }
     }
 
+    /** A readable reason for a connection problem. */
+    private static String describe(Exception e){
+        String key;
+        if(e instanceof UnknownHostException || e instanceof NoRouteToHostException) key = "unreachable";
+        else if(e instanceof ConnectException) key = "refused";
+        else if(e instanceof SocketTimeoutException) key = "timeout";
+        else if(e instanceof SSLHandshakeException && String.valueOf(Strings.getFinalCause(e).getMessage()).contains("pin")) key = "pin";
+        else if(e instanceof SSLException) return Core.bundle.format("client.globalchat.err.tls", e.getMessage());
+        else if(e instanceof EOFException || e instanceof SocketException) key = "closed";
+        else return e.getClass().getSimpleName() + (e.getMessage() == null ? "" : ": " + e.getMessage());
+        return Core.bundle.get("client.globalchat.err." + key);
+    }
+
     private static void connect() throws Exception{
         SSLContext ctx = SSLContext.getInstance("TLS");
         ctx.init(null, new TrustManager[]{new PinnedTrust()}, new SecureRandom());
         SSLSocket s = (SSLSocket)ctx.getSocketFactory().createSocket();
+        socket = s;
         s.connect(new InetSocketAddress(host, port), 10000);
         s.setSoTimeout(60000);
         s.startHandshake();
-        socket = s;
         out = new BufferedWriter(new OutputStreamWriter(s.getOutputStream(), StandardCharsets.UTF_8));
 
         Jval hello = Jval.newObject();
@@ -154,7 +201,7 @@ public class GlobalChat{
         hello.put("v", 1);
         hello.put("name", player == null ? "player" : Strings.stripColors(player.name));
         hello.put("token", token());
-        if(!write(hello)) throw new IOException("hello failed");
+        if(!write(hello)) throw new EOFException();
     }
 
     private static void read() throws Exception{
@@ -185,7 +232,8 @@ public class GlobalChat{
                 tag = msg.getString("tag", "");
                 online = msg.getInt("online", 0);
                 connected = true;
-                post(Core.bundle.format("client.globalchat.connected", online));
+                error = null;
+                postRaw(Core.bundle.format("client.globalchat.connected", online));
             }
             case "online" -> online = msg.getInt("n", online);
             case "msg" -> {
@@ -198,7 +246,11 @@ public class GlobalChat{
             case "sys" -> {
                 String code = msg.getString("code", "");
                 String key = "client.globalchat.sys." + code;
-                post(Core.bundle.has(key) ? Core.bundle.get(key) : "[scarlet]" + escape(msg.getString("text", "")));
+                String text = Core.bundle.has(key) ? Core.bundle.get(key) : "[#7fd3ff][[GL][] [scarlet]" + escape(msg.getString("text", ""));
+                if(code.equals("banned") || code.equals("kicked") || code.equals("full")){
+                    error = Strings.stripColors(text.replace("[[GL]", "")).trim();
+                }
+                postRaw(text);
             }
             default -> {}
         }
@@ -209,14 +261,12 @@ public class GlobalChat{
         return s.replace("[", "[[");
     }
 
-    private static void post(String keyOrText){
-        String text = Core.bundle.has(keyOrText) ? Core.bundle.get(keyOrText) : keyOrText;
-        postRaw(text);
-    }
-
     private static void postRaw(String text){
         Core.app.post(() -> {
+            log.add(text);
+            if(log.size > maxLog) log.remove(0);
             if(ui != null && ui.chatfrag != null) ui.chatfrag.addMessage(text);
+            if(listener != null) listener.run();
         });
     }
 
@@ -232,6 +282,12 @@ public class GlobalChat{
         }
     }
 
+    private static String hex(byte[] bytes){
+        StringBuilder sb = new StringBuilder();
+        for(byte b : bytes) sb.append(String.format("%02x", b));
+        return sb.toString();
+    }
+
     /** Accepts only the GL chat server certificate. */
     private static class PinnedTrust implements X509TrustManager{
         @Override
@@ -243,10 +299,9 @@ public class GlobalChat{
         public void checkServerTrusted(X509Certificate[] chain, String authType) throws CertificateException{
             if(chain == null || chain.length == 0) throw new CertificateException("no certificate");
             try{
-                byte[] hash = MessageDigest.getInstance("SHA-256").digest(chain[0].getEncoded());
-                StringBuilder sb = new StringBuilder();
-                for(byte b : hash) sb.append(String.format("%02x", b));
-                if(!sb.toString().equals(pin)) throw new CertificateException("certificate pin mismatch");
+                if(!hex(MessageDigest.getInstance("SHA-256").digest(chain[0].getEncoded())).equals(pin)){
+                    throw new CertificateException("certificate pin mismatch");
+                }
             }catch(NoSuchAlgorithmException e){
                 throw new CertificateException(e);
             }

@@ -67,6 +67,7 @@ public class TileMenu{
         item(menu, Icon.star, "@client.tilemenu.favorites", () -> ui.favFrag.toggle());
         item(menu, Icon.paste, "@client.tilemenu.schems", () -> ui.quickSchemFrag.toggle());
         item(menu, Icon.units, "@client.tilemenu.unitpicker", () -> ui.unitPicker.show());
+        item(menu, Icon.chat, "@client.tilemenu.globalchat", GlobalChatDialog::showDialog);
         Button waypoints = item(menu, Icon.commandRally, "@client.tilemenu.waypoints", null);
         waypoints.clicked(() -> {
             waypoints(menu, tile);

@@ -433,9 +433,8 @@ fun setupCommands() {
 
     register("g [message...]", Core.bundle.get("client.command.g.description")) { args, player ->
         // GL: global chat between GL Client players
-        if (!mindustry.client.utils.GlobalChat.enabled()) player.sendMessage(Core.bundle.get("client.globalchat.off"))
-        else if (args.isEmpty()) player.sendMessage(Core.bundle.format(if (mindustry.client.utils.GlobalChat.connected()) "client.globalchat.status" else "client.globalchat.connecting", mindustry.client.utils.GlobalChat.online()))
-        else if (!mindustry.client.utils.GlobalChat.send(args[0])) player.sendMessage(Core.bundle.get("client.globalchat.connecting"))
+        if (args.isEmpty()) player.sendMessage(mindustry.client.utils.GlobalChat.status())
+        else mindustry.client.utils.GlobalChat.send(args[0]) // writes the reason to the chat when it cannot send
     }
 
     register("c <message...>", Core.bundle.get("client.command.c.description")) { args, _ ->
