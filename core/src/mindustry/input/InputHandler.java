@@ -1969,6 +1969,7 @@ public abstract class InputHandler implements InputProcessor, GestureListener{
         IntSet toBreak = force ? new IntSet() : null;
         for(BuildPlan plan : plans){
             if (plan.block == null) continue;
+            if (!freeze) PlastaniumCrossings.flushed(plan); // GL: bridges and deferred conveyors of plastanium crossings
 
             if (removeFrozen) {
                 plan.bounds(Tmp.r1);
@@ -1983,7 +1984,6 @@ public abstract class InputHandler implements InputProcessor, GestureListener{
 
             if (plan.breaking) {
                 tryBreakBlock(plan.x, plan.y, freeze);
-                PlastaniumCrossings.flushed(plan); // GL: conveyor waiting for the conduit under it to be removed
                 continue;
             }
 

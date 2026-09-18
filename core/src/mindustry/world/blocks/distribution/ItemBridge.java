@@ -259,6 +259,9 @@ public class ItemBridge extends Block{
         public void playerPlaced(Object config){
             super.playerPlaced(config);
 
+            // GL: bridges placed over a plastanium conveyor keep only the link from their plan
+            if(mindustry.client.utils.PlastaniumCrossings.skipAutoLink(tile)) return;
+
             Tile link = findLink(tile.x, tile.y);
             if(linkValid(tile, link) && this.link != link.pos() && !proximity.contains(link.build)){
                 link.build.configure(tile.pos());
