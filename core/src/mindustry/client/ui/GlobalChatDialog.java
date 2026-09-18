@@ -272,7 +272,7 @@ public class GlobalChatDialog extends Table{
                     String name = p.getString("name", "?"), tag = p.getString("tag", ""), role = p.getString("role", "");
                     String badge = GlobalChat.badge(role);
                     String self = tag.equals(GlobalChat.tag()) ? "[accent]" : "[white]";
-                    TextButton b = list.button(badge + self + name.replace("[", "[[") + "[] [gray]#" + tag, lineStyle, () -> playerMenu(tag, name)).get();
+                    TextButton b = list.button(badge + self + (p.has("cname") ? p.getString("cname", name) : name.replace("[", "[[")) + "[] [gray]#" + tag, lineStyle, () -> playerMenu(tag, name)).get();
                     b.left();
                     b.getLabel().setEllipsis(true);
                     b.addListener(new ClickListener(KeyCode.mouseRight){

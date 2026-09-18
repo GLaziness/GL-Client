@@ -441,7 +441,7 @@ public class GlobalChat{
         Jval hello = Jval.newObject();
         hello.put("t", "hello");
         hello.put("v", 1);
-        hello.put("name", player == null ? "player" : Strings.stripColors(player.name));
+        hello.put("name", player == null ? "player" : player.name); // with colors: the server keeps only color tags and closes them
         hello.put("token", token());
         hello.put("global", globalOn());
         if(!write(hello)) throw new EOFException();
@@ -509,7 +509,8 @@ public class GlobalChat{
                 serverRole = msg.getString("server", "");
             }
             case "msg" -> {
-                String name = escape(msg.getString("name", "?"));
+                // the name with the player's colors (checked and balanced by the chat server), old servers send only the plain one
+                String name = msg.has("cname") ? msg.getString("cname", "?") : escape(msg.getString("name", "?"));
                 String from = msg.getString("tag", "");
                 String raw = msg.getString("text", "");
                 String self = from.equals(tag) ? "[accent]" : "[white]";
