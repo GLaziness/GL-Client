@@ -126,7 +126,7 @@ public class DesktopLauncher extends ClientLauncher{
                         }
                     }
                 }
-                setWindowIcon(FileType.internal, "icons/foo_64.png"); // FINISHME: Why don't we just replace icon_64.png?
+                setWindowIcon(FileType.internal, "icons/gl_64.png");
             }});
         }catch(Throwable e){
             handleCrash(e);

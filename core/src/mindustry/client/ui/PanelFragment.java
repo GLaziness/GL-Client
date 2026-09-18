@@ -246,7 +246,6 @@ public class PanelFragment extends Table{
     }
 
     public void build(Group parent){
-        loadStyles();
         parent.fill(full -> {
             fdpanel = full;
             full.top().left().visible(() -> ui.hudfrag.shown);
@@ -274,25 +273,13 @@ public class PanelFragment extends Table{
                     ));
                 }).padBottom(4f).row();
 
-                Table body = new Table();
-
-                root.table(tabs -> {
-                    tabs.defaults().size(boxSize()).padRight(4f);
-                    for(int i = 0; i < sections.length; i++){
-                        int idx = i;
-                        tabs.button(sections[i].icon, boxStyle, iconSize(), () -> {
-                            tab = tab == idx ? -1 : idx;
-                            settings.put("fdpanel-tab", tab);
-                            buildSection(body);
-                        }).update(b -> {
-                            b.setChecked(tab == idx);
-                            b.getImage().setColor(tab == idx ? Pal.accent : Color.white);
-                        }).tooltip(bundle.get(sections[idx].name));
-                    }
-                }).left().row();
-
-                root.add(body).width(contentWidth()).padTop(2f);
-                buildSection(body);
+                buildMining(root);
+                separator(root);
+                buildView(root);
+                separator(root);
+                buildCombatAndAuto(root);
+                separator(root);
+                buildServer(root);
             }).left();
 
             full.update(() -> {
@@ -338,102 +325,21 @@ public class PanelFragment extends Table{
         }
     }
 
-    /** Game-style octagon buttons: light border normally, accent border when hovered or selected. */
-    private static ImageButton.ImageButtonStyle boxStyle, boxActionStyle;
-    /** Text rows: transparent until hovered, accent octagon border when switched on. */
-    private static ImageButton.ImageButtonStyle rowStyle, rowActionStyle;
+    /** Icons per row, same idea as the active modes display in the wave panel. */
+    private static final int columns = 8;
+    /** Tint for switched-off icons, matches the active modes display. */
+    private static final Color offColor = new Color(0.4f, 0.4f, 0.4f, 0.55f);
 
-    private void loadStyles(){
-        if(boxStyle != null) return;
-        boxStyle = new ImageButton.ImageButtonStyle(){{
-            up = Tex.buttonDown;
-            over = Tex.buttonOver;
-            down = Tex.buttonOver;
-            checked = Tex.buttonOver;
-        }};
-        boxActionStyle = new ImageButton.ImageButtonStyle(){{
-            up = Tex.buttonDown;
-            over = Tex.buttonOver;
-            down = Tex.button;
-        }};
-        rowStyle = new ImageButton.ImageButtonStyle(){{
-            up = Styles.none;
-            over = Tex.button;
-            down = Tex.buttonOver;
-            checked = Tex.buttonOver;
-        }};
-        rowActionStyle = new ImageButton.ImageButtonStyle(){{
-            up = Styles.none;
-            over = Tex.button;
-            down = Tex.buttonOver;
-        }};
-    }
-
-    private static float boxSize(){
-        return Math.max(rowSize() + 10f, 36f);
-    }
-
-    private static float gridIconSize(){
-        return boxSize() * 0.6f;
-    }
-
-    /** Width of the widest section, so the panel keeps one size across tabs and never gets clipped by long labels. */
-    private float contentWidth(){
-        float width = 0f;
-        for(int i = 0; i < sections.length; i++){
-            Table probe = new Table();
-            fillSection(probe, i);
-            width = Math.max(width, probe.getPrefWidth());
-        }
-        return width;
-    }
-
-    private final Section[] sections = {
-        new Section("fdpanel.tab.mining", Icon.production, this::buildMining),
-        new Section("fdpanel.tab.view", Icon.eye, this::buildView),
-        new Section("fdpanel.tab.combat", Icon.commandAttack, this::buildCombat),
-        new Section("fdpanel.tab.auto", Icon.distribution, this::buildAuto),
-        new Section("fdpanel.tab.server", Icon.chat, this::buildServer),
-    };
-
-    /** Selected tab index, -1 when the panel is collapsed. */
-    private int tab = settings.getInt("fdpanel-tab", 0);
-
-    private static class Section{
-        final String name;
-        final Drawable icon;
-        final Cons<Table> builder;
-
-        Section(String name, Drawable icon, Cons<Table> builder){
-            this.name = name;
-            this.icon = icon;
-            this.builder = builder;
-        }
-    }
-
-    private static float rowSize(){
-        return settings.getInt("buttonsizefdpamel", 30);
+    private static float cellSize(){
+        return settings.getInt("buttonsizefdpamel", 30) + 4f;
     }
 
     private static float iconSize(){
-        return Math.max(rowSize() * 0.6f, 12f);
+        return Math.max(settings.getInt("buttonsizefdpamel", 30) * 0.8f, 12f);
     }
 
-    private void buildSection(Table body){
-        body.clear();
-        if(tab < 0 || tab >= sections.length) return;
-        fillSection(body, tab);
-    }
-
-    private void fillSection(Table t, int index){
-        t.defaults().growX();
-        Section section = sections[index];
-        header(t, section.name);
-        section.builder.get(t);
-    }
-
-    private void buildMining(Table t){
-        itemGrid(t, 4,
+    private void buildMining(Table root){
+        iconGrid(root,
             itemToggle(Items.copper, "", () -> minecopper, () -> minecopper = !minecopper),
             itemToggle(Items.lead, "", () -> minelead, () -> minelead = !minelead),
             itemToggle(Items.titanium, "", () -> minetitan, () -> minetitan = !minetitan),
@@ -441,202 +347,193 @@ public class PanelFragment extends Table{
             itemToggle(Items.coal, "", () -> minecoal, () -> minecoal = !minecoal),
             itemToggle(Items.scrap, "", () -> minescrap, () -> minescrap = !minescrap),
             itemToggle(Items.beryllium, bundle.get("fdpanel.wall"), () -> mineBerylliumwall, () -> mineBerylliumwall = !mineBerylliumwall),
-            itemToggle(Items.graphite, bundle.get("fdpanel.wall"), () -> mineGraphiticwall, () -> mineGraphiticwall = !mineGraphiticwall)
-        );
+            itemToggle(Items.graphite, bundle.get("fdpanel.wall"), () -> mineGraphiticwall, () -> mineGraphiticwall = !mineGraphiticwall),
 
-        action(t, Icon.production, "fdpanel.mine", () -> {
-            eneblemining = true;
-            startmining();
-        });
-
-        subheader(t, "fdpanel.miners");
-        toggle(t, Icon.units, "fdpanel.automine", () -> MinersFDAI.autoMiningActive, () -> MinersFDAI.autoMiningActive = !MinersFDAI.autoMiningActive);
-        toggle(t, new TextureRegionDrawable(UnitTypes.poly.uiIcon), "fdpanel.minepolys", () -> minePolys, () -> minePolys = !minePolys);
-        toggle(t, Icon.hammer, "fdpanel.assistbuild", () -> MinersFDAI.autoAssistBuild, () -> MinersFDAI.autoAssistBuild = !MinersFDAI.autoAssistBuild);
-        toggle(t, Icon.commandRally, "fdpanel.respectcommands", () -> MinersFDAI.respectManualCommands, () -> MinersFDAI.respectManualCommands = !MinersFDAI.respectManualCommands);
-        action(t, Icon.settings, "fdpanel.minerssettings", () -> MinersSettingsDialog.get().show());
-    }
-
-    private void buildView(Table t){
-        toggle(t, Icon.eye, "fdpanel.light", () -> enableLight, () -> enableLight = !enableLight);
-        toggle(t, Icon.defense, "fdpanel.unitshealth", () -> viewunitshealth, () -> viewunitshealth = !viewunitshealth);
-        toggle(t, Icon.effect, "fdpanel.unitseffects", () -> viewunitseffects, () -> viewunitseffects = !viewunitseffects);
-        toggle(t, Icon.units, "fdpanel.unitsprogress", () -> viewprogressunit, () -> viewprogressunit = !viewprogressunit);
-        toggle(t, Icon.hammer, "fdpanel.buildprogress", () -> viewprogresbuild, () -> viewprogresbuild = !viewprogresbuild);
-        toggle(t, Icon.chartBar, "fdpanel.efficiency", () -> viewEfficiency, () -> viewEfficiency = !viewEfficiency);
-        settingToggle(t, Icon.grid, "fdpanel.prodanal", "prod-anal");
-
-        subheader(t, "fdpanel.scan");
-        itemGrid(t, 6,
-            gridAction(Icon.units, "fdpanel.scan.units", this::checkunits),
-            gridAction(new TextureRegionDrawable(Blocks.coreShard.uiIcon), "fdpanel.scan.cores", this::checkcores),
-            gridAction(Icon.waves, "fdpanel.scan.spawns", this::checkspawns),
-            gridAction(new TextureRegionDrawable(Blocks.itemVoid.uiIcon), "fdpanel.scan.voids", this::checkvoids),
-            gridAction(new TextureRegionDrawable(Blocks.itemSource.uiIcon), "fdpanel.scan.sources", this::checksources),
-            gridAction(new TextureRegionDrawable(Blocks.worldProcessor.uiIcon), "fdpanel.scan.worldproc", this::checkworldprocc)
-        );
-        settingToggle(t, Icon.chat, "fdpanel.unitatchat", "unitatchat");
-    }
-
-    private void buildCombat(Table t){
-        settingToggle(t, Icon.commandAttack, "fdpanel.smarttargeting", "smarttargeting");
-        settingToggle(t, Icon.units, "fdpanel.ignoreunit", "ignoreunit");
-        settingToggle(t, Icon.defense, "fdpanel.ignoreheal", "ignoreheal");
-        toggle(t, Icon.zoom, "fdpanel.aim", () -> FDAutoShoot.viewUnitAim, () -> FDAutoShoot.viewUnitAim = !FDAutoShoot.viewUnitAim);
-        action(t, new TextureRegionDrawable(UnitTypes.mega.uiIcon), "fdpanel.mega", () ->
-            ClientVars.clientCommandHandler.handleMessage("!uc " + UnitTypes.mega.localizedName, player));
-    }
-
-    private void buildAuto(Table t){
-        toggle(t, Icon.diagonal, "fdpanel.afk", () -> settings.getBool("afkmode"), () -> {
-            if(!settings.getBool("afkmode")){
+            action(Icon.production, "fdpanel.mine", () -> {
                 eneblemining = true;
                 startmining();
-            }else{
-                Navigation.stopFollowing();
-            }
-            settings.put("afkmode", !settings.getBool("afkmode"));
-            new Toast(1).add(bundle.get("setting.afkmode.name") + ": " + bundle.get(settings.getBool("afkmode") ? "mod.enabled" : "mod.disabled"));
-        });
+            }),
+            toggle(Icon.units, "fdpanel.automine", () -> MinersFDAI.autoMiningActive, () -> MinersFDAI.autoMiningActive = !MinersFDAI.autoMiningActive),
+            toggle(new TextureRegionDrawable(UnitTypes.poly.uiIcon), "fdpanel.minepolys", () -> minePolys, () -> minePolys = !minePolys),
+            toggle(Icon.hammer, "fdpanel.assistbuild", () -> MinersFDAI.autoAssistBuild, () -> MinersFDAI.autoAssistBuild = !MinersFDAI.autoAssistBuild),
+            toggle(Icon.commandRally, "fdpanel.respectcommands", () -> MinersFDAI.respectManualCommands, () -> MinersFDAI.respectManualCommands = !MinersFDAI.respectManualCommands),
+            toggle(Icon.diagonal, "fdpanel.afk", () -> settings.getBool("afkmode"), () -> {
+                if(!settings.getBool("afkmode")){
+                    eneblemining = true;
+                    startmining();
+                }else{
+                    Navigation.stopFollowing();
+                }
+                settings.put("afkmode", !settings.getBool("afkmode"));
+                new Toast(1).add(bundle.get("setting.afkmode.name") + ": " + bundle.get(settings.getBool("afkmode") ? "mod.enabled" : "mod.disabled"));
+            }),
+            action(Icon.settings, "fdpanel.minerssettings", () -> MinersSettingsDialog.get().show())
+        );
+    }
 
-        subheader(t, "fdpanel.transfer");
-        toggle(t, Icon.upload, "fdpanel.autotransfer", () -> settings.getBool("autotransfer"), () -> {
-            AutoTransfer.enabled = !AutoTransfer.enabled;
-            settings.put("autotransfer", !settings.getBool("autotransfer"));
-            new Toast(1).add(bundle.get("client.autotransfer") + ": " + bundle.get(AutoTransfer.enabled ? "mod.enabled" : "mod.disabled"));
-        });
-        itemGrid(t, 4,
+    private void buildView(Table root){
+        iconGrid(root,
+            toggle(Icon.eye, "fdpanel.light", () -> enableLight, () -> enableLight = !enableLight),
+            toggle(Icon.defense, "fdpanel.unitshealth", () -> viewunitshealth, () -> viewunitshealth = !viewunitshealth),
+            toggle(Icon.effect, "fdpanel.unitseffects", () -> viewunitseffects, () -> viewunitseffects = !viewunitseffects),
+            toggle(Icon.units, "fdpanel.unitsprogress", () -> viewprogressunit, () -> viewprogressunit = !viewprogressunit),
+            toggle(Icon.hammer, "fdpanel.buildprogress", () -> viewprogresbuild, () -> viewprogresbuild = !viewprogresbuild),
+            toggle(Icon.chartBar, "fdpanel.efficiency", () -> viewEfficiency, () -> viewEfficiency = !viewEfficiency),
+            settingToggle(Icon.grid, "fdpanel.prodanal", "prod-anal"),
+            toggle(Icon.zoom, "fdpanel.aim", () -> FDAutoShoot.viewUnitAim, () -> FDAutoShoot.viewUnitAim = !FDAutoShoot.viewUnitAim),
+
+            action(Icon.units, "fdpanel.scan.units", this::checkunits),
+            action(new TextureRegionDrawable(Blocks.coreShard.uiIcon), "fdpanel.scan.cores", this::checkcores),
+            action(Icon.waves, "fdpanel.scan.spawns", this::checkspawns),
+            action(new TextureRegionDrawable(Blocks.itemVoid.uiIcon), "fdpanel.scan.voids", this::checkvoids),
+            action(new TextureRegionDrawable(Blocks.itemSource.uiIcon), "fdpanel.scan.sources", this::checksources),
+            action(new TextureRegionDrawable(Blocks.worldProcessor.uiIcon), "fdpanel.scan.worldproc", this::checkworldprocc),
+            settingToggle(Icon.chat, "fdpanel.unitatchat", "unitatchat")
+        );
+    }
+
+    private void buildCombatAndAuto(Table root){
+        iconGrid(root,
+            settingToggle(Icon.commandAttack, "fdpanel.smarttargeting", "smarttargeting"),
+            settingToggle(new SlashTextureRegionDrawable(Icon.units.getRegion(), Color.white), "fdpanel.ignoreunit", "ignoreunit"),
+            settingToggle(new SlashTextureRegionDrawable(Icon.defense.getRegion(), Color.white), "fdpanel.ignoreheal", "ignoreheal"),
+            action(new TextureRegionDrawable(UnitTypes.mega.uiIcon), "fdpanel.mega", () ->
+                ClientVars.clientCommandHandler.handleMessage("!uc " + UnitTypes.mega.localizedName, player)),
+            action(Icon.power, "fdpanel.fixpower", () -> ClientVars.clientCommandHandler.handleMessage("!fixpower c", player)),
+            action(Icon.logic, "fdpanel.fixcode", () -> ClientVars.clientCommandHandler.handleMessage("!fixcode r", player)),
+            settingToggle(Icon.trash, "fdpanel.schemcleanup", "placeSchematicWithCleanup"),
+            null,
+
+            toggle(Icon.upload, "fdpanel.autotransfer", () -> settings.getBool("autotransfer"), () -> {
+                AutoTransfer.enabled = !AutoTransfer.enabled;
+                settings.put("autotransfer", !settings.getBool("autotransfer"));
+                new Toast(1).add(bundle.get("client.autotransfer") + ": " + bundle.get(AutoTransfer.enabled ? "mod.enabled" : "mod.disabled"));
+            }),
             transferTarget(Blocks.duo, "fdpanel.target.turrets", "autotransfer-t-turrets", AutoTransfer.Settings::setTargetTurrets),
             transferTarget(Blocks.siliconSmelter, "fdpanel.target.prod", "autotransfer-t-prod", AutoTransfer.Settings::setTargetProduction),
             transferTarget(Blocks.groundFactory, "fdpanel.target.units", "autotransfer-t-units", AutoTransfer.Settings::setTargetUnitFactories),
             transferTarget(Blocks.additiveReconstructor, "fdpanel.target.recons", "autotransfer-t-recons", AutoTransfer.Settings::setTargetReconstructors)
         );
-
-        subheader(t, "fdpanel.fixes");
-        action(t, Icon.power, "fdpanel.fixpower", () -> ClientVars.clientCommandHandler.handleMessage("!fixpower c", player));
-        action(t, Icon.logic, "fdpanel.fixcode", () -> ClientVars.clientCommandHandler.handleMessage("!fixcode r", player));
-        settingToggle(t, Icon.trash, "fdpanel.schemcleanup", "placeSchematicWithCleanup");
     }
 
-    private void buildServer(Table t){
-        action(t, Icon.refresh, "fdpanel.sync", () -> Call.sendChatMessage("/sync"));
-        action(t, Icon.ok, "fdpanel.vote", () -> Call.sendChatMessage("/vote y"));
-        autoAction(t, Icon.map, "fdpanel.rtv", () -> Call.sendChatMessage("/rtv"), () -> rtvKey, () -> rtvKey = !rtvKey);
-        autoAction(t, Icon.waves, "fdpanel.rtvwave", () -> Call.sendChatMessage("/rtv wave"), () -> rtvWaveKey, () -> rtvWaveKey = !rtvWaveKey);
-        action(t, Icon.book, "fdpanel.history", () -> Call.sendChatMessage("/history"));
+    private void buildServer(Table root){
+        Seq<GridEntry> entries = Seq.with(
+            action(Icon.refresh, "fdpanel.sync", () -> Call.sendChatMessage("/sync")),
+            action(Icon.ok, "fdpanel.vote", () -> Call.sendChatMessage("/vote y")),
+            autoAction(Icon.map, "fdpanel.rtv", () -> Call.sendChatMessage("/rtv"), () -> rtvKey, () -> rtvKey = !rtvKey),
+            autoAction(Icon.waves, "fdpanel.rtvwave", () -> Call.sendChatMessage("/rtv wave"), () -> rtvWaveKey, () -> rtvWaveKey = !rtvWaveKey),
+            action(Icon.book, "fdpanel.history", () -> Call.sendChatMessage("/history"))
+        );
 
         if(settings.getBool("OneLoliToRuleThemAll", false)){
-            toggle(t, Icon.warning, "fdpanel.shiftnick", () -> settings.getBool("shift_nick", false), () -> {
+            entries.add(toggle(Icon.warning, "fdpanel.shiftnick", () -> settings.getBool("shift_nick", false), () -> {
                 temp_name = shiftColorsRight(settings.getString("mynickshifter", "nani"));
                 settings.put("shift_nick", !settings.getBool("shift_nick"));
-            });
+            }));
         }
+
+        iconGrid(root, entries.toArray(GridEntry.class));
     }
 
     // region panel widgets
-
-    private static void header(Table t, String key){
-        t.add(bundle.get(key)).color(Pal.accent).left().padLeft(4f).padTop(2f).row();
-        t.image().color(Pal.accent).height(3f).growX().padBottom(4f).row();
-    }
-
-    private static void subheader(Table t, String key){
-        t.table(h -> {
-            h.add(bundle.get(key)).color(Color.lightGray).padRight(4f).get().setFontScale(0.85f);
-            h.image().color(Pal.gray).height(2f).growX();
-        }).padTop(6f).padBottom(2f).padLeft(4f).row();
-    }
-
-    /** Icon + label. With {@code active == null} the row is a plain action and is always drawn bright. */
-    private static void rowContent(Button b, Drawable icon, String key, Boolp active){
-        b.left().margin(0f, 6f, 0f, 6f);
-        b.image(icon).size(iconSize()).padRight(8f).update(i -> i.setColor(active == null ? Color.white : active.get() ? Pal.accent : Color.lightGray));
-        b.add(bundle.get(key)).left().growX().update(l -> l.setColor(active == null || active.get() ? Color.white : Color.lightGray));
-    }
-
-    /** Row that switches a flag; highlighted while the flag is on. */
-    private static void toggle(Table t, Drawable icon, String key, Boolp checked, Runnable action){
-        t.button(b -> rowContent(b, icon, key, checked), rowStyle, action)
-            .update(b -> b.setChecked(checked.get()))
-            .minHeight(rowSize()).tooltip(tooltip(key)).row();
-    }
-
-    private static void settingToggle(Table t, Drawable icon, String key, String setting){
-        toggle(t, icon, key, () -> settings.getBool(setting, false), () -> settings.put(setting, !settings.getBool(setting, false)));
-    }
-
-    /** Row that runs a one-off action. */
-    private static void action(Table t, Drawable icon, String key, Runnable action){
-        t.button(b -> rowContent(b, icon, key, null), rowActionStyle, action).minHeight(rowSize()).tooltip(tooltip(key)).row();
-    }
-
-    /** Action row: left click runs it once, right click toggles running it automatically. */
-    private static void autoAction(Table t, Drawable icon, String key, Runnable action, Boolp auto, Runnable toggleAuto){
-        Button button = t.button(b -> {
-            rowContent(b, icon, key, null);
-            Label tag = b.add(bundle.get("fdpanel.auto")).color(Pal.accent).padLeft(4f).get();
-            tag.setFontScale(0.75f);
-            tag.visible(auto);
-        }, rowStyle, action).update(b -> b.setChecked(auto.get()))
-            .minHeight(rowSize()).tooltip(tooltip(key) + "\n[lightgray]" + bundle.get("fdpanel.autohint")).get();
-
-        button.addListener(new InputListener(){
-            @Override
-            public boolean touchDown(InputEvent e, float x, float y, int pointer, KeyCode key){
-                if(key == KeyCode.mouseRight){
-                    toggleAuto.run();
-                    return true;
-                }
-                return false;
-            }
-        });
-        t.row();
-    }
-
-    private static String tooltip(String key){
-        String tip = key + ".tooltip";
-        return bundle.has(tip) ? bundle.get(tip) : bundle.get(key);
-    }
 
     private interface GridEntry{
         void add(Table t);
     }
 
-    private static void itemGrid(Table t, int columns, GridEntry... entries){
-        t.table(g -> {
-            g.defaults().size(boxSize()).pad(2f);
-            for(int i = 0; i < entries.length; i++){
-                entries[i].add(g);
-                if((i + 1) % columns == 0) g.row();
-            }
-        }).padTop(2f).padBottom(2f).row();
+    private static void separator(Table root){
+        root.image().color(Pal.gray).height(2f).growX().pad(3f, 0f, 3f, 0f).row();
     }
 
-    /** Mining ore selector: item icon, dimmed while not selected. */
-    private GridEntry itemToggle(Item item, String suffix, Boolp checked, Runnable flip){
-        return g -> g.button(new TextureRegionDrawable(item.uiIcon), boxStyle, gridIconSize(), () -> {
+    /** Lays icons out {@link #columns} per row. A {@code null} entry ends the current row early. */
+    private static void iconGrid(Table root, GridEntry... entries){
+        root.table(g -> {
+            g.left().defaults().size(cellSize()).pad(1f);
+            int col = 0;
+            for(GridEntry entry : entries){
+                if(entry == null || col == columns){
+                    g.row();
+                    col = 0;
+                    if(entry == null) continue;
+                }
+                entry.add(g);
+                col++;
+            }
+        }).left().row();
+    }
+
+    /** Tooltip with the bold name and, when the bundle has one, a longer description underneath. */
+    private static String tooltip(String key){
+        String tip = key + ".tooltip";
+        return bundle.get(key) + (bundle.has(tip) ? "\n[lightgray]" + bundle.get(tip) : "");
+    }
+
+    /** Like {@link Styles#clearNonei}, but without image colors so the icon tint set by the entries is kept. */
+    private static ImageButton.ImageButtonStyle iconStyle;
+
+    private static Cell<ImageButton> iconButton(Table g, Drawable icon, String tooltipText, Runnable action){
+        if(iconStyle == null){
+            iconStyle = new ImageButton.ImageButtonStyle(){{
+                up = Styles.none;
+                over = Styles.flatOver;
+                down = Styles.flatDown;
+            }};
+        }
+        return g.button(icon, iconStyle, iconSize(), action)
+            .tooltip(t -> t.background(Styles.black6).margin(4f).add(tooltipText).style(Styles.outlineLabel));
+    }
+
+    /** Switch: bright while on, dimmed like the active modes display while off. */
+    private static GridEntry toggle(Drawable icon, String key, Boolp on, Runnable flip){
+        return toggle(icon, on, flip, tooltip(key));
+    }
+
+    private static GridEntry toggle(Drawable icon, Boolp on, Runnable flip, String tooltipText){
+        return g -> iconButton(g, icon, tooltipText, flip)
+            .update(b -> b.getImage().setColor(on.get() ? Color.white : offColor));
+    }
+
+    private static GridEntry settingToggle(Drawable icon, String key, String setting){
+        return toggle(icon, key, () -> settings.getBool(setting, false), () -> settings.put(setting, !settings.getBool(setting, false)));
+    }
+
+    /** One-off action, always drawn bright. */
+    private static GridEntry action(Drawable icon, String key, Runnable action){
+        return g -> iconButton(g, icon, tooltip(key), action);
+    }
+
+    /** Left click runs the action once, right click toggles running it automatically (icon turns accent). */
+    private static GridEntry autoAction(Drawable icon, String key, Runnable action, Boolp auto, Runnable toggleAuto){
+        return g -> {
+            ImageButton b = iconButton(g, icon, tooltip(key) + "\n[lightgray]" + bundle.get("fdpanel.autohint"), action).get();
+            b.update(() -> b.getImage().setColor(auto.get() ? Pal.accent : Color.white));
+            b.addListener(new InputListener(){
+                @Override
+                public boolean touchDown(InputEvent e, float x, float y, int pointer, KeyCode key){
+                    if(key == KeyCode.mouseRight){
+                        toggleAuto.run();
+                        return true;
+                    }
+                    return false;
+                }
+            });
+        };
+    }
+
+    /** Mining ore selector. */
+    private GridEntry itemToggle(Item item, String suffix, Boolp on, Runnable flip){
+        return toggle(new TextureRegionDrawable(item.uiIcon), on, () -> {
             flip.run();
             updatemineitems();
-        }).update(b -> {
-            b.setChecked(checked.get());
-            b.getImage().setColor(checked.get() ? Color.white : Color.gray);
-        }).tooltip(item.localizedName + (suffix.isEmpty() ? "" : " (" + suffix + ")"));
-    }
-
-    private static GridEntry gridAction(Drawable icon, String key, Runnable action){
-        return g -> g.button(icon, boxActionStyle, gridIconSize(), action).tooltip(bundle.get(key));
+        }, bundle.get("fdpanel.mineitem") + ": " + item.localizedName + (suffix.isEmpty() ? "" : " (" + suffix + ")"));
     }
 
     private static GridEntry transferTarget(Block block, String key, String setting, Boolc apply){
-        return g -> g.button(new TextureRegionDrawable(block.uiIcon), boxStyle, gridIconSize(), () -> {
+        return g -> iconButton(g, new TextureRegionDrawable(block.uiIcon), bundle.get("fdpanel.transfer") + ": " + bundle.get(key), () -> {
             boolean val = !settings.getBool(setting, false);
             settings.put(setting, val);
             apply.get(val);
-        }).update(b -> {
-            boolean on = settings.getBool(setting, false);
-            b.setChecked(on);
-            b.getImage().setColor(on ? Color.white : Color.gray);
-        }).tooltip(bundle.get(key));
+        }).update(b -> b.getImage().setColor(settings.getBool(setting, false) ? Color.white : offColor));
     }
 
     // endregion
