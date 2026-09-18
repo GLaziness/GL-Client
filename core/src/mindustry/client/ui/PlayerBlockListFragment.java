@@ -15,6 +15,7 @@ import arc.scene.ui.layout.Table;
 import arc.struct.ObjectIntMap;
 import arc.struct.Seq;
 import arc.util.*;
+import mindustry.core.UI;
 import mindustry.Vars;
 import mindustry.client.ClientVars;
 import mindustry.client.Spectate;
@@ -279,25 +280,27 @@ public class PlayerBlockListFragment {
                 int config = configCache.get(cleanUserName, 0);
 
                 button.table(stats -> {
-                    stats.button("[green]+" + built, () -> name_for_plans = user.name)
-                            .height(30).minWidth(50).pad(2).tooltip("Построено");
+                    // GL: numbers stay on one line (they used to wrap digit by digit), large counts are shortened
+                    stats.defaults().height(30f).pad(2f);
+                    stats.button("[green]+" + UI.formatAmount(built), () -> name_for_plans = user.name)
+                            .minWidth(50f).wrapLabel(false).tooltip("Построено: " + built);
 
-                    stats.button("[red]-" + broken, () -> name_for_plans = user.name)
-                            .height(30).minWidth(50).pad(2).tooltip("Сломано");
+                    stats.button("[red]-" + UI.formatAmount(broken), () -> name_for_plans = user.name)
+                            .minWidth(50f).wrapLabel(false).tooltip("Сломано: " + broken);
 
-                    stats.button("[blue]~" + config, () -> name_for_plans = user.name)
-                            .height(30).minWidth(50).pad(2).tooltip("Потрогано");
+                    stats.button("[blue]~" + UI.formatAmount(config), () -> name_for_plans = user.name)
+                            .minWidth(50f).wrapLabel(false).tooltip("Потрогано: " + config);
 
                     stats.button(Icon.hammer, ustyle, () -> {
                         String targetName = Strings.stripColors(user.name());
                         deletePlayerBuild(targetName);
-                    }).tooltip("Восстановить всё, что сломал этот инвалид");
+                    }).size(30f).tooltip("Восстановить всё, что сломал этот инвалид");
 
                     stats.button(Icon.trash, ustyle, () -> {
                         String targetName = Strings.stripColors(user.name());
                         repairPlayerBuild(targetName);
-                    }).tooltip("Снести всё, что построил этот инвалид");
-                });
+                    }).size(30f).tooltip("Снести всё, что построил этот инвалид");
+                }).padLeft(4f);
             }
 
             if(user != player) {
