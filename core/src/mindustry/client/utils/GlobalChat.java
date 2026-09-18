@@ -54,6 +54,10 @@ public class GlobalChat{
     private static volatile String serverRole = "";
     private static String pendingHost = "";
     private static boolean hooked, joining;
+    /** Name the chat server knows (with colors); checked every {@link #nameCheck} ms and after joining a server. */
+    private static volatile String sentName = "";
+    private static final float nameDelay = 10f;
+    private static final long nameCheck = 3 * 60 * 1000;
     /** Why the chat is not connected (shown to the player), null when there is no problem. */
     private static volatile @Nullable String error;
     private static Thread thread;
@@ -83,6 +87,8 @@ public class GlobalChat{
                 if(joining && Core.settings.getBool("globalchat-server-auto", true) && !serverOn()) setServerOn(true);
                 joining = false;
                 setServer(pendingHost);
+                // servers give their own names (clan tags, colors): send it once the server has set it
+                Time.run(nameDelay * 60f, GlobalChat::sendName);
             });
             Events.on(EventType.MenuReturnEvent.class, e -> setServer(""));
         }
@@ -107,6 +113,20 @@ public class GlobalChat{
         }, "GL-GlobalChat-resolve");
         t.setDaemon(true);
         t.start();
+    }
+
+    private static String myName(){
+        return player == null || player.name == null || player.name.isEmpty() ? "player" : player.name;
+    }
+
+    /** Tells the chat server the current name when it changed. */
+    private static void sendName(){
+        String name = myName();
+        if(!connected || name.equals(sentName)) return;
+        Jval msg = Jval.newObject();
+        msg.put("t", "name");
+        msg.put("name", name);
+        if(write(msg)) sentName = name;
     }
 
     private static void report(String h){
@@ -441,7 +461,8 @@ public class GlobalChat{
         Jval hello = Jval.newObject();
         hello.put("t", "hello");
         hello.put("v", 1);
-        hello.put("name", player == null ? "player" : player.name); // with colors: the server keeps only color tags and closes them
+        sentName = myName();
+        hello.put("name", sentName); // with colors: the server keeps only color tags and closes them
         hello.put("token", token());
         hello.put("global", globalOn());
         if(!write(hello)) throw new EOFException();
@@ -449,7 +470,7 @@ public class GlobalChat{
 
     private static void read() throws Exception{
         BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
-        long lastPing = Time.millis();
+        long lastPing = Time.millis(), lastName = Time.millis();
         while(running){
             String line;
             try{
@@ -463,6 +484,10 @@ public class GlobalChat{
                 Jval ping = Jval.newObject();
                 ping.put("t", "ping");
                 write(ping);
+            }
+            if(Time.timeSinceMillis(lastName) > nameCheck){
+                lastName = Time.millis();
+                sendName();
             }
             if(line.isEmpty() || line.length() > 4096) continue;
             handle(Jval.read(line));
