@@ -146,6 +146,16 @@ public class MassDriver extends Block{
         //TODO use queue? this array usually holds about 3 shooters max anyway
         public OrderedSet<Building> waitingShooters = new OrderedSet<>();
 
+        // Массив для хранения времени исчезновения каждого предмета (60 тиков = 1 секунда)
+        public float[] visualTimers = null;
+
+        private float[] getVisualTimers(){
+            if(visualTimers == null || visualTimers.length != content.items().size){
+                visualTimers = new float[content.items().size];
+            }
+            return visualTimers;
+        }
+
         @Override
         public float buildRotation(){
             return rotation;
@@ -227,8 +237,8 @@ public class MassDriver extends Block{
                 float targetRotation = angleTo(link);
 
                 if(
-                items.total() >= minDistribute && //must shoot minimum amount of items
-                link.block.itemCapacity - link.items.total() >= minDistribute //must have minimum amount of space
+                        items.total() >= minDistribute && //must shoot minimum amount of items
+                                link.block.itemCapacity - link.items.total() >= minDistribute //must have minimum amount of space
                 ){
                     MassDriverBuild other = (MassDriverBuild)link;
                     other.waitingShooters.add(this);
@@ -240,8 +250,8 @@ public class MassDriver extends Block{
 
                         //fire when it's the first in the queue and angles are ready.
                         if(other.currentShooter() == this &&
-                        other.state == DriverState.accepting &&
-                        Angles.near(rotation, targetRotation, 2f) && Angles.near(other.rotation, targetRotation + 180f, 2f)){
+                                other.state == DriverState.accepting &&
+                                Angles.near(rotation, targetRotation, 2f) && Angles.near(other.rotation, targetRotation + 180f, 2f)){
                             //actually fire
                             fire(other);
                             float timeToArrive = Math.min(bulletLifetime / timeScale, dst(other) / (bulletSpeed * timeScale));
@@ -253,6 +263,16 @@ public class MassDriver extends Block{
                             //driver is immediately idle
                             state = DriverState.idle;
                         }
+                    }
+                }
+            }
+
+            // Обновление визуальных таймеров для предметов, которые физически лежат в катапульте
+            if(ItemBridge.drawItems && items != null){
+                float[] timers = getVisualTimers();
+                for(int i = 0; i < timers.length; i++){
+                    if(items.get(content.item(i)) > 0){
+                        timers[i] = Time.time + 60f;
                     }
                 }
             }
@@ -271,11 +291,67 @@ public class MassDriver extends Block{
             Draw.z(Layer.turret);
 
             Drawf.shadow(region,
-            x + Angles.trnsx(rotation + 180f, reloadCounter * knockback) - (size / 2),
-            y + Angles.trnsy(rotation + 180f, reloadCounter * knockback) - (size / 2), rotation - 90);
+                    x + Angles.trnsx(rotation + 180f, reloadCounter * knockback) - (size / 2),
+                    y + Angles.trnsy(rotation + 180f, reloadCounter * knockback) - (size / 2), rotation - 90);
             Draw.rect(region,
-            x + Angles.trnsx(rotation + 180f, reloadCounter * knockback),
-            y + Angles.trnsy(rotation + 180f, reloadCounter * knockback), rotation - 90);
+                    x + Angles.trnsx(rotation + 180f, reloadCounter * knockback),
+                    y + Angles.trnsy(rotation + 180f, reloadCounter * knockback), rotation - 90);
+
+            drawStoredItems();
+        }
+
+        public void drawStoredItems(){
+            if(!ItemBridge.drawItems) return;
+
+            float[] timers = getVisualTimers();
+
+            // Считаем количество активных (видимых) предметов
+            int count = 0;
+            for(int i = 0; i < timers.length; i++){
+                if(timers[i] > Time.time) count++;
+            }
+
+            if(count == 0) return;
+
+            // Используем слой ВЫШЕ башни, чтобы ствол не перекрывал иконки
+            Draw.z(Layer.turret + 0.1f);
+            Draw.color();
+
+            // Катапульта имеет размер 3x3, поэтому используем size * tilesize для вычислений
+            float blockTileSize = size * tilesize;
+
+            // Если предмет только один, рисуем его крупно по центру
+            if(count == 1){
+                for(int i = 0; i < timers.length; i++){
+                    if(timers[i] > Time.time){
+                        Item item = content.item(i);
+                        Draw.rect(item.fullIcon, x, y, blockTileSize / 2f, blockTileSize / 2f);
+                        break;
+                    }
+                }
+            } else {
+                // Если предметов несколько, располагаем их сеткой 3x3
+                int index = 0;
+                int maxItems = 9;
+                int columns = 3;
+                float space = blockTileSize / 3.2f; // Расстояние между иконками
+                float iconSize = blockTileSize / 3.5f;  // Размер иконки для сетки
+
+                for(int i = 0; i < timers.length; i++){
+                    if(timers[i] > Time.time){
+                        Item item = content.item(i);
+                        float col = index % columns - 1; // -1, 0, 1
+                        float row = index / columns - 1; // -1, 0, 1
+                        float ix = x + col * space;
+                        float iy = y + row * space;
+
+                        Draw.rect(item.fullIcon, ix, iy, iconSize, iconSize);
+                        index++;
+                        if(index >= maxItems) break;
+                    }
+                }
+            }
+            Draw.reset();
         }
 
         @Override
@@ -341,6 +417,16 @@ public class MassDriver extends Block{
             return items.total() < itemCapacity && linkValid();
         }
 
+        @Override
+        public void handleItem(Building source, Item item){
+            super.handleItem(source, item);
+
+            // Обновляем таймер, когда предмет ВХОДИТ в катапульту
+            if(ItemBridge.drawItems){
+                getVisualTimers()[item.id] = Time.time + 60f;
+            }
+        }
+
         protected void fire(MassDriverBuild target){
             //reset reload, use power.
             reloadCounter = 1f;
@@ -359,8 +445,8 @@ public class MassDriver extends Block{
             float angle = tile.angleTo(target);
 
             bullet.create(this, team,
-                x + Angles.trnsx(angle, translation), y + Angles.trnsy(angle, translation),
-                angle, totalUsed/2f, bulletSpeed * timeScale, bulletLifetime / timeScale, data);
+                    x + Angles.trnsx(angle, translation), y + Angles.trnsy(angle, translation),
+                    angle, totalUsed/2f, bulletSpeed * timeScale, bulletLifetime / timeScale, data);
 
             shootEffect.at(x + Angles.trnsx(angle, translation), y + Angles.trnsy(angle, translation), angle);
             smokeEffect.at(x + Angles.trnsx(angle, translation), y + Angles.trnsy(angle, translation), angle);
@@ -379,6 +465,11 @@ public class MassDriver extends Block{
                 items.add(content.item(i), maxAdd);
                 data.items[i] -= maxAdd;
                 totalItems += maxAdd;
+
+                // Обновляем таймер для предметов, которые прилетели из другой катапульты
+                if(maxAdd > 0 && ItemBridge.drawItems){
+                    getVisualTimers()[i] = Time.time + 60f;
+                }
 
                 if(totalItems >= itemCapacity * 2){
                     break;

@@ -348,19 +348,44 @@ public class HudFragment{
         parent.fill(t -> {
             t.visible(() -> shown() && Core.settings.getBool("minimap")); // FINISHME: Only hide minimap when doing so, use a collapser to shrink it maybe? Idk
             t.name = "minimap/position";
-            //tile hud
-            t.add(new TileInfoFragment()).name("tilehud").top();
-            //minimap
-            t.add(new Minimap()).name("minimap").top();
-            t.row();
-            //position
-            t.label(() -> player.tileX() + ", " + player.tileY() + "\n" + "[coral]" + World.toTile(Core.input.mouseWorldX()) + ", " + World.toTile(Core.input.mouseWorldY()))
-                .tooltip("Player Position\n[coral]Cursor Position")
-                .visible(() -> Core.settings.getBool("position"))
-                .style(Styles.outlineLabel)
-                .name("position").top().right().labelAlign(Align.right)
-                .colspan(2);
             t.top().right();
+            t.visible(() -> shown && Core.settings.getBool("minimap"));
+
+            boolean showHistory = Core.settings.getBool("historyfragment");
+            boolean showTile = Core.settings.getBool("tilefragment");
+            boolean showPos = Core.settings.getBool("position");
+
+            // 1. ВЕРХНИЙ РЯД: [Логи ИЛИ Тайлы] + [Миникарта]
+            t.table(topRow -> {
+                topRow.right().top();
+
+                // Если включена история - она идет первой (слева от карты)
+                if(showHistory){
+                    topRow.add(new HistoryInfoFragment()).name("log").maxWidth(500f).top();
+                }
+                // Если история выключена, но включены тайлы - они занимают это место
+                else if(showTile){
+                    topRow.add(new TileInfoFragment()).name("tilehud-top").top();
+                }
+
+                // Миникарта всегда в этом ряду справа
+                topRow.add(new Minimap()).name("minimap").top();
+            }).row();
+
+            // 2. СРЕДНИЙ РЯД: [Тайлы под миникартой]
+            // Этот ряд создается ТОЛЬКО если включены и история, и тайлы одновременно
+            if(showHistory && showTile){
+                t.add(new TileInfoFragment()).name("tilehud-bottom").right().row();
+            }
+
+            // 3. НИЖНИЙ РЯД: [Координаты]
+            if(showPos){
+                t.label(() -> player.tileX() + ", " + player.tileY() + "\n" +
+                                "[coral]" + World.toTile(Core.input.mouseWorldX()) + ", " + World.toTile(Core.input.mouseWorldY()))
+                        .style(Styles.outlineLabel)
+                        .labelAlign(Align.right)
+                        .right().row();
+            }
         });
 
         ui.hints.build(parent);
@@ -512,7 +537,7 @@ public class HudFragment{
                 // button to skip wave
                 s.button(Icon.play, rightStyle, 30f, () -> {
                     if(!canSkipWave()) new Toast(1f).add("You tried and that's all that matters.");
-                    else if(net.client() && Server.current.adminui()){
+                    else if(net.client()){
                         Call.adminRequest(player, AdminAction.wave, null);
                     }else{
                         logic.skipWave();

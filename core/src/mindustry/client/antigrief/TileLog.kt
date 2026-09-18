@@ -1,6 +1,7 @@
 package mindustry.client.antigrief
 
 import arc.*
+import arc.math.Mathf
 import arc.math.geom.*
 import arc.scene.*
 import arc.scene.ui.layout.*
@@ -15,6 +16,7 @@ import mindustry.type.*
 import mindustry.ui.*
 import mindustry.world.*
 import java.time.*
+import kotlin.math.min
 
 // FINISHME: The string truncation is done in the most convoluted way imaginable
 data class IntRectangle(val x: Int, val y: Int, val width: Int, val height: Int) : Iterable<Point2> { // Finishme: This class is entirely useless
@@ -184,7 +186,7 @@ open class ConfigureTileLog(cause: Interactor, block: Block, val rotation: Int, 
 
     override fun toString() = "${eventPlayer()} ${Core.bundle.get("client.configured")} ${eventTarget()}"
 
-    private fun eventName(): String = Core.bundle.get("client.configured").let { if(Core.settings.getBool("colorizelogs")) "[accent]$it[]" else it }
+    private fun eventName(): String = Core.bundle.get("client.configured").let { if(Core.settings.getBool("colorizelogs")) "[blue]$it[]" else it }
 
     override fun toShortString() = "${eventPlayer()} ${eventName()} ${eventTarget()}"
 
@@ -323,4 +325,16 @@ class RotateTileLog(cause: Interactor, block: Block, val rotation: Int, val dire
     companion object {
         fun read(reads: Reads, interactor: Interactor) = RotateTileLog(interactor, TypeIO.readBlock(reads), reads.b().toInt(), reads.bool())
     }
+}
+
+//class CommandTileLog(tile: Tile, cause: Interactor, val block: Block, val poscom: Vec2) : TileLog(tile, cause) {
+class CommandTileLog(tile: Tile, cause: Interactor, val block: Block, val poscom: Vec2) : TileLog(cause) {
+    override fun apply(previous: TileState) {
+        previous.rotation = 0
+    }
+    override fun toString(): String {
+        return "${cause.name.stripColors()} ${Core.bundle.get("client.command")} ${block.localizedName} ${ " to "} ${Mathf.ceil(poscom.x/8)}  ${ ","}  ${Mathf.ceil(poscom.y/8)}"
+    }
+
+    override fun toShortString() = "${cause.shortName.stripColors().subSequence(0, min(16, cause.shortName.stripColors().length))}${if (cause.shortName.stripColors().length > 16) "..." else ""} ${Core.bundle.get("client.command")} ${block.localizedName}"
 }

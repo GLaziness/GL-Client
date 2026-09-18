@@ -47,6 +47,14 @@ public class ItemBridge extends Block{
     //for autolink
     public @Nullable ItemBridgeBuild lastBuild;
 
+    // Настройки отображения предметов
+    public static boolean drawItems = false;
+
+    public float drawTime = 120f;
+    public static void setDrawItems(boolean draw){
+        drawItems = draw;
+    }
+
     public ItemBridge(String name){
         super(name);
         update = true;
@@ -61,6 +69,8 @@ public class ItemBridge extends Block{
         noUpdateDisabled = true;
         allowDiagonal = false;
         copyConfig = false;
+        //disabled as to not be annoying
+        allowConfigInventory = true;
         ignoreResizeConfig = true;
         diagonalConfigInventory = true;
         priority = TargetPriority.transport;
@@ -230,6 +240,16 @@ public class ItemBridge extends Block{
         public boolean wasMoved, moved, hadValidLink;
         public float transportCounter;
 
+        // Массив для хранения времени исчезновения каждого предмета (60 тиков = 1 секунда)
+        public float[] visualTimers = null;
+
+        private float[] getVisualTimers(){
+            if(visualTimers == null || visualTimers.length != content.items().size){
+                visualTimers = new float[content.items().size];
+            }
+            return visualTimers;
+        }
+
         @Override
         public void pickedUp(){
             link = -1;
@@ -304,7 +324,7 @@ public class ItemBridge extends Block{
                         boolean linked = other.pos() == link;
 
                         Drawf.select(other.drawx(), other.drawy(),
-                            other.block().size * tilesize / 2f + 2f + (linked ? 0f : Mathf.absin(Time.time, 4f, 1f)), linked ? Pal.place : Pal.breakInvalid);
+                                other.block().size * tilesize / 2f + 2f + (linked ? 0f : Mathf.absin(Time.time, 4f, 1f)), linked ? Pal.place : Pal.breakInvalid);
                     }
                 }
             }
@@ -373,6 +393,17 @@ public class ItemBridge extends Block{
                 warmup = Mathf.approachDelta(warmup, efficiency, 1f / 30f);
                 updateTransport(other.build);
             }
+
+            // Обновление визуальных таймеров для предметов, которые физически лежат в мосту (чтобы они не пропадали, если поток остановился)
+            if(drawItems && items != null){
+                float[] timers = getVisualTimers();
+                for(int i = 0; i < timers.length; i++){
+                    if(items.get(content.item(i)) > 0){
+                        // Пока предмет есть в хранилище, постоянно продлеваем его жизнь
+                        timers[i] = Time.time + drawTime;
+                    }
+                }
+            }
         }
 
         public void doDump(){
@@ -387,11 +418,26 @@ public class ItemBridge extends Block{
                 if(item != null && other.acceptItem(this, item)){
                     other.handleItem(this, item);
                     moved = true;
+
+                    // Обновляем таймер, когда предмет ВЫХОДИТ из моста (продлеваем визуал, чтобы не моргал при быстрой передаче)
+                    if(drawItems){
+                        getVisualTimers()[item.id] = Time.time + drawTime;
+                    }
                 }else if(item != null){
                     items.add(item, 1);
                     items.undoFlow(item);
                 }
                 transportCounter -= transportTime;
+            }
+        }
+
+        @Override
+        public void handleItem(Building source, Item item){
+            super.handleItem(source, item);
+
+            // Обновляем таймер, когда предмет ВХОДИТ в мост (продлеваем визуал, чтобы не моргал при быстрой передаче)
+            if(drawItems){
+                getVisualTimers()[item.id] = Time.time + drawTime;
             }
         }
 
@@ -402,9 +448,15 @@ public class ItemBridge extends Block{
             Draw.z(Layer.power);
 
             Tile other = world.tile(link);
-            if(!linkValid(tile, other)) return;
+            if(!linkValid(tile, other)) {
+                drawStoredItems();
+                return;
+            }
 
-            if(Mathf.zero(Renderer.bridgeOpacity)) return;
+            if(Mathf.zero(Renderer.bridgeOpacity)) {
+                drawStoredItems();
+                return;
+            }
 
             int i = relativeTo(other.x, other.y);
 
@@ -445,6 +497,61 @@ public class ItemBridge extends Block{
                 }
             }
 
+            Draw.reset();
+
+            // Отрисовка скопившихся / пролетающих предметов
+            drawStoredItems();
+        }
+
+        public void drawStoredItems(){
+            if (!drawItems) return;
+
+            float[] timers = getVisualTimers();
+
+            // Считаем количество активных (видимых) предметов
+            int count = 0;
+            for(int i = 0; i < timers.length; i++){
+                if(timers[i] > Time.time){
+                    count++;
+                }
+            }
+
+            if(count == 0) return;
+
+            Draw.z(Layer.blockOver);
+            Draw.color();
+
+            // Если предмет только один, рисуем его крупно по центру
+            if(count == 1){
+                for(int i = 0; i < timers.length; i++){
+                    if(timers[i] > Time.time){
+                        Item item = content.item(i);
+                        Draw.rect(item.fullIcon, x, y, tilesize / 1.5f, tilesize / 1.5f);
+                        break;
+                    }
+                }
+            } else {
+                // Если предметов несколько, располагаем их сеткой 3x3
+                int index = 0;
+                int maxItems = 9;
+                int columns = 3;
+                float space = tilesize / 3.2f; // Расстояние между иконками
+                float size = tilesize / 3.5f;  // Размер иконки для сетки
+
+                for(int i = 0; i < timers.length; i++){
+                    if(timers[i] > Time.time){
+                        Item item = content.item(i);
+                        float col = index % columns - 1; // -1, 0, 1
+                        float row = index / columns - 1; // -1, 0, 1
+                        float ix = x + col * space;
+                        float iy = y + row * space;
+
+                        Draw.rect(item.fullIcon, ix, iy, size, size);
+                        index++;
+                        if(index >= maxItems) break;
+                    }
+                }
+            }
             Draw.reset();
         }
 

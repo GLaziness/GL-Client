@@ -31,11 +31,12 @@ object BuildPlanCommunicationSystem : CommunicationSystem() {
     init {
         Events.on(EventType.WorldLoadEvent::class.java) {
             lastGotten.clear()
+            if (Vars.world.width() <= 0 || Vars.world.height() <= 0) return@on
             corners = arrayOf(
                 Vars.world.tiles.get(0, 0),
                 Vars.world.tiles.get(0, Vars.world.height() - 1),
-                Vars.world.tiles.getc(Vars.world.width() - 1, 0),
-                Vars.world.tiles.getc(Vars.world.width() - 1, Vars.world.height() - 1)
+                Vars.world.tiles.get(Vars.world.width() - 1, 0),
+                Vars.world.tiles.get(Vars.world.width() - 1, Vars.world.height() - 1)
             )
         }
 

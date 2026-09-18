@@ -131,11 +131,12 @@ public class PlayerListFragment{
 
     public void rebuild(){
         content.clear();
+        mindustry.client.ui.PlayerBlockListFragment.calculateStats();
         boolean adminui = net.server() || Server.current.adminui();
 
         float h = 80f;
         float bs = h / 2;
-        float width = 700f + (Server.current.freeze.canRun() ? 20f : 0) + (Server.current.mute.canRun() ? 20f : 0);
+        float width = 700f + (Server.current.freeze.canRun() ? 20f : 0) + (Server.current.mute.canRun() ? 20f : 0) + (Core.settings.getBool("blocksplayersplan") ? 200f : 0);
         boolean found = false;
 
         players.clear();
@@ -196,7 +197,34 @@ public class PlayerListFragment{
             };
             button.left();
             button.margin(5).marginBottom(10);
+            if (Core.settings.getBool("blocksplayersplan")) {
+                button.table(stats -> {
+                    stats.left().defaults().pad(1).height(28f);
 
+                    // Первая строка: + - ~
+                    stats.table(t -> {
+                        t.button("[green]+" + mindustry.client.ui.PlayerBlockListFragment.builtCache.get(Strings.stripColors(user.name())), () -> mindustry.client.ui.PlayerBlockListFragment.name_for_plans = user.name)
+                                .width(42).padRight(2).get().getLabel().setFontScale(0.8f);
+                        t.button("[red]-" + mindustry.client.ui.PlayerBlockListFragment.breakCache.get(Strings.stripColors(user.name())), () -> mindustry.client.ui.PlayerBlockListFragment.name_for_plans = user.name)
+                                .width(42).padRight(2).get().getLabel().setFontScale(0.8f);
+                        t.button("[blue]~" + mindustry.client.ui.PlayerBlockListFragment.configCache.get(Strings.stripColors(user.name())), () -> mindustry.client.ui.PlayerBlockListFragment.name_for_plans = user.name)
+                                .width(42).get().getLabel().setFontScale(0.8f);
+                    }).row();
+
+                    // Вторая строка: Молот и Корзина
+                    stats.table(t -> {
+                        t.button(Icon.hammer, Styles.clearNonei, () -> {
+                            mindustry.client.ui.PlayerBlockListFragment.deletePlayerBuild(Strings.stripColors(user.name()));
+                        }).size(24).padRight(4).tooltip("Восстановить сломанное");
+
+                        t.button(Icon.trash, Styles.clearNonei, () -> {
+                            mindustry.client.ui.PlayerBlockListFragment.repairPlayerBuild(Strings.stripColors(user.name()));
+                        }).size(24).tooltip("Снести построенное");
+
+                        t.add().growX();
+                    });
+                }).width(140f).padRight(8);
+            }
             ClickListener listener = new ClickListener();
             Table iconTable = new Table(){
                 @Override
