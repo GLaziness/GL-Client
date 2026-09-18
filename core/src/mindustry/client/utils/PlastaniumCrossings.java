@@ -41,6 +41,8 @@ public class PlastaniumCrossings{
     /** Built (or being built) power nodes waiting to be linked to their phase bridges. */
     private static final Seq<NodeLinks> pendingLinks = new Seq<>();
     private static final Interval linkTimer = new Interval();
+    /** Power nodes under the line being drawn that were (or could not be) moved to the side. */
+    private static final IntSet movedNodes = new IntSet(), failedNodes = new IntSet();
 
     private static class NodeLinks{
         int pos;
@@ -70,8 +72,10 @@ public class PlastaniumCrossings{
         result.clear();
         phaseEnds.clear();
 
+        movedNodes.clear();
+        failedNodes.clear();
         for(BuildPlan plan : plans){
-            if(!crossLine(plans, plan)) result.add(plan);
+            if(!moveNode(plans, plan) && !crossLine(plans, plan)) result.add(plan);
         }
 
         if(!phaseEnds.isEmpty()) placeNodes();
@@ -171,8 +175,7 @@ public class PlastaniumCrossings{
      * ends as a large one would, a large node otherwise. The nodes connect to the grid by themselves when built.
      */
     private static void placeNodes(){
-        IntSet occupied = new IntSet();
-        for(BuildPlan plan : result) occupied.add(Point2.pack(plan.x, plan.y));
+        IntSet occupied = occupiedBy(result, null);
         Seq<Tile> left = phaseEnds.copy();
         Seq<Tile> linked = new Seq<>();
 
@@ -226,6 +229,113 @@ public class PlastaniumCrossings{
     }
 
     private static final Seq<Tile> tempTiles = new Seq<>();
+
+    /** Every tile covered by the given plans (and optionally by the line itself). */
+    private static IntSet occupiedBy(Seq<BuildPlan> plans, @Nullable Seq<BuildPlan> line){
+        IntSet occupied = new IntSet();
+        occupy(plans, occupied);
+        if(line != null) occupy(line, occupied);
+        return occupied;
+    }
+
+    private static void occupy(Seq<BuildPlan> plans, IntSet occupied){
+        for(BuildPlan plan : plans){
+            Tile tile = plan.tile();
+            if(tile == null) continue;
+            if(plan.block == null || plan.block.size == 1) occupied.add(tile.pos());
+            else tile.getLinkedTilesAs(plan.block, tempTiles).each(t -> occupied.add(t.pos()));
+        }
+    }
+
+    /**
+     * A power node under the line is rebuilt next to it with the same links, then the old one is removed
+     * and the conveyor takes its place. Returns false if there is no power node here or no room for it.
+     */
+    private static boolean moveNode(Seq<BuildPlan> plans, BuildPlan plan){
+        Tile tile = plan.tile();
+        if(tile == null || !(tile.build instanceof PowerNode.PowerNodeBuild build) || build.team != player.team()) return false;
+        if(!(build.block instanceof PowerNode node) || !node.unlockedNow()) return false;
+
+        int key = build.pos();
+        if(failedNodes.contains(key)) return false;
+        if(movedNodes.add(key)){
+            Tile to = findNodeSpot(plans, build, node);
+            if(to == null){
+                failedNodes.add(key);
+                movedNodes.remove(key);
+                return false;
+            }
+            // the new node goes first so the grid is never cut
+            add(new BuildPlan(to.x, to.y, 0, node, nodeLinks(build, node, to).toArray(Point2.class)));
+        }
+
+        // the conveyor can't replace a node: break it, the conveyor is placed once the tile is free
+        BuildPlan breaking = new BuildPlan(plan.x, plan.y);
+        breaking.block = build.block;
+        breaking.config = plan.copy();
+        result.add(breaking);
+        return true;
+    }
+
+    /** Closest free spot next to the line from which the node keeps as many of its links as possible. */
+    private static @Nullable Tile findNodeSpot(Seq<BuildPlan> plans, Building build, PowerNode node){
+        IntSet occupied = occupiedBy(result, plans);
+        int total = nodeLinkCount(build);
+        Tile best = null;
+        int bestKept = -1;
+        float bestDst = Float.MAX_VALUE;
+        int r = 4 + node.size;
+
+        for(int dx = -r; dx <= r; dx++){
+            for(int dy = -r; dy <= r; dy++){
+                Tile c = world.tile(build.tile.x + dx, build.tile.y + dy);
+                if(c == null || !free(c, node, occupied)) continue;
+                int kept = nodeLinks(build, node, c).size;
+                float dst = c.dst2(build.tile);
+                if(kept > bestKept || (kept == bestKept && dst < bestDst)){
+                    best = c;
+                    bestKept = kept;
+                    bestDst = dst;
+                }
+            }
+        }
+        // better to leave the node where it is than to cut the grid
+        return best != null && bestKept >= Math.min(total, 1) ? best : null;
+    }
+
+    private static int nodeLinkCount(Building build){
+        int count = build.power.links.size;
+        for(Building other : build.proximity){
+            if(other.power != null && other.block.connectedPower && !(other.block instanceof StackConveyor)) count++;
+        }
+        return count;
+    }
+
+    /** Links (relative to the new spot) the moved node should have: its lasers, plus the buildings it powered by touching them. */
+    private static Seq<Point2> nodeLinks(Building build, PowerNode node, Tile to){
+        Seq<Point2> out = new Seq<>();
+        IntSet added = new IntSet();
+        tempTiles.clear();
+        to.getLinkedTilesAs(node, tempTiles);
+
+        for(int i = 0; i < build.power.links.size; i++){
+            Building other = world.build(build.power.links.get(i));
+            if(other != null && inRange(node, to, other) && added.add(other.pos())) out.add(new Point2(other.tileX() - to.x, other.tileY() - to.y));
+        }
+        for(Building other : build.proximity){
+            if(other.power == null || !other.block.connectedPower || other.block instanceof StackConveyor || other.block instanceof PowerNode) continue;
+            // buildings touching the new spot are powered by contact anyway
+            if(tempTiles.contains(t -> t.build == other || t.nearby(0) != null && t.nearby(0).build == other || t.nearby(1) != null && t.nearby(1).build == other
+                || t.nearby(2) != null && t.nearby(2).build == other || t.nearby(3) != null && t.nearby(3).build == other)) continue;
+            if(inRange(node, to, other) && added.add(other.pos())) out.add(new Point2(other.tileX() - to.x, other.tileY() - to.y));
+        }
+        if(out.size > node.maxNodes) out.truncate(node.maxNodes);
+        return out;
+    }
+
+    private static boolean inRange(PowerNode node, Tile from, Building other){
+        return node.overlaps(from, other.tile) || (other.block instanceof PowerNode on && on.overlaps(other.tile, from));
+    }
 
     private static boolean free(Tile tile, Block node, IntSet occupied){
         if(!Build.validPlace(node, player.team(), tile.x, tile.y, 0)) return false;
