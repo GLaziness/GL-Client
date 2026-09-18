@@ -199,31 +199,28 @@ public class PlayerListFragment{
             button.margin(5).marginBottom(10);
             if (Core.settings.getBool("blocksplayersplan")) {
                 button.table(stats -> {
-                    stats.left().defaults().pad(1).height(28f);
+                    // GL: flat buttons without the octagon frame, numbers on one line and shortened (1.5k), so nothing overlaps
+                    String clean = Strings.stripColors(user.name());
+                    stats.left().top();
 
-                    // Первая строка: + - ~
                     stats.table(t -> {
-                        t.button("[green]+" + mindustry.client.ui.PlayerBlockListFragment.builtCache.get(Strings.stripColors(user.name())), () -> mindustry.client.ui.PlayerBlockListFragment.name_for_plans = user.name)
-                                .width(42).padRight(2).get().getLabel().setFontScale(0.8f);
-                        t.button("[red]-" + mindustry.client.ui.PlayerBlockListFragment.breakCache.get(Strings.stripColors(user.name())), () -> mindustry.client.ui.PlayerBlockListFragment.name_for_plans = user.name)
-                                .width(42).padRight(2).get().getLabel().setFontScale(0.8f);
-                        t.button("[blue]~" + mindustry.client.ui.PlayerBlockListFragment.configCache.get(Strings.stripColors(user.name())), () -> mindustry.client.ui.PlayerBlockListFragment.name_for_plans = user.name)
-                                .width(42).get().getLabel().setFontScale(0.8f);
-                    }).row();
+                        t.left().defaults().size(44f, 26f).padRight(2f);
+                        counter(t, "[green]+", mindustry.client.ui.PlayerBlockListFragment.builtCache.get(clean, 0), "Построено", user);
+                        counter(t, "[red]-", mindustry.client.ui.PlayerBlockListFragment.breakCache.get(clean, 0), "Сломано", user);
+                        counter(t, "[#6ea8ff]~", mindustry.client.ui.PlayerBlockListFragment.configCache.get(clean, 0), "Потрогано", user);
+                    }).left().row();
 
-                    // Вторая строка: Молот и Корзина
                     stats.table(t -> {
-                        t.button(Icon.hammer, Styles.clearNonei, () -> {
-                            mindustry.client.ui.PlayerBlockListFragment.deletePlayerBuild(Strings.stripColors(user.name()));
-                        }).size(24).padRight(4).tooltip("Восстановить сломанное");
+                        t.left().defaults().size(26f).padRight(4f).padTop(3f);
+                        t.button(Icon.hammer, Styles.clearNonei, 18f, () -> {
+                            mindustry.client.ui.PlayerBlockListFragment.deletePlayerBuild(clean);
+                        }).tooltip("Восстановить сломанное");
 
-                        t.button(Icon.trash, Styles.clearNonei, () -> {
-                            mindustry.client.ui.PlayerBlockListFragment.repairPlayerBuild(Strings.stripColors(user.name()));
-                        }).size(24).tooltip("Снести построенное");
-
-                        t.add().growX();
-                    });
-                }).width(140f).padRight(8);
+                        t.button(Icon.trash, Styles.clearNonei, 18f, () -> {
+                            mindustry.client.ui.PlayerBlockListFragment.repairPlayerBuild(clean);
+                        }).tooltip("Снести построенное");
+                    }).left();
+                }).width(144f).padRight(8).top();
             }
             ClickListener listener = new ClickListener();
             Table iconTable = new Table(){
@@ -431,6 +428,13 @@ public class PlayerListFragment{
         }
 
         content.marginBottom(5);
+    }
+
+    /** GL: one block-log counter of the player list row. */
+    private static void counter(Table t, String prefix, int value, String tip, Player user){
+        t.button(prefix + mindustry.core.UI.formatAmount(value), Styles.flatt,
+            () -> mindustry.client.ui.PlayerBlockListFragment.name_for_plans = user.name)
+            .wrapLabel(false).tooltip(tip + ": " + value).get().getLabel().setFontScale(0.8f);
     }
 
     public void toggle(){
