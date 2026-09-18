@@ -27,6 +27,8 @@ public class GlobalChat{
     /** SHA-256 of the server certificate (DER). */
     private static final String pin = "5373188ec5a8d68d4f930a38f2aadb8b9606ac35819d8ddcecb8865e4d81971e";
     private static final int maxText = 200, maxLog = 150;
+    /** Start of every line of the global chat. */
+    public static final String prefix = "[#7fd3ff][[GL][] ";
 
     private static volatile boolean running;
     private static volatile SSLSocket socket;

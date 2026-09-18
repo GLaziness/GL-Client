@@ -31,6 +31,7 @@ public class GlobalChatDialog extends Table{
     private ScrollPane pane;
     private TextField field;
     private boolean shown, placed;
+    private @Nullable Table popup;
     private float lastX, lastY;
 
     public static void showDialog(){
@@ -125,6 +126,50 @@ public class GlobalChatDialog extends Table{
         if(GlobalChat.send(text)) field.setText("");
     }
 
+    /** Actions for one player: moderators punish and lift punishments, the owner also appoints moderators. */
+    private void playerMenu(String target, String name){
+        if(popup != null) popup.remove();
+        Table menu = new Table(Tex.pane);
+        popup = menu;
+        menu.touchable = Touchable.enabled;
+        menu.margin(6f);
+        menu.defaults().size(250f, 38f).left();
+        menu.add("[accent]" + name.replace("[", "[[") + " [gray]#" + target).left().padBottom(4f).row();
+        menuItem(menu, Icon.lock, "@client.globalchat.btn.mute", () -> confirm("client.globalchat.confirm.mute", "mute", target, name));
+        menuItem(menu, Icon.lockOpen, "@client.globalchat.btn.unmute", () -> GlobalChat.moderate("unmute", target));
+        menuItem(menu, Icon.hammer, "@client.globalchat.btn.ban", () -> confirm("client.globalchat.confirm.ban", "ban", target, name));
+        menuItem(menu, Icon.refresh, "@client.globalchat.btn.unban", () -> GlobalChat.moderate("unban", target));
+        if(GlobalChat.owner()){
+            menuItem(menu, Icon.admin, "@client.globalchat.btn.addmod", () -> confirm("client.globalchat.confirm.addmod", "addmod", target, name));
+            menuItem(menu, Icon.cancel, "@client.globalchat.btn.delmod", () -> GlobalChat.moderate("delmod", target));
+        }
+        menuItem(menu, Icon.copy, "@client.globalchat.btn.copytag", () -> {
+            Core.app.setClipboardText(target);
+            ui.showInfoFade("@client.globalchat.copied");
+        });
+        menu.update(() -> {
+            boolean outside = (Core.input.keyTap(KeyCode.mouseLeft) || Core.input.keyTap(KeyCode.mouseRight)) && !menu.hasMouse();
+            if(outside || Core.input.keyTap(KeyCode.escape) || !shown) closePopup();
+        });
+        Core.scene.add(menu);
+        menu.pack();
+        float mx = Core.input.mouseX(), my = Core.input.mouseY();
+        menu.setPosition(Math.min(mx, Core.scene.getWidth() - menu.getWidth()), Math.max(0f, my - menu.getHeight()));
+    }
+
+    private void menuItem(Table menu, arc.scene.style.Drawable icon, String text, Runnable action){
+        menu.button(text, icon, Styles.flatt, () -> {
+            closePopup();
+            action.run();
+        }).get().left();
+        menu.row();
+    }
+
+    private void closePopup(){
+        if(popup != null) popup.remove();
+        popup = null;
+    }
+
     private void confirm(String key, String action, String target, String name){
         ui.showConfirm("@confirm", Core.bundle.format(key, name.replace("[", "[["), target), () -> GlobalChat.moderate(action, target));
     }
@@ -138,19 +183,28 @@ public class GlobalChatDialog extends Table{
         for(int i = 0; i < GlobalChat.log.size; i++){
             String copy = GlobalChat.copies.get(i), line = GlobalChat.log.get(i);
             String from = GlobalChat.lineTags.get(i), name = GlobalChat.lineNames.get(i);
-            boolean modButtons = GlobalChat.moderator() && !from.isEmpty() && !from.equals(GlobalChat.tag());
+            // owner and moderators: a click (left or right) on [GL] of someone's message opens the actions for that player
+            boolean menu = GlobalChat.moderator() && !from.isEmpty() && !from.equals(GlobalChat.tag()) && line.startsWith(GlobalChat.prefix);
             lines.table(row -> {
-                row.button(b -> b.add(line).left().wrap().width(modButtons ? 350f : 410f), lineStyle, () -> {
+                row.top().left();
+                String text = line;
+                if(menu){
+                    text = line.substring(GlobalChat.prefix.length());
+                    TextButton gl = row.button("[#7fd3ff][[GL]", lineStyle, () -> playerMenu(from, name)).top().get();
+                    gl.margin(2f, 4f, 2f, 2f);
+                    gl.addListener(new ClickListener(KeyCode.mouseRight){
+                        @Override
+                        public void clicked(InputEvent event, float x, float y){
+                            playerMenu(from, name);
+                        }
+                    });
+                    gl.addListener(new Tooltip(t -> t.background(Styles.black8).margin(4f).add("@client.globalchat.menuhint")));
+                }
+                String shown = text;
+                row.button(b -> b.add(shown).left().wrap().width(menu ? 370f : 410f), lineStyle, () -> {
                     Core.app.setClipboardText(copy);
                     ui.showInfoFade("@client.globalchat.copied");
                 }).left().growX().get().left().margin(2f, 4f, 2f, 4f);
-                if(modButtons){
-                    // moderators: mute for 10 minutes or ban for 7 days, with a confirmation
-                    row.button(Icon.lockSmall, Styles.clearNonei, () -> confirm("client.globalchat.confirm.mute", "mute", from, name))
-                        .size(28f).top().tooltip("@client.globalchat.btn.mute");
-                    row.button(Icon.hammerSmall, Styles.clearNonei, () -> confirm("client.globalchat.confirm.ban", "ban", from, name))
-                        .size(28f).top().tooltip("@client.globalchat.btn.ban").get().getImage().setColor(Color.scarlet);
-                }
             }).left().growX().padBottom(2f);
             lines.row();
         }
