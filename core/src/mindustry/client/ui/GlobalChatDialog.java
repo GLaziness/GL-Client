@@ -32,7 +32,6 @@ public class GlobalChatDialog extends Table{
     private ScrollPane pane;
     private TextField field;
     private boolean shown, placed, serverTab;
-    private String lastChannel = "";
     private @Nullable Table popup;
     private float lastX, lastY;
 
@@ -81,28 +80,36 @@ public class GlobalChatDialog extends Table{
                     }
                 }).size(36f).tooltip(t -> t.background(Styles.black8).margin(4f).label(() ->
                     GlobalChat.tag().isEmpty() ? Core.bundle.get("client.globalchat.mytag.none") : Core.bundle.format("client.globalchat.mytag.hint", GlobalChat.tag())));
-                head.button(Icon.power, Styles.clearNoneTogglei, () -> {
-                    boolean on = !GlobalChat.enabled();
-                    Core.settings.put("globalchat", on);
-                    GlobalChat.setEnabled(on);
-                }).size(36f).checked(b -> GlobalChat.enabled()).tooltip("@client.setting.globalchat.name");
+                // the two channels are turned on and off separately: the chat of this server and the global one
+                head.button(Icon.host, Styles.clearNoneTogglei, () -> GlobalChat.setServerOn(!GlobalChat.serverOn()))
+                    .size(36f).checked(b -> GlobalChat.serverOn()).tooltip(t -> t.background(Styles.black8).margin(4f).label(() ->
+                        Core.bundle.get(GlobalChat.serverOn() ? "client.globalchat.btn.server.off" : "client.globalchat.btn.server.on")));
+                head.button(Icon.planet, Styles.clearNoneTogglei, () -> GlobalChat.setGlobal(!GlobalChat.globalOn()))
+                    .size(36f).checked(b -> GlobalChat.globalOn()).tooltip(t -> t.background(Styles.black8).margin(4f).label(() ->
+                        Core.bundle.get(GlobalChat.globalOn() ? "client.globalchat.btn.global.off" : "client.globalchat.btn.global.on")));
                 head.button(Icon.cancel, Styles.cleari, this::toggle).size(36f);
             }).growX().row();
 
             root.table(tabs -> {
                 tabs.defaults().height(34f).growX();
-                tabs.button("", Styles.flatTogglet, () -> setTab(false)).checked(b -> !serverTab)
-                    .update(b -> b.setText(Core.bundle.format("client.globalchat.tab.global", GlobalChat.connected() ? GlobalChat.online() : 0)));
-                tabs.button("", Styles.flatTogglet, () -> setTab(true)).checked(b -> serverTab).padLeft(4f)
-                    .disabled(b -> GlobalChat.channel().isEmpty())
-                    .update(b -> b.setText(GlobalChat.channel().isEmpty() ? Core.bundle.get("client.globalchat.tab.server.off") :
-                        Core.bundle.format("client.globalchat.tab.server", GlobalChat.serverOnline())))
+                // the server first: it is the one opened by default when the player is on a server
+                tabs.button("", Styles.flatTogglet, () -> setTab(true)).checked(b -> serverTab)
+                    .disabled(b -> !GlobalChat.onServer())
+                    .update(b -> b.setText(!GlobalChat.onServer() ? Core.bundle.get("client.globalchat.tab.server.off") :
+                        !GlobalChat.serverOn() ? Core.bundle.get("client.globalchat.tab.server.disabled") :
+                        Core.bundle.format("client.globalchat.tab.server", GlobalChat.channel().isEmpty() ? 0 : GlobalChat.serverOnline())))
                     .tooltip("@client.globalchat.tab.server.hint");
+                tabs.button("", Styles.flatTogglet, () -> setTab(false)).checked(b -> !serverTab).padLeft(4f)
+                    .update(b -> b.setText(!GlobalChat.globalOn() ? Core.bundle.get("client.globalchat.tab.global.disabled") :
+                        Core.bundle.format("client.globalchat.tab.global", GlobalChat.connected() ? GlobalChat.online() : 0)));
             }).growX().padTop(4f).row();
 
-            root.label(() -> !GlobalChat.enabled() ? Core.bundle.get("client.globalchat.off.window") :
-                serverTab && GlobalChat.connected() ? Core.bundle.format("client.globalchat.serverstatus", GlobalChat.channel(), GlobalChat.serverOnline()) :
-                GlobalChat.status()).fontScale(0.85f).wrap().growX().left().padTop(2f).row();
+            root.label(() -> serverTab ?
+                (!GlobalChat.serverOn() ? Core.bundle.get("client.globalchat.serveroff.window") :
+                GlobalChat.channel().isEmpty() ? GlobalChat.status() :
+                Core.bundle.format("client.globalchat.serverstatus", GlobalChat.channel(), GlobalChat.serverOnline())) :
+                (!GlobalChat.globalOn() ? Core.bundle.get("client.globalchat.off.window") : GlobalChat.status()))
+                .fontScale(0.85f).wrap().growX().left().padTop(2f).row();
             root.add("@client.globalchat.copyhint").color(Color.gray).fontScale(0.75f).left().padTop(2f).row();
             root.image().color(Pal.accent).height(2f).growX().padTop(4f).padBottom(4f).row();
 
@@ -129,16 +136,12 @@ public class GlobalChatDialog extends Table{
                 placed = true;
             }
             // left the server: back to the global chat
-            String ch = GlobalChat.channel();
-            if(!ch.equals(lastChannel)){
-                lastChannel = ch;
-                if(ch.isEmpty() && serverTab) setTab(false);
-            }
+            if(serverTab && !GlobalChat.onServer()) setTab(false);
         });
     }
 
     private void setTab(boolean server){
-        if(server && GlobalChat.channel().isEmpty()) return;
+        if(server && !GlobalChat.onServer()) return;
         if(serverTab == server) return;
         serverTab = server;
         closePopup();
@@ -149,6 +152,8 @@ public class GlobalChatDialog extends Table{
         shown = !shown;
         if(shown){
             toFront();
+            // on a server its chat is opened first
+            serverTab = GlobalChat.onServer();
             GlobalChat.listener = this::rebuild;
             rebuild();
             Core.scene.setKeyboardFocus(field);
@@ -166,7 +171,7 @@ public class GlobalChatDialog extends Table{
     private void send(){
         String text = field.getText().trim();
         if(text.isEmpty()) return;
-        if(!GlobalChat.enabled()) return; // the status line above already says to press the power button
+        if(serverTab ? !GlobalChat.serverOn() : !GlobalChat.globalOn()) return; // the status line above says which button turns it on
         if(GlobalChat.send(text, serverTab)) field.setText("");
     }
 

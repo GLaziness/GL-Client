@@ -77,6 +77,8 @@ public class GlobalChat{
             });
             Events.on(EventType.MenuReturnEvent.class, e -> setServer(""));
         }
+        // the server chat appeared later: whoever already used the global chat gets it on too
+        if(!Core.settings.has("globalchat-server")) Core.settings.put("globalchat-server", globalOn());
         if(enabled()) start();
     }
 
@@ -109,7 +111,7 @@ public class GlobalChat{
     private static void sendServer(){
         Jval msg = Jval.newObject();
         msg.put("t", "server");
-        msg.put("host", serverHost);
+        msg.put("host", serverOn() ? serverHost : "");
         write(msg);
     }
 
@@ -122,14 +124,55 @@ public class GlobalChat{
         return serverOnline;
     }
 
+    /** Connected to the chat server: the global channel or the server one is on. */
     public static boolean enabled(){
+        return globalOn() || serverOn();
+    }
+
+    /** The global channel is on (it can be off while the chat of the server stays on). */
+    public static boolean globalOn(){
         return Core.settings.getBool("globalchat", false);
     }
 
-    /** Called by the setting checkbox. */
+    /** The chat of the server the player is on is on. */
+    public static boolean serverOn(){
+        return Core.settings.getBool("globalchat-server", false);
+    }
+
+    /** The player is on a game server now (its chat can be used when it is on). */
+    public static boolean onServer(){
+        return !serverHost.isEmpty();
+    }
+
+    public static void setGlobal(boolean on){
+        Core.settings.put("globalchat", on);
+        apply();
+    }
+
+    public static void setServerOn(boolean on){
+        Core.settings.put("globalchat-server", on);
+        apply();
+    }
+
+    /** Called by the setting checkboxes (the value is already saved). */
     public static void setEnabled(boolean on){
-        if(on) start();
-        else stop();
+        apply();
+    }
+
+    /** Connects when a channel is on, disconnects when both are off, and tells the server which channels to send. */
+    private static void apply(){
+        if(!enabled()){
+            stop();
+            return;
+        }
+        start();
+        if(connected){
+            Jval msg = Jval.newObject();
+            msg.put("t", "global");
+            msg.put("on", globalOn());
+            write(msg);
+            sendServer();
+        }
     }
 
     public static boolean connected(){
@@ -276,6 +319,10 @@ public class GlobalChat{
             postRaw(status());
             return false;
         }
+        if(server ? !serverOn() : !globalOn()){
+            postRaw(Core.bundle.get(server ? "client.globalchat.serveroff" : "client.globalchat.sys.globaloff"));
+            return false;
+        }
         if(server && channel.isEmpty()){
             postRaw(Core.bundle.get("client.globalchat.sys.noserver"));
             return false;
@@ -376,6 +423,7 @@ public class GlobalChat{
         hello.put("v", 1);
         hello.put("name", player == null ? "player" : Strings.stripColors(player.name));
         hello.put("token", token());
+        hello.put("global", globalOn());
         if(!write(hello)) throw new EOFException();
     }
 
@@ -412,7 +460,7 @@ public class GlobalChat{
                 connected = true;
                 error = null;
                 postRaw(Core.bundle.format("client.globalchat.connected", online));
-                if(!serverHost.isEmpty()) sendServer();
+                if(!serverHost.isEmpty() && serverOn()) sendServer();
             }
             case "online" -> online = msg.getInt("n", online);
             case "server" -> {

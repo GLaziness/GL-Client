@@ -69,9 +69,10 @@ public class RecommendedDialog extends BaseDialog{
                     .update(l -> l.setColor(GlobalChat.connected() ? Pal.accent : Color.lightGray)).row();
                 t.button(b -> b.label(() -> Core.bundle.get(GlobalChat.enabled() ? "client.recommended.chat.off" : "client.recommended.chat.on")),
                     Styles.flatt, () -> {
+                        // both channels: the global one and the chat of the server
                         boolean on = !GlobalChat.enabled();
-                        Core.settings.put("globalchat", on);
-                        GlobalChat.setEnabled(on);
+                        Core.settings.put("globalchat-server", on);
+                        GlobalChat.setGlobal(on);
                     }).height(48f).growX().padTop(8f).row();
             });
         }).grow().scrollX(false);
