@@ -25,7 +25,7 @@ import static mindustry.Vars.*;
 
 /** GL: the Alt + left click menu on a tile: tile actions, client windows and toggles. */
 public class TileMenu{
-    private static final float width = 290f, rowHeight = 38f;
+    private static final float width = 320f, rowHeight = 38f;
     private static Table current;
 
     public static void show(Tile tile){
@@ -54,6 +54,12 @@ public class TileMenu{
         menu.clearChildren();
         header(menu, tile);
 
+        group(menu, "@client.tilemenu.chat");
+        Button chat = item(menu, Icon.chat, "@client.tilemenu.globalchat", GlobalChatDialog::showDialog);
+        chat.label(() -> !mindustry.client.utils.GlobalChat.enabled() ? bundle.get("mod.disabled") :
+            mindustry.client.utils.GlobalChat.connected() ? bundle.format("client.tilemenu.online", mindustry.client.utils.GlobalChat.online()) : "...")
+            .update(l -> l.setColor(mindustry.client.utils.GlobalChat.connected() ? Pal.accent : Color.gray)).padLeft(8f);
+
         group(menu, "@client.tilemenu.tile");
         item(menu, Icon.chat, "@client.tilemenu.coords", () -> {
             Call.sendChatMessage(tile.x + ", " + tile.y);
@@ -67,7 +73,6 @@ public class TileMenu{
         item(menu, Icon.star, "@client.tilemenu.favorites", () -> ui.favFrag.toggle());
         item(menu, Icon.paste, "@client.tilemenu.schems", () -> ui.quickSchemFrag.toggle());
         item(menu, Icon.units, "@client.tilemenu.unitpicker", () -> ui.unitPicker.show());
-        item(menu, Icon.chat, "@client.tilemenu.globalchat", GlobalChatDialog::showDialog);
         Button waypoints = item(menu, Icon.commandRally, "@client.tilemenu.waypoints", null);
         waypoints.clicked(() -> {
             waypoints(menu, tile);
@@ -132,7 +137,7 @@ public class TileMenu{
         Button button = new Button(Styles.flatt);
         button.left().margin(0f, 8f, 0f, 8f);
         button.image(icon).size(20f).padRight(10f);
-        button.add(text).left().growX();
+        button.add(text).left().growX().minWidth(0f).get().setEllipsis(true);
         if(action != null){
             button.clicked(() -> {
                 action.run();
@@ -148,7 +153,7 @@ public class TileMenu{
         Button button = new Button(Styles.flatt);
         button.left().margin(0f, 8f, 0f, 8f);
         button.image(icon).size(20f).padRight(10f);
-        button.add(text).left().growX();
+        button.add(text).left().growX().minWidth(0f).get().setEllipsis(true);
         button.label(() -> bundle.get(on.get() ? "mod.enabled" : "mod.disabled"))
             .update(l -> l.setColor(on.get() ? Pal.accent : Color.gray)).padLeft(8f);
         button.clicked(() -> {
