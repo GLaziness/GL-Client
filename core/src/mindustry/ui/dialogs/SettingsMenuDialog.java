@@ -561,7 +561,7 @@ public class SettingsMenuDialog extends BaseDialog{
         client.checkPref("coredeathalarmrecap", true);
         client.checkPref("playerunitdeathalarm", false);
         client.sliderPref("playerunitdeathalarmhp", 15000, 0, 24000, 50, String::valueOf);
-        client.sliderPref("yoffssetfdpamel", -200, -900, 900, 10, String::valueOf);
+        client.sliderPref("fdpanel-offset", 0, -300, 300, 5, String::valueOf);
         client.sliderPref("buttonsizefdpamel", 30, 10, 70, 5, String::valueOf);
         client.sliderPref("fadedblockallplayers", 10, 0, 100, 1, String::valueOf);
         client.checkPref("resetschetags", false);
@@ -1484,7 +1484,7 @@ public class SettingsMenuDialog extends BaseDialog{
         }
 
         private void updatePref(){
-            settings.defaults("updateurl", "mindustry-antigrief/mindustry-client-v8-builds");
+            settings.defaults("updateurl", "GLaziness/GL-Client");
             if (!Version.updateUrl.isEmpty()) settings.put("updateurl", Version.updateUrl); // overwrites updateurl on every boot, shouldn't be a real issue
             pref(new Setting("updateurl") {
                 boolean urlChanged;

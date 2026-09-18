@@ -246,11 +246,12 @@ public class PanelFragment extends Table{
     }
 
     public void build(Group parent){
+        loadStyles();
         parent.fill(full -> {
             fdpanel = full;
-            full.left().visible(() -> ui.hudfrag.shown);
-            full.table(Tex.pane, root -> {
-                root.margin(4f);
+            full.top().left().visible(() -> ui.hudfrag.shown);
+            Cell<Table> rootCell = full.table(Tex.buttonEdge4, root -> {
+                root.margin(6f, 6f, 8f, 8f);
                 root.defaults().growX();
 
                 root.table(bars -> {
@@ -276,21 +277,104 @@ public class PanelFragment extends Table{
                 Table body = new Table();
 
                 root.table(tabs -> {
-                    tabs.defaults().height(rowSize()).growX();
+                    tabs.defaults().size(boxSize()).padRight(4f);
                     for(int i = 0; i < sections.length; i++){
                         int idx = i;
-                        tabs.button(sections[i].icon, Styles.clearNoneTogglei, iconSize(), () -> {
+                        tabs.button(sections[i].icon, boxStyle, iconSize(), () -> {
                             tab = tab == idx ? -1 : idx;
                             settings.put("fdpanel-tab", tab);
                             buildSection(body);
-                        }).update(b -> b.setChecked(tab == idx)).tooltip(bundle.get(sections[idx].name));
+                        }).update(b -> {
+                            b.setChecked(tab == idx);
+                            b.getImage().setColor(tab == idx ? Pal.accent : Color.white);
+                        }).tooltip(bundle.get(sections[idx].name));
                     }
-                }).row();
+                }).left().row();
 
                 root.add(body).width(contentWidth()).padTop(2f);
                 buildSection(body);
-            }).left().padTop(settings.getInt("yoffssetfdpamel", -200) * 1f);
+            }).left();
+
+            full.update(() -> {
+                if(!attachTimer.get(20f)) return;
+                float offset = Core.scene.getHeight() - panelsBottom() + Scl.scl(settings.getInt("fdpanel-offset", 0));
+                if(Math.abs(offset - attachedOffset) > 0.5f){
+                    attachedOffset = offset;
+                    rootCell.padTop(Math.max(offset, 0f) / Scl.scl(1f));
+                    full.invalidate();
+                }
+            });
         });
+    }
+
+    private final Interval attachTimer = new Interval();
+    private float attachedOffset = -1f;
+
+    /**
+     * Lowest bottom edge (in scene coordinates) of the panels stacked along the left edge of the HUD, including the
+     * vanilla wave info and panels added by mods. The side panel is attached right under them.
+     */
+    private float panelsBottom(){
+        float[] bottom = {Core.scene.getHeight()};
+        collectPanels(ui.hudGroup, bottom);
+        return bottom[0];
+    }
+
+    private void collectPanels(Group group, float[] bottom){
+        for(Element e : group.getChildren()){
+            if(e == fdpanel || !e.visible || e.getWidth() <= 0f || e.getHeight() <= 0f) continue;
+
+            if(e instanceof Table table && table.getBackground() != null){
+                Vec2 pos = e.localToStageCoordinates(Tmp.v1.set(0f, 0f));
+                float top = pos.y + e.getHeight();
+                boolean leftEdge = pos.x <= Scl.scl(10f);
+                boolean small = e.getWidth() < Core.scene.getWidth() / 2f && e.getHeight() < Core.scene.getHeight() / 2f;
+                if(leftEdge && small && top >= Core.scene.getHeight() / 2f){
+                    bottom[0] = Math.min(bottom[0], pos.y);
+                }
+            }
+
+            if(e instanceof Group g) collectPanels(g, bottom);
+        }
+    }
+
+    /** Game-style octagon buttons: light border normally, accent border when hovered or selected. */
+    private static ImageButton.ImageButtonStyle boxStyle, boxActionStyle;
+    /** Text rows: transparent until hovered, accent octagon border when switched on. */
+    private static ImageButton.ImageButtonStyle rowStyle, rowActionStyle;
+
+    private void loadStyles(){
+        if(boxStyle != null) return;
+        boxStyle = new ImageButton.ImageButtonStyle(){{
+            up = Tex.buttonDown;
+            over = Tex.buttonOver;
+            down = Tex.buttonOver;
+            checked = Tex.buttonOver;
+        }};
+        boxActionStyle = new ImageButton.ImageButtonStyle(){{
+            up = Tex.buttonDown;
+            over = Tex.buttonOver;
+            down = Tex.button;
+        }};
+        rowStyle = new ImageButton.ImageButtonStyle(){{
+            up = Styles.none;
+            over = Tex.button;
+            down = Tex.buttonOver;
+            checked = Tex.buttonOver;
+        }};
+        rowActionStyle = new ImageButton.ImageButtonStyle(){{
+            up = Styles.none;
+            over = Tex.button;
+            down = Tex.buttonOver;
+        }};
+    }
+
+    private static float boxSize(){
+        return Math.max(rowSize() + 10f, 36f);
+    }
+
+    private static float gridIconSize(){
+        return boxSize() * 0.6f;
     }
 
     /** Width of the widest section, so the panel keeps one size across tabs and never gets clipped by long labels. */
@@ -415,7 +499,7 @@ public class PanelFragment extends Table{
             new Toast(1).add(bundle.get("setting.afkmode.name") + ": " + bundle.get(settings.getBool("afkmode") ? "mod.enabled" : "mod.disabled"));
         });
 
-        subheader(t, "client.autotransfer");
+        subheader(t, "fdpanel.transfer");
         toggle(t, Icon.upload, "fdpanel.autotransfer", () -> settings.getBool("autotransfer"), () -> {
             AutoTransfer.enabled = !AutoTransfer.enabled;
             settings.put("autotransfer", !settings.getBool("autotransfer"));
@@ -472,7 +556,7 @@ public class PanelFragment extends Table{
 
     /** Row that switches a flag; highlighted while the flag is on. */
     private static void toggle(Table t, Drawable icon, String key, Boolp checked, Runnable action){
-        t.button(b -> rowContent(b, icon, key, checked), Styles.clearNoneTogglei, action)
+        t.button(b -> rowContent(b, icon, key, checked), rowStyle, action)
             .update(b -> b.setChecked(checked.get()))
             .minHeight(rowSize()).tooltip(tooltip(key)).row();
     }
@@ -483,7 +567,7 @@ public class PanelFragment extends Table{
 
     /** Row that runs a one-off action. */
     private static void action(Table t, Drawable icon, String key, Runnable action){
-        t.button(b -> rowContent(b, icon, key, null), Styles.clearNonei, action).minHeight(rowSize()).tooltip(tooltip(key)).row();
+        t.button(b -> rowContent(b, icon, key, null), rowActionStyle, action).minHeight(rowSize()).tooltip(tooltip(key)).row();
     }
 
     /** Action row: left click runs it once, right click toggles running it automatically. */
@@ -493,7 +577,7 @@ public class PanelFragment extends Table{
             Label tag = b.add(bundle.get("fdpanel.auto")).color(Pal.accent).padLeft(4f).get();
             tag.setFontScale(0.75f);
             tag.visible(auto);
-        }, Styles.clearNoneTogglei, action).update(b -> b.setChecked(auto.get()))
+        }, rowStyle, action).update(b -> b.setChecked(auto.get()))
             .minHeight(rowSize()).tooltip(tooltip(key) + "\n[lightgray]" + bundle.get("fdpanel.autohint")).get();
 
         button.addListener(new InputListener(){
@@ -520,7 +604,7 @@ public class PanelFragment extends Table{
 
     private static void itemGrid(Table t, int columns, GridEntry... entries){
         t.table(g -> {
-            g.defaults().growX().height(Math.max(rowSize(), 32f)).pad(0f);
+            g.defaults().size(boxSize()).pad(2f);
             for(int i = 0; i < entries.length; i++){
                 entries[i].add(g);
                 if((i + 1) % columns == 0) g.row();
@@ -530,7 +614,7 @@ public class PanelFragment extends Table{
 
     /** Mining ore selector: item icon, dimmed while not selected. */
     private GridEntry itemToggle(Item item, String suffix, Boolp checked, Runnable flip){
-        return g -> g.button(new TextureRegionDrawable(item.uiIcon), Styles.clearNoneTogglei, iconSize(), () -> {
+        return g -> g.button(new TextureRegionDrawable(item.uiIcon), boxStyle, gridIconSize(), () -> {
             flip.run();
             updatemineitems();
         }).update(b -> {
@@ -540,11 +624,11 @@ public class PanelFragment extends Table{
     }
 
     private static GridEntry gridAction(Drawable icon, String key, Runnable action){
-        return g -> g.button(icon, Styles.clearNonei, iconSize(), action).tooltip(bundle.get(key));
+        return g -> g.button(icon, boxActionStyle, gridIconSize(), action).tooltip(bundle.get(key));
     }
 
     private static GridEntry transferTarget(Block block, String key, String setting, Boolc apply){
-        return g -> g.button(new TextureRegionDrawable(block.uiIcon), Styles.clearNoneTogglei, iconSize(), () -> {
+        return g -> g.button(new TextureRegionDrawable(block.uiIcon), boxStyle, gridIconSize(), () -> {
             boolean val = !settings.getBool(setting, false);
             settings.put(setting, val);
             apply.get(val);

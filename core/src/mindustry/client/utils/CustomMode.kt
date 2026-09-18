@@ -29,7 +29,7 @@ enum class CustomMode(
                     if (hasLoaded) return // Only attempt to enable the mod once
                     hasLoaded = true
 
-                    Log.warn("FloodCompat installed but disabled. Foo's will load it at runtime.")
+                    Log.warn("FloodCompat installed but disabled. GL Client will load it at runtime.")
 
                     mods.mods.remove(floodMod)
                     floodMod!!.dispose()

@@ -97,6 +97,6 @@ public class Version{
         if(build == -1){
             return "custom build";
         }
-        return (type.equals("official") ? modifier : type) + " build " + build + (revision == 0 ? "" : "." + revision) + "\n(Foo's Client Version: " + (clientVersion.equals("v0.0.0") ? "Dev" : clientVersion) + ")" + (commitHash.equals("unknown") ? "" : " (" + commitHash + ")");
+        return (type.equals("official") ? modifier : type) + " build " + build + (revision == 0 ? "" : "." + revision) + "\n(GL Client Version: " + (clientVersion.equals("v0.0.0") ? "Dev" : clientVersion) + ")" + (commitHash.equals("unknown") ? "" : " (" + commitHash + ")");
     }
 }

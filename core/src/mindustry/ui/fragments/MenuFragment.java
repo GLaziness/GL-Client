@@ -68,9 +68,9 @@ public class MenuFragment{
 
         parent.fill(c ->
             c.bottom().left().image(
-                    Core.atlas.find("flarogus")
-            ).tooltip("Foo's Client now includes Flarogus Client and Zxtej's client. Praise the almighty flarogus.")
-            .size(60, 60).pad(5)
+                    Core.atlas.find("gl-logo")
+            ).tooltip("GL Client - a fork of Foo's Client and the FD client")
+            .size(146, 64).pad(5)
         );
 
         //info icon
@@ -279,9 +279,9 @@ public class MenuFragment{
                             }
                         }),
                         new MenuButton("Github", Icon.github, () -> { // Link to client github
-                            if (!Core.app.openURI("https://github.com/mindustry-antigrief/mindustry-client")) {
+                            if (!Core.app.openURI("https://github.com/GLaziness/GL-Client")) {
                                 ui.showErrorMessage("@linkfail");
-                                Core.app.setClipboardText("https://github.com/mindustry-antigrief/mindustry-client");
+                                Core.app.setClipboardText("https://github.com/GLaziness/GL-Client");
                             }
                         }),
                         new MenuButton("@client.changelog", Icon.edit, ChangelogDialog.INSTANCE::show),
