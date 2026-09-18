@@ -82,7 +82,10 @@ public class GlobalChatDialog extends Table{
             root.image().color(Pal.accent).height(2f).growX().padTop(4f).padBottom(4f).row();
 
             lines.top().left();
-            pane = root.pane(lines).grow().scrollX(false).get();
+            // the wheel scrolls the chat only under the mouse, elsewhere it zooms the camera as usual
+            pane = root.pane(lines).grow().scrollX(false).update(p -> {
+                if(Core.scene.getScrollFocus() == p && !p.hasMouse()) Core.scene.setScrollFocus(null);
+            }).get();
             root.row();
 
             root.table(input -> {
