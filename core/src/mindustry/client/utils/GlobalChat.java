@@ -146,13 +146,13 @@ public class GlobalChat{
 
     public static void setGlobal(boolean on){
         Core.settings.put("globalchat", on);
-        postRaw(Core.bundle.get(on ? "client.globalchat.local.global.on" : "client.globalchat.local.global.off"));
+        postRaw(Core.bundle.get(on ? "client.globalchat.local.global.on" : "client.globalchat.local.global.off"), kindGlobal);
         apply();
     }
 
     public static void setServerOn(boolean on){
         Core.settings.put("globalchat-server", on);
-        postRaw(Core.bundle.get(on ? "client.globalchat.local.server.on" : "client.globalchat.local.server.off"));
+        postRaw(Core.bundle.get(on ? "client.globalchat.local.server.on" : "client.globalchat.local.server.off"), kindServer);
         apply();
     }
 
@@ -461,7 +461,8 @@ public class GlobalChat{
                 serverRole = "";
                 connected = true;
                 error = null;
-                postRaw(globalOn() ? Core.bundle.format("client.globalchat.connected", online) : Core.bundle.get("client.globalchat.connected.serveronly"));
+                if(globalOn()) postRaw(Core.bundle.format("client.globalchat.connected", online), kindGlobal);
+                else postRaw(Core.bundle.get("client.globalchat.connected.serveronly"), kindServer);
                 if(!serverHost.isEmpty() && serverOn()) sendServer();
             }
             case "online" -> online = msg.getInt("n", online);
@@ -473,14 +474,15 @@ public class GlobalChat{
                     String old = channel;
                     channel = h;
                     // a local line: joined the chat of a server or left it
-                    if(!h.isEmpty()) postRaw(Core.bundle.format("client.globalchat.local.joined", escape(h), serverOnline));
-                    else if(!old.isEmpty()) postRaw(Core.bundle.format("client.globalchat.local.left", escape(old)));
-                    // lines of the previous server go away, the chat server sends the history of the new one
+                    String note = !h.isEmpty() ? Core.bundle.format("client.globalchat.local.joined", escape(h), serverOnline) :
+                        !old.isEmpty() ? Core.bundle.format("client.globalchat.local.left", escape(old)) : null;
+                    // messages of the previous server go away (before the history of the new one comes), then the note
                     Core.app.post(() -> {
                         for(int i = log.size - 1; i >= 0; i--){
-                            if(lineKinds.get(i) == kindServer) removeLine(i);
+                            if(lineKinds.get(i) == kindServer && !lineTags.get(i).isEmpty()) removeLine(i);
                         }
-                        if(listener != null) listener.run();
+                        if(note != null) addLine(note, Strings.stripColors(note), "", "", kindServer);
+                        else if(listener != null) listener.run();
                     });
                 }
             }
@@ -569,20 +571,28 @@ public class GlobalChat{
     }
 
     private static void postRaw(String text){
-        postRaw(text, Strings.stripColors(text), "", "", kindSystem);
+        postRaw(text, kindSystem);
+    }
+
+    /** @param kind the tab the line is shown in: {@link #kindGlobal}, {@link #kindServer} or both ({@link #kindSystem}) */
+    private static void postRaw(String text, int kind){
+        postRaw(text, Strings.stripColors(text), "", "", kind);
     }
 
     private static void postRaw(String text, String copy, String from, String name, int kind){
-        Core.app.post(() -> {
-            log.add(text);
-            copies.add(copy);
-            lineTags.add(from);
-            lineNames.add(name);
-            lineKinds.add(kind);
-            if(log.size > maxLog) removeLine(0);
-            if(ui != null && ui.chatfrag != null) ui.chatfrag.addMessage(text);
-            if(listener != null) listener.run();
-        });
+        Core.app.post(() -> addLine(text, copy, from, name, kind));
+    }
+
+    /** Main thread only. */
+    private static void addLine(String text, String copy, String from, String name, int kind){
+        log.add(text);
+        copies.add(copy);
+        lineTags.add(from);
+        lineNames.add(name);
+        lineKinds.add(kind);
+        if(log.size > maxLog) removeLine(0);
+        if(ui != null && ui.chatfrag != null) ui.chatfrag.addMessage(text);
+        if(listener != null) listener.run();
     }
 
     private static void removeLine(int i){
