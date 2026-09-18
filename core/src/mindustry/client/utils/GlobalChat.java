@@ -146,11 +146,13 @@ public class GlobalChat{
 
     public static void setGlobal(boolean on){
         Core.settings.put("globalchat", on);
+        postRaw(Core.bundle.get(on ? "client.globalchat.local.global.on" : "client.globalchat.local.global.off"));
         apply();
     }
 
     public static void setServerOn(boolean on){
         Core.settings.put("globalchat-server", on);
+        postRaw(Core.bundle.get(on ? "client.globalchat.local.server.on" : "client.globalchat.local.server.off"));
         apply();
     }
 
@@ -271,7 +273,7 @@ public class GlobalChat{
     /** One line saying what the chat is doing: off, connected, or what went wrong. */
     public static String status(){
         if(!enabled()) return Core.bundle.get("client.globalchat.off");
-        if(connected) return Core.bundle.format("client.globalchat.status", online);
+        if(connected) return globalOn() ? Core.bundle.format("client.globalchat.status", online) : Core.bundle.get("client.globalchat.status.serveronly");
         String e = error;
         if(e == null) return Core.bundle.get("client.globalchat.connecting");
         // a banned player needs his tag to ask for an unban
@@ -459,7 +461,7 @@ public class GlobalChat{
                 serverRole = "";
                 connected = true;
                 error = null;
-                postRaw(Core.bundle.format("client.globalchat.connected", online));
+                postRaw(globalOn() ? Core.bundle.format("client.globalchat.connected", online) : Core.bundle.get("client.globalchat.connected.serveronly"));
                 if(!serverHost.isEmpty() && serverOn()) sendServer();
             }
             case "online" -> online = msg.getInt("n", online);
@@ -468,7 +470,11 @@ public class GlobalChat{
                 serverOnline = msg.getInt("online", 0);
                 serverRole = msg.getString("role", "");
                 if(!h.equals(channel)){
+                    String old = channel;
                     channel = h;
+                    // a local line: joined the chat of a server or left it
+                    if(!h.isEmpty()) postRaw(Core.bundle.format("client.globalchat.local.joined", escape(h), serverOnline));
+                    else if(!old.isEmpty()) postRaw(Core.bundle.format("client.globalchat.local.left", escape(old)));
                     // lines of the previous server go away, the chat server sends the history of the new one
                     Core.app.post(() -> {
                         for(int i = log.size - 1; i >= 0; i--){
