@@ -70,6 +70,7 @@ public class GlobalChatDialog extends Table{
             }).growX().row();
 
             root.label(() -> GlobalChat.enabled() ? GlobalChat.status() : Core.bundle.get("client.globalchat.off.window")).fontScale(0.85f).wrap().growX().left().padTop(2f).row();
+            root.add("@client.globalchat.copyhint").color(Color.gray).fontScale(0.75f).left().padTop(2f).row();
             root.image().color(Pal.accent).height(2f).growX().padTop(4f).padBottom(4f).row();
 
             lines.top().left();
@@ -123,8 +124,14 @@ public class GlobalChatDialog extends Table{
         if(GlobalChat.log.isEmpty()){
             lines.add("@client.globalchat.empty").color(Color.lightGray).pad(10f);
         }
-        for(String line : GlobalChat.log){
-            lines.add(line).left().growX().wrap().padBottom(3f).row();
+        // a click on a line copies its text
+        for(int i = 0; i < GlobalChat.log.size; i++){
+            String copy = GlobalChat.copies.get(i), line = GlobalChat.log.get(i);
+            lines.button(b -> b.add(line).left().growX().wrap(), Styles.flatt, () -> {
+                Core.app.setClipboardText(copy);
+                ui.showInfoFade("@client.globalchat.copied");
+            }).left().growX().padBottom(2f).get().left().margin(2f, 4f, 2f, 4f);
+            lines.row();
         }
         Core.app.post(() -> {
             pane.layout();

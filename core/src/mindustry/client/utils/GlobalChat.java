@@ -39,6 +39,8 @@ public class GlobalChat{
 
     /** Lines of the global chat for its window, main thread only. */
     public static final Seq<String> log = new Seq<>();
+    /** Text copied when a line of {@link #log} is clicked (the message itself, without the name). */
+    public static final Seq<String> copies = new Seq<>();
     /** Called on the main thread when a line is added to {@link #log}. */
     public static @Nullable Runnable listener;
 
@@ -239,9 +241,9 @@ public class GlobalChat{
             case "msg" -> {
                 String name = escape(msg.getString("name", "?"));
                 String from = msg.getString("tag", "");
-                String text = escape(msg.getString("text", ""));
+                String raw = msg.getString("text", "");
                 String self = from.equals(tag) ? "[accent]" : "[white]";
-                postRaw("[#7fd3ff][[GL][] " + self + name + "[] [gray]#" + escape(from) + "[]: [white]" + text);
+                postRaw("[#7fd3ff][[GL][] " + self + name + "[] [gray]#" + escape(from) + "[]: [white]" + escape(raw), raw);
             }
             case "sys" -> {
                 String code = msg.getString("code", "");
@@ -262,9 +264,17 @@ public class GlobalChat{
     }
 
     private static void postRaw(String text){
+        postRaw(text, Strings.stripColors(text));
+    }
+
+    private static void postRaw(String text, String copy){
         Core.app.post(() -> {
             log.add(text);
-            if(log.size > maxLog) log.remove(0);
+            copies.add(copy);
+            if(log.size > maxLog){
+                log.remove(0);
+                copies.remove(0);
+            }
             if(ui != null && ui.chatfrag != null) ui.chatfrag.addMessage(text);
             if(listener != null) listener.run();
         });
