@@ -415,7 +415,7 @@ public class SettingsMenuDialog extends BaseDialog{
 
         client.category("chat");
         client.checkPref("globalchat", false, mindustry.client.utils.GlobalChat::setEnabled);
-        client.checkPref("globalchat-server", false, mindustry.client.utils.GlobalChat::setEnabled);
+        client.checkPref("globalchat-server", true, mindustry.client.utils.GlobalChat::setEnabled);
         client.checkPref("clearchatonleave", true);
         client.checkPref("logmsgstoconsole", true);
         client.checkPref("clientjoinleave", true);

@@ -77,8 +77,6 @@ public class GlobalChat{
             });
             Events.on(EventType.MenuReturnEvent.class, e -> setServer(""));
         }
-        // the server chat appeared later: whoever already used the global chat gets it on too
-        if(!Core.settings.has("globalchat-server")) Core.settings.put("globalchat-server", globalOn());
         if(enabled()) start();
     }
 
@@ -134,9 +132,9 @@ public class GlobalChat{
         return Core.settings.getBool("globalchat", false);
     }
 
-    /** The chat of the server the player is on is on. */
+    /** The chat of the server the player is on is on (by default it is). */
     public static boolean serverOn(){
-        return Core.settings.getBool("globalchat-server", false);
+        return Core.settings.getBool("globalchat-server", true);
     }
 
     /** The player is on a game server now (its chat can be used when it is on). */
