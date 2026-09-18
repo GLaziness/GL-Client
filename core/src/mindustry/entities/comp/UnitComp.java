@@ -977,7 +977,7 @@ abstract class UnitComp implements Healthc, Physicsc, Hitboxc, Statusc, Teamc, I
     public void draw(){
         UnitType.currentAlpha =
             ClientVars.hidingUnits || ClientVars.hidingAirUnits && isFlying() ? 0 :
-            (controller() instanceof Player p && p.assisting && !p.isLocal() && !type.isModded()) ? UnitType.formationAlpha : // Don't draw modded units with partial transparency as it won't apply to custom UnitType.draw() code
+            (controller() instanceof Player p && !type.isModded() && ((p.assisting && !p.isLocal()) || (p.isLocal() && Core.settings.getBool("smarttransparency", false)))) ? UnitType.formationAlpha : // Don't draw modded units with partial transparency as it won't apply to custom UnitType.draw() code
             type.typeAlpha;
         if (UnitType.currentAlpha == 0) return; // Don't bother drawing what we can't see.
 

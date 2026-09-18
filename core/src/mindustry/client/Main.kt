@@ -284,12 +284,12 @@ object Main : ApplicationListener {
         return when {
             Vars.player.dead() -> Tmp.v1.set(0F, 0F)
             Server.current.ghost -> Tmp.v1.set(sentAimX(), sentAimY())
-            Navigation.currentlyFollowing is AssistPath && show ->
+            sendAssisting() && show ->
                 Tmp.v1.set(
                     FloatEmbed.embedInFloat(sentAimX(), ClientVars.FOO_USER),
                     FloatEmbed.embedInFloat(sentAimY(), ClientVars.ASSISTING)
                 )
-            Navigation.currentlyFollowing is AssistPath ->
+            sendAssisting() ->
                 Tmp.v1.set(
                     FloatEmbed.embedInFloat(sentAimX(), ClientVars.ASSISTING),
                     FloatEmbed.embedInFloat(sentAimY(), ClientVars.ASSISTING)
@@ -302,6 +302,9 @@ object Main : ApplicationListener {
             else -> Tmp.v1.set(sentAimX(), sentAimY())
         }
     }
+
+    /** Assisting (or GL "smarttransparency"): other Foo/GL clients draw this player semi-transparent. */
+    private fun sendAssisting() = Navigation.currentlyFollowing is AssistPath || Core.settings.getBool("smarttransparency", false)
 
     private fun sentAimX(): Float {
         val unit = Vars.player.unit()

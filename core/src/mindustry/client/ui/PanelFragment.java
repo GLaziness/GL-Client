@@ -329,7 +329,8 @@ public class PanelFragment extends Table{
             toggle(icon(Blocks.groundFactory), "fdpanel.unitsprogress", () -> viewprogressunit, () -> viewprogressunit = !viewprogressunit),
             toggle(Icon.crafting, "fdpanel.buildprogress", () -> viewprogresbuild, () -> viewprogresbuild = !viewprogresbuild),
             toggle(Icon.chartBar, "fdpanel.efficiency", () -> viewEfficiency, () -> viewEfficiency = !viewEfficiency),
-            settingToggle(Icon.chartAlt, "fdpanel.prodanal", "prod-anal")
+            settingToggle(Icon.chartAlt, "fdpanel.prodanal", "prod-anal"),
+            settingToggle(Icon.eyeOff, "fdpanel.smarttransparency", "smarttransparency")
         );
 
         header(root, "fdpanel.scan");
