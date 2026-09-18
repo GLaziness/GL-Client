@@ -20,6 +20,12 @@ import static mindustry.Vars.*;
  */
 public class GlobalChatDialog extends Table{
     private static GlobalChatDialog instance;
+    /** Message rows: see-through, only a light highlight under the mouse. */
+    private static final TextButton.TextButtonStyle lineStyle = new TextButton.TextButtonStyle(){{
+        font = Fonts.def;
+        fontColor = Color.white;
+        over = down = ((arc.scene.style.TextureRegionDrawable)Tex.whiteui).tint(1f, 1f, 1f, 0.12f);
+    }};
 
     private final Table lines = new Table();
     private ScrollPane pane;
@@ -127,7 +133,7 @@ public class GlobalChatDialog extends Table{
         // a click on a line copies its text
         for(int i = 0; i < GlobalChat.log.size; i++){
             String copy = GlobalChat.copies.get(i), line = GlobalChat.log.get(i);
-            lines.button(b -> b.add(line).left().growX().wrap(), Styles.flatt, () -> {
+            lines.button(b -> b.add(line).left().growX().wrap(), lineStyle, () -> {
                 Core.app.setClipboardText(copy);
                 ui.showInfoFade("@client.globalchat.copied");
             }).left().growX().padBottom(2f).get().left().margin(2f, 4f, 2f, 4f);
