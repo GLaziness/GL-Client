@@ -43,6 +43,8 @@ public class SelfBuilderAI extends AIController{
     public boolean onlyAssist;
 
     boolean found = false;
+    /** GL: damaged block the unit is flying to and repairing. */
+    public @Nullable Building healTarget;
     /** GL: how often an idle player unit looks for destroyed blocks, and how many it queues at once. */
     private static final float playerRebuildPeriod = 10f;
     private static final int maxQueued = 12;
@@ -284,20 +286,34 @@ public class SelfBuilderAI extends AIController{
             }
 
             // 5. АВТО-ЛЕЧЕНИЕ ПОВРЕЖДЕННЫХ БЛОКОВ
+            // GL: the target is kept between searches and followed every frame (it used to move for a single frame out of 30),
+            // the actual shooting is done by the input handler, see healing()
             if(healDamaged && unit.type.canHeal && unit.buildPlan() == null && following == null && !hold){
-                if(timer.get(timerTarget, 30f)){
+                if(timer.get(timerTarget, 30f) || (healTarget != null && !(healTarget.isValid() && healTarget.damaged()))){
                     Building damaged = Geometry.findClosest(unit.x, unit.y, indexer.getDamaged(unit.team));
-                    if(damaged != null && damaged.within(unit, buildRadius) && !isInEnemyTurretRange(damaged.x, damaged.y)){
-                        moveTo(damaged, unit.type.buildRange * 0.7f);
-                        unit.aim(damaged);
-                    }
+                    healTarget = damaged != null && damaged.within(unit, buildRadius) && !isInEnemyTurretRange(damaged.x, damaged.y) ? damaged : null;
                 }
+                if(healTarget != null){
+                    moveTo(healTarget, healRange() * 0.7f);
+                    moving = !unit.within(healTarget, healRange());
+                }
+            }else{
+                healTarget = null;
             }
         }
 
         if(!unit.type.flying){
             unit.updateBoosting(unit.type.boostWhenBuilding || moving || unit.floorOn().isDuct || unit.floorOn().damageTaken > 0f || unit.floorOn().isDeep());
         }
+    }
+
+    private float healRange(){
+        return Math.max(unit.type.range, tilesize * 3f);
+    }
+
+    /** GL: the unit is close enough to its heal target to shoot it. */
+    public boolean healing(){
+        return healTarget != null && unit != null && healTarget.isValid() && healTarget.damaged() && unit.within(healTarget, healRange());
     }
 
     public boolean isPlanSafeAndAffordable(BuildPlan plan){

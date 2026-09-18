@@ -1433,6 +1433,15 @@ public class DesktopInput extends InputHandler{
             if(unit == null || player.dead()) return;
             PanelFragment.aiNotPolyAi.unit(unit);
             PanelFragment.aiNotPolyAi.updateMovement();
+            // the AI only moves the unit; repairing blocks means shooting them with the heal weapons
+            boolean healing = PanelFragment.aiNotPolyAi.healing();
+            if(healing){
+                Building target = PanelFragment.aiNotPolyAi.healTarget;
+                unit.aim(target.x, target.y);
+                if(unit.type.faceTarget) unit.lookAt(target);
+            }
+            player.shooting = healing;
+            unit.controlWeapons(true, healing);
             player.mouseX = unit.aimX();
             player.mouseY = unit.aimY();
             return;
