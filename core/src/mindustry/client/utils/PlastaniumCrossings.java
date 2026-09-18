@@ -441,7 +441,8 @@ public class PlastaniumCrossings{
 
             for(int j = links.targets.size - 1; j >= 0; j--){
                 Building target = world.build(links.targets.get(j));
-                if(target == null || !(target.block instanceof ItemBridge) || target.team != player.team()) continue;
+                // wait until the phase bridge itself is built (an old bridge conveyor there has no power module)
+                if(target == null || !(target.block instanceof ItemBridge) || target.power == null || target.team != player.team()) continue;
                 if(!node.power.links.contains(target.pos()) && !target.power.links.contains(node.pos())){
                     ClientVars.configs.add(new ConfigRequest(node, target.pos()));
                 }
