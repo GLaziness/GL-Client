@@ -11,6 +11,7 @@ import mindustry.entities.units.*;
 import mindustry.game.EventType.*;
 import mindustry.gen.*;
 import mindustry.world.*;
+import mindustry.world.blocks.*;
 import mindustry.world.blocks.distribution.*;
 import mindustry.world.blocks.distribution.ItemBridge.*;
 import mindustry.world.blocks.liquid.*;
@@ -312,15 +313,10 @@ public class PlastaniumCrossings{
 
         int key = build.pos();
         if(failedNodes.contains(key)) return false;
-        if(movedNodes.add(key)){
-            Tile to = findNodeSpot(plans, build, node);
-            if(to == null){
-                failedNodes.add(key);
-                movedNodes.remove(key);
-                return false;
-            }
-            // the new node goes first so the grid is never cut
-            add(new BuildPlan(to.x, to.y, 0, node, nodeLinks(build, node, to).toArray(Point2.class)));
+        if(movedNodes.add(key) && !placeMovedNodes(plans, build, node)){
+            failedNodes.add(key);
+            movedNodes.remove(key);
+            return false;
         }
 
         // the conveyor can't replace a node: break it, the conveyor is placed once the tile is free
@@ -331,10 +327,55 @@ public class PlastaniumCrossings{
         return true;
     }
 
-    /** Closest free spot next to the line from which the node keeps as many of its links as possible. */
-    private static @Nullable Tile findNodeSpot(Seq<BuildPlan> plans, Building build, PowerNode node){
+    /**
+     * Rebuilds the node next to the line. If one spot can't reach everything the old node was connected to
+     * (e.g. a chain of nodes running across the line), a second node is placed on the other side and the two are linked.
+     */
+    private static boolean placeMovedNodes(Seq<BuildPlan> plans, Building build, PowerNode node){
+        Seq<Building> targets = nodeTargets(build);
         IntSet occupied = occupiedBy(result, plans);
-        int total = nodeLinkCount(build);
+
+        Tile a = findNodeSpot(build, node, targets, occupied, null);
+        if(a == null) return false;
+        Seq<Building> left = targets.select(t -> !covers(node, a, t));
+        // better to leave the node where it is than to cut the grid
+        if(left.size == targets.size && targets.size > 0) return false;
+
+        Tile b = null;
+        if(!left.isEmpty()){
+            a.getLinkedTilesAs(node, tempTiles).each(t -> occupied.add(t.pos()));
+            Tile spot = findNodeSpot(build, node, left, occupied, a);
+            if(spot != null && left.contains(t -> covers(node, spot, t))) b = spot;
+        }
+
+        // the new nodes go first so the grid is never cut
+        BuildPlan planA = new BuildPlan(a.x, a.y, 0, node, linksFrom(node, a, targets));
+        add(planA);
+        if(b != null){
+            BuildPlan planB = new BuildPlan(b.x, b.y, 0, node, linksFrom(node, b, left));
+            add(planB);
+            // link the two halves once both exist
+            nodeTargets.put(planA, IntSeq.with(b.pos()));
+        }
+        return true;
+    }
+
+    /** Buildings the old node is connected to: its lasers, plus the buildings it powers by touching them. */
+    private static Seq<Building> nodeTargets(Building build){
+        Seq<Building> out = new Seq<>();
+        for(int i = 0; i < build.power.links.size; i++){
+            Building other = world.build(build.power.links.get(i));
+            if(other != null && !out.contains(other)) out.add(other);
+        }
+        for(Building other : build.proximity){
+            if(other.power == null || !other.block.connectedPower || other.block instanceof StackConveyor || out.contains(other)) continue;
+            out.add(other);
+        }
+        return out;
+    }
+
+    /** Free spot closest to the old node that reaches the most targets (and the other new node, if given). */
+    private static @Nullable Tile findNodeSpot(Building build, PowerNode node, Seq<Building> targets, IntSet occupied, @Nullable Tile mustReach){
         Tile best = null;
         int bestKept = -1;
         float bestDst = Float.MAX_VALUE;
@@ -344,7 +385,8 @@ public class PlastaniumCrossings{
             for(int dy = -r; dy <= r; dy++){
                 Tile c = world.tile(build.tile.x + dx, build.tile.y + dy);
                 if(c == null || !free(c, node, occupied)) continue;
-                int kept = nodeLinks(build, node, c).size;
+                if(mustReach != null && !node.overlaps(c, mustReach) && !node.overlaps(mustReach, c)) continue;
+                int kept = targets.count(t -> covers(node, c, t));
                 float dst = c.dst2(build.tile);
                 if(kept > bestKept || (kept == bestKept && dst < bestDst)){
                     best = c;
@@ -353,38 +395,33 @@ public class PlastaniumCrossings{
                 }
             }
         }
-        // better to leave the node where it is than to cut the grid
-        return best != null && bestKept >= Math.min(total, 1) ? best : null;
+        return best;
     }
 
-    private static int nodeLinkCount(Building build){
-        int count = build.power.links.size;
-        for(Building other : build.proximity){
-            if(other.power != null && other.block.connectedPower && !(other.block instanceof StackConveyor)) count++;
-        }
-        return count;
+    /** Whether a node at this spot keeps the target powered: by laser, or by touching it. */
+    private static boolean covers(PowerNode node, Tile at, Building other){
+        return touches(node, at, other) || inRange(node, at, other);
     }
 
-    /** Links (relative to the new spot) the moved node should have: its lasers, plus the buildings it powered by touching them. */
-    private static Seq<Point2> nodeLinks(Building build, PowerNode node, Tile to){
+    private static boolean touches(PowerNode node, Tile at, Building other){
+        Seq<Tile> tiles = at.getLinkedTilesAs(node, new Seq<>());
+        return tiles.contains(t -> {
+            for(int d = 0; d < 4; d++){
+                Tile n = t.nearby(d);
+                if(n != null && n.build == other) return true;
+            }
+            return false;
+        });
+    }
+
+    /** Laser links (relative to the spot) to the targets the node reaches; touching ones need no laser. */
+    private static Point2[] linksFrom(PowerNode node, Tile at, Seq<Building> targets){
         Seq<Point2> out = new Seq<>();
-        IntSet added = new IntSet();
-        tempTiles.clear();
-        to.getLinkedTilesAs(node, tempTiles);
-
-        for(int i = 0; i < build.power.links.size; i++){
-            Building other = world.build(build.power.links.get(i));
-            if(other != null && inRange(node, to, other) && added.add(other.pos())) out.add(new Point2(other.tileX() - to.x, other.tileY() - to.y));
+        for(Building other : targets){
+            if(out.size >= node.maxNodes - 1) break;
+            if(!touches(node, at, other) && inRange(node, at, other)) out.add(new Point2(other.tileX() - at.x, other.tileY() - at.y));
         }
-        for(Building other : build.proximity){
-            if(other.power == null || !other.block.connectedPower || other.block instanceof StackConveyor || other.block instanceof PowerNode) continue;
-            // buildings touching the new spot are powered by contact anyway
-            if(tempTiles.contains(t -> t.build == other || t.nearby(0) != null && t.nearby(0).build == other || t.nearby(1) != null && t.nearby(1).build == other
-                || t.nearby(2) != null && t.nearby(2).build == other || t.nearby(3) != null && t.nearby(3).build == other)) continue;
-            if(inRange(node, to, other) && added.add(other.pos())) out.add(new Point2(other.tileX() - to.x, other.tileY() - to.y));
-        }
-        if(out.size > node.maxNodes) out.truncate(node.maxNodes);
-        return out;
+        return out.toArray(Point2.class);
     }
 
     private static boolean inRange(PowerNode node, Tile from, Building other){
@@ -495,8 +532,8 @@ public class PlastaniumCrossings{
 
             for(int j = links.targets.size - 1; j >= 0; j--){
                 Building target = world.build(links.targets.get(j));
-                // wait until the phase bridge itself is built (an old bridge conveyor there has no power module)
-                if(target == null || !(target.block instanceof ItemBridge) || target.power == null || target.team != player.team()) continue;
+                // wait until the target itself is built (an old bridge conveyor under a phase bridge plan has no power module)
+                if(target == null || target.power == null || target instanceof ConstructBlock.ConstructBuild || target.team != player.team()) continue;
                 if(!node.power.links.contains(target.pos()) && !target.power.links.contains(node.pos())){
                     ClientVars.configs.add(new ConfigRequest(node, target.pos()));
                 }
