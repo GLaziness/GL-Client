@@ -401,12 +401,12 @@ public class SettingsMenuDialog extends BaseDialog{
 
         // Client Settings, organized exactly the same as Bundle.properties: text first, sliders second, checked boxes third, unchecked boxes last
         client.category("antigrief");
-        client.sliderPref("reactorwarningdistance", 40, 0, 101, s -> s == 101 ? "Always" : s == 0 ? "Never" : Integer.toString(s));
-        client.sliderPref("reactorsounddistance", 25, 0, 101, s -> s == 101 ? "Always" : s == 0 ? "Never" : Integer.toString(s));
-        client.sliderPref("incineratorwarningdistance", 5, 0, 101, s -> s == 101 ? "Always" : s == 0 ? "Never" : Integer.toString(s));
-        client.sliderPref("incineratorsounddistance", 3, 0, 101, s -> s == 101 ? "Always" : s == 0 ? "Never" : Integer.toString(s));
-        client.sliderPref("slagwarningdistance", 10, 0, 101, s -> s == 101 ? "Always" : s == 0 ? "Never" : Integer.toString(s));
-        client.sliderPref("slagsounddistance", 5, 0, 101, s -> s == 101 ? "Always" : s == 0 ? "Never" : Integer.toString(s));
+        client.sliderPref("reactorwarningdistance", 40, 0, 101, s -> s == 101 ? "@client.slider.always" : s == 0 ? "@client.slider.never" : Integer.toString(s));
+        client.sliderPref("reactorsounddistance", 25, 0, 101, s -> s == 101 ? "@client.slider.always" : s == 0 ? "@client.slider.never" : Integer.toString(s));
+        client.sliderPref("incineratorwarningdistance", 5, 0, 101, s -> s == 101 ? "@client.slider.always" : s == 0 ? "@client.slider.never" : Integer.toString(s));
+        client.sliderPref("incineratorsounddistance", 3, 0, 101, s -> s == 101 ? "@client.slider.always" : s == 0 ? "@client.slider.never" : Integer.toString(s));
+        client.sliderPref("slagwarningdistance", 10, 0, 101, s -> s == 101 ? "@client.slider.always" : s == 0 ? "@client.slider.never" : Integer.toString(s));
+        client.sliderPref("slagsounddistance", 5, 0, 101, s -> s == 101 ? "@client.slider.always" : s == 0 ? "@client.slider.never" : Integer.toString(s));
         client.checkPref("breakwarnings", true); // Warnings for removal of certain sandbox stuff (mostly sources)
         client.checkPref("powersplitwarnings", true); // FINISHME: Add a minimum building requirement and a setting for it
         client.checkPref("viruswarnings", true, b -> LExecutor.virusWarnings = b);
@@ -445,10 +445,10 @@ public class SettingsMenuDialog extends BaseDialog{
         client.sliderPref("minzoom", 0, 0, 100, s -> Strings.fixed(Mathf.pow(10, 0.0217f * s) / 100f, 2) + "x");
         client.sliderPref("weatheropacity", 50, 0, 100, s -> s + "%");
         client.sliderPref("beamdrillopacity", 100, 0, 100, 1, s -> s + "%");
-        client.sliderPref("junctionview", 0, -1, 1, 1, s -> { Junction.setBaseOffset(s); return s == -1 ? "@client.left" : s == 1 ? "@client.right" : "Do not show"; });
-        client.sliderPref("itembridgeview", 0, 0, 1, 1, s -> {ItemBridge.setDrawItems(s == 1);return s == 1 ? "Show" : "Do not show";});
-        client.sliderPref("liquidbridgeview", 0, 0, 1, 1, s -> {mindustry.world.blocks.liquid.LiquidBridge.setDrawLiquids(s == 1);return s == 1 ? "Show" : "Do not show";});
-        client.sliderPref("spawntime", 5, -1, 60, s -> { ClientVars.spawnTime = 60 * s; if (Vars.pathfinder.thread == null) Vars.pathfinder.start(); return s == -1 ? "Solid Line" : s == 0 ? "@off" : String.valueOf(s); });
+        client.sliderPref("junctionview", 0, -1, 1, 1, s -> { Junction.setBaseOffset(s); return s == -1 ? "@client.left" : s == 1 ? "@client.right" : "@client.slider.hide"; });
+        client.sliderPref("itembridgeview", 0, 0, 1, 1, s -> {ItemBridge.setDrawItems(s == 1);return s == 1 ? "@client.slider.show" : "@client.slider.hide";});
+        client.sliderPref("liquidbridgeview", 0, 0, 1, 1, s -> {mindustry.world.blocks.liquid.LiquidBridge.setDrawLiquids(s == 1);return s == 1 ? "@client.slider.show" : "@client.slider.hide";});
+        client.sliderPref("spawntime", 5, -1, 60, s -> { ClientVars.spawnTime = 60 * s; if (Vars.pathfinder.thread == null) Vars.pathfinder.start(); return s == -1 ? "@client.slider.solidline" : s == 0 ? "@off" : String.valueOf(s); });
         client.sliderPref("traveltime", 10, 0, 60, s -> { ClientVars.travelTime = 60f / s; return s == 0 ? "@off" : String.valueOf(s); });
         client.sliderPref("formationopacity", 30, 10, 100, 5, s -> { UnitType.formationAlpha = s / 100f; return s + "%"; });
         client.sliderPref("hitboxopacity", 0, 0, 100, 5, s -> { UnitType.hitboxAlpha = s / 100f; return s == 0 ? "@off" : s + "%"; });
@@ -501,13 +501,13 @@ public class SettingsMenuDialog extends BaseDialog{
         client.textPref("keybind1ctrlcommand", "");
         client.textPref("keybind1altcommand", "");
         client.textPref("keybind1command", "");
-        client.sliderPref("minepathcap", 5000, -100, 5000, 100, s -> s == 0 ? "Unlimited" : s == -100 ? "Never" : String.valueOf(s));
-        client.sliderPref("defaultbuildpathradius", 0, 0, 250, 5, s -> s == 0 ? "Unlimited" : String.valueOf(s));
-        client.sliderPref("modautoupdate", 1, 0, 2, s -> s == 0 ? "@off" : s == 1 ? "In Background" : "Restart Game");
+        client.sliderPref("minepathcap", 5000, -100, 5000, 100, s -> s == 0 ? "@client.slider.unlimited" : s == -100 ? "@client.slider.never" : String.valueOf(s));
+        client.sliderPref("defaultbuildpathradius", 0, 0, 250, 5, s -> s == 0 ? "@client.slider.unlimited" : String.valueOf(s));
+        client.sliderPref("modautoupdate", 1, 0, 2, s -> s == 0 ? "@off" : s == 1 ? "@client.slider.background" : "@client.slider.restart");
         client.sliderPref("processorstatementscale", 80, 10, 100, 1, s -> String.format("%.2fx", s/100f)); // This is the most scuffed setting you have ever seen
-        client.sliderPref("automapvote", 0, 0, 4, s -> s == 0 ? "Never" : s == 4 ? "Random vote" : "Always " + new String[]{"downvote", "novote", "upvote"}[--s]);
-        client.sliderPref("pingexecutorthreads", OS.isWindows && !OS.is64Bit ? 5 : 65, 5, 105, 5, s -> s > 100 ? "Unlimited" : String.valueOf(s));
-        client.sliderPref("maxschematicslisted", 300, 0, 3000, 150, s -> s == 0 ? "Unlimited" : String.valueOf(s));
+        client.sliderPref("automapvote", 0, 0, 4, s -> s == 0 ? "@client.slider.never" : s == 4 ? "@client.slider.randomvote" : new String[]{"@client.slider.alwaysdownvote", "@client.slider.alwaysnovote", "@client.slider.alwaysupvote"}[--s]);
+        client.sliderPref("pingexecutorthreads", OS.isWindows && !OS.is64Bit ? 5 : 65, 5, 105, 5, s -> s > 100 ? "@client.slider.unlimited" : String.valueOf(s));
+        client.sliderPref("maxschematicslisted", 300, 0, 3000, 150, s -> s == 0 ? "@client.slider.unlimited" : String.valueOf(s));
         client.textPref("defaultbuildpathargs", "self"); // Keep it to just self. Skill issue players going afk make this too problematic otherwise. FINISHME: Add an afk detection system and revert this once we can reliably detect afk players and allow others to stop their pathing
         client.textPref("defaultminepathargs", "all");
         client.textPref("gamejointext", "");
