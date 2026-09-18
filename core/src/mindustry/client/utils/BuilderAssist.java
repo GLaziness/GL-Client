@@ -19,8 +19,9 @@ import static mindustry.Vars.*;
  */
 public class BuilderAssist{
     public static boolean enabled = false;
-
-    private static final UnitType[] types = {UnitTypes.nova, UnitTypes.vela};
+    /** Which of the two types help (right click on the panel button). */
+    public static boolean nova = Core.settings.getBool("builderassist-nova", true);
+    public static boolean vela = Core.settings.getBool("builderassist-vela", true);
     /** Units we switched to assist, with the command they had before. */
     private static final IntMap<UnitCommand> previous = new IntMap<>();
     /** Units someone switched away from assist by hand. */
@@ -40,9 +41,12 @@ public class BuilderAssist{
         Events.run(Trigger.update, () -> {
             if(!state.isGame() || player == null) return;
             if(enabled){
-                if(timer.get(120f)) update();
+                if(timer.get(120f)){
+                    release(false); // types switched off in the settings
+                    update();
+                }
             }else if(previous.size > 0){
-                release();
+                release(true);
             }
         });
     }
@@ -52,12 +56,19 @@ public class BuilderAssist{
         timer.reset(0, 120f); // apply right away
     }
 
+    public static void setType(UnitType type, boolean value){
+        if(type == UnitTypes.nova) nova = value;
+        else vela = value;
+        Core.settings.put("builderassist-" + type.name, value);
+        timer.reset(0, 120f);
+    }
+
+    private static boolean allowed(UnitType type){
+        return type == UnitTypes.nova ? nova : type == UnitTypes.vela && vela;
+    }
+
     private static boolean managed(Unit u){
-        if(u.team != player.team() || !u.isCommandable()) return false;
-        for(UnitType type : types){
-            if(u.type == type) return true;
-        }
-        return false;
+        return u.team == player.team() && u.isCommandable() && allowed(u.type);
     }
 
     private static void update(){
@@ -82,17 +93,33 @@ public class BuilderAssist{
         if(send.size > 0) Call.setUnitCommand(player, send.toArray(), UnitCommand.assistCommand);
     }
 
-    private static void release(){
+    /** Gives units their previous command back: all of them, or only those of types switched off. */
+    private static void release(boolean all){
         ObjectMap<UnitCommand, IntSeq> back = new ObjectMap<>();
+        IntSeq done = new IntSeq();
         for(var e : previous.entries()){
             Unit u = Groups.unit.getByID(e.key);
+            if(u != null && !all && allowed(u.type)) continue;
+            done.add(e.key);
             if(u == null || !(u.controller() instanceof CommandAI ai) || ai.command != UnitCommand.assistCommand) continue;
             back.get(e.value, IntSeq::new).add(e.key);
         }
         for(var e : back.entries()){
             Call.setUnitCommand(player, e.value.toArray(), e.key);
         }
-        previous.clear();
-        manual.clear();
+        for(int i = 0; i < done.size; i++) previous.remove(done.get(i));
+        if(all) manual.clear();
+    }
+
+    /** Right click on the panel button: which types help. */
+    public static void showSettings(){
+        var dialog = new mindustry.ui.dialogs.BaseDialog("@fdpanel.novaassist");
+        dialog.addCloseButton();
+        dialog.cont.defaults().left().pad(6f);
+        for(UnitType type : new UnitType[]{UnitTypes.nova, UnitTypes.vela}){
+            dialog.cont.check("", allowed(type), b -> setType(type, b)).get().add(new arc.scene.ui.Image(type.uiIcon)).size(40f).padLeft(8f);
+            dialog.cont.add(type.localizedName).padLeft(8f).row();
+        }
+        dialog.show();
     }
 }

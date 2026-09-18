@@ -381,7 +381,7 @@ public class PanelFragment extends Table{
                 autoFixPower = !autoFixPower;
                 fixPowerTimer.reset(0, 0f); // the first automatic run waits a full minute
             }),
-            toggle(icon(UnitTypes.nova), "fdpanel.novaassist", () -> BuilderAssist.enabled, BuilderAssist::toggle),
+            withSettings(toggle(icon(UnitTypes.nova), "fdpanel.novaassist", () -> BuilderAssist.enabled, BuilderAssist::toggle), BuilderAssist::showSettings),
             action(Icon.logic, "fdpanel.fixcode", () -> ClientVars.clientCommandHandler.handleMessage("!fixcode r", player)),
             settingToggle(Icon.eraser, "fdpanel.schemcleanup", "placeSchematicWithCleanup"),
             settingToggle(icon(Blocks.itemBridge), "fdpanel.plastbridges", "plastbridges"),
