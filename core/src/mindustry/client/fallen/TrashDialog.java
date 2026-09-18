@@ -1,17 +1,19 @@
 package mindustry.client.fallen;
 
 import arc.*;
-import arc.func.Cons;
+import arc.func.*;
 import arc.graphics.*;
 import arc.input.*;
 import arc.math.*;
 import arc.scene.event.*;
+import arc.scene.style.*;
 import arc.scene.ui.*;
 import arc.scene.ui.layout.*;
 import arc.struct.*;
 import arc.util.*;
 import mindustry.*;
 import mindustry.client.ClientVars;
+import mindustry.client.navigation.*;
 import mindustry.client.utils.AutoTransfer;
 import mindustry.gen.*;
 import mindustry.graphics.*;
@@ -26,9 +28,20 @@ import static mindustry.Vars.*;
 
 public class TrashDialog extends BaseDialog {
     private final Table all = new Table();
+    private final Table unitGrid = new Table();
+    /** Width of the section column, recalculated on every rebuild to fit the screen. */
+    private float width = 600f;
 
     public static float iconunitsize = 48f;
 
+    private static final String[][] assistShapes = {
+        {"circle", "@client.fdtrash.shape.circle"},
+        {"square", "@client.fdtrash.shape.square"},
+        {"star", "@client.fdtrash.shape.star"},
+        {"hold", "@client.fdtrash.shape.hold"},
+        {"line", "@client.fdtrash.shape.line"},
+        {"figure8", "@client.fdtrash.shape.figure8"}
+    };
 
     public TrashDialog(){
         super("@trashbase");
@@ -38,401 +51,233 @@ public class TrashDialog extends BaseDialog {
         shown(this::rebuild);
         onResize(this::rebuild);
 
-        all.margin(20).marginTop(0f);
         cont.pane(all).scrollX(false).grow();
     }
 
     void rebuild(){
         all.clear();
-        all.top();
+        all.top().margin(10f).marginBottom(30f);
+        width = Math.min(600f, Core.graphics.getWidth() / Scl.scl(1f) - 60f);
 
-        all.add("@client.fdtrash.slidicon").left().row();
+        section(Icon.units, "@client.fdtrash.units", t -> {
+            t.add("@client.fdtrash.units.hint").color(Color.lightGray).wrap().growX().left().padBottom(6f).row();
+            t.add(unitGrid).left().row();
+            rebuildUnitGrid();
+            slider(t, "@client.fdtrash.slidicon", 16, 128, 4, iconunitsize, v -> {
+                iconunitsize = v;
+                rebuildUnitGrid();
+            }, "");
+        });
 
-        all.table(sl -> {
-            var s = new Slider(16, 128, 4, false);
-            s.setValue(iconunitsize);
-            var l = new Label("" + (int)iconunitsize, Styles.outlineLabel);
+        section(Icon.commandAttack, "@client.fdtrash.autoshoot", t -> {
+            slider(t, "@client.fdtrash.overrange", -20, 70, 1, Core.settings.getFloat("overrange", 0f),
+                v -> Core.settings.put("overrange", v), "%");
+        });
 
-            s.changed(() -> {
-                iconunitsize = s.getValue();
-                l.setText("" + (int)iconunitsize);
+        section(Icon.players, "@client.fdtrash.assistset", t -> {
+            check(t, "@client.setting.circleassist.name", Core.settings.getBool("circleassist"), b -> {
+                Core.settings.put("circleassist", b);
+                if(Navigation.currentlyFollowing instanceof AssistPath path) path.setCircling(b);
             });
 
-            sl.add(s).width(400);
-            sl.add(l).padLeft(10);
-
-            sl.button(Icon.refresh, this::rebuild).size(40).padLeft(20);
-        }).left().row();
-
-        addSeparator(Pal.accent);
-
-        all.table(list -> {
-            list.left();
-            int cols = (int) Mathf.clamp((graphics.getWidth() - Scl.scl(60)) / Scl.scl(iconunitsize + 10), 1, 40);
-            int count = 0;
-
-            for(UnitType unit : Vars.content.units()){
-                if(unit.isHidden()) continue;
-
-                Image image = new Image(unit.uiIcon).setScaling(Scaling.fit);
-                Cell<Image> cell = list.add(image).size(iconunitsize).pad(3);
-
-                image.addListener(new HandCursorListener());
-                image.addListener(new Tooltip(t -> t.background(Tex.button).add(unit.localizedName)));
-
-                image.clicked(() -> {
-                    if(Core.input.keyDown(KeyCode.shiftLeft)){
-                        hide();
-                        InputHandler.last_select_units_type = unit;
-                        InputHandler.selectUnitsType(unit);
-                    }else{
-                        hide();
-                        String message = "!uc " + unit.localizedName;
-                        ClientVars.clientCommandHandler.handleMessage(message, player);
-                    }
-                });
-
-                if(++count % cols == 0) list.row();
-            }
-        }).growX().left().padBottom(15).row();
-
-        all.add("@client.fdtrash.autoshoot").left().row();
-        addSeparator(Pal.accent);
-        all.table(ash -> {
-            addSlider(ash, "@client.fdtrash.overrange", -20, 70, 1,
-                    Core.settings.getFloat("overrange", 0f) ,
-                    v -> Core.settings.put("overrange", v ), "%");
-        }).left().row();
-
-        all.add("@client.fdtrash.assistset").left().row();
-        addSeparator(Pal.accent);
-
-        all.table(tas -> {
-            tas.defaults().left().pad(4);
-
-            tas.check("@client.setting.circleassist.name", Core.settings.getBool("circleassist"), b -> Core.settings.put("circleassist", b)).row();
-            //tas.check("@setting.assistbutnuance.name", Core.settings.getBool("assistbutnuance"), b -> Core.settings.put("assistbutnuance", b)).row();
-
-            // Orbit / route shape: circle, square, star, hold, line, figure8
-            tas.table(shapes -> {
-                shapes.add("@client.fdtrash.circleassistshape").minWidth(180).left().padRight(8).row();
+            t.add("@client.fdtrash.circleassistshape").color(Color.lightGray).left().padTop(8f).row();
+            t.table(shapes -> {
+                shapes.left().defaults().height(40f).growX().uniformX().pad(2f);
                 ButtonGroup<TextButton> group = new ButtonGroup<>();
-                group.setMinCheckCount(1);
-                group.setMaxCheckCount(1);
                 String current = Core.settings.getString("circleassistshape", "circle");
-                String[][] opts = {
-                    {"circle", "@client.fdtrash.shape.circle"},
-                    {"square", "@client.fdtrash.shape.square"},
-                    {"star", "@client.fdtrash.shape.star"},
-                    {"hold", "@client.fdtrash.shape.hold"},
-                    {"line", "@client.fdtrash.shape.line"},
-                    {"figure8", "@client.fdtrash.shape.figure8"}
-                };
-                shapes.table(row1 -> {
-                    for(int i = 0; i < 3; i++){
-                        String key = opts[i][0];
-                        row1.button(opts[i][1], Styles.togglet, () -> Core.settings.put("circleassistshape", key))
-                            .group(group).checked(key.equals(current)).size(90f, 32f).padRight(4);
-                    }
-                }).left().row();
-                shapes.table(row2 -> {
-                    for(int i = 3; i < opts.length; i++){
-                        String key = opts[i][0];
-                        row2.button(opts[i][1], Styles.togglet, () -> Core.settings.put("circleassistshape", key))
-                            .group(group).checked(key.equals(current)).size(90f, 32f).padRight(4);
-                    }
-                }).left();
-            }).left().row();
+                for(int i = 0; i < assistShapes.length; i++){
+                    String key = assistShapes[i][0];
+                    shapes.button(assistShapes[i][1], Styles.flatTogglet, () -> Core.settings.put("circleassistshape", key))
+                        .group(group).checked(key.equals(current))
+                        .disabled(b -> !Core.settings.getBool("circleassist"));
+                    if(i == 2) shapes.row();
+                }
+            }).growX().padBottom(4f).row();
 
-            // Negative speed = clockwise orbit, positive = counter-clockwise
-            addSlider(tas, "@client.fdtrash.circleassistspeed", -100, 100, 1,
-                    Core.settings.getFloat("circleassistspeed") * 100,
-                    v -> Core.settings.put("circleassistspeed", v / 100f), "%");
+            slider(t, "@client.fdtrash.circleassistspeed", -100, 100, 1, Core.settings.getFloat("circleassistspeed", 0.25f) * 100,
+                v -> Core.settings.put("circleassistspeed", v / 100f), "%");
+            slider(t, "@client.fdtrash.assistdistance", 0, 50, 1, Core.settings.getFloat("assistdistance", 5f),
+                v -> Core.settings.put("assistdistance", v), "");
+        });
 
-            addSlider(tas, "@client.fdtrash.assistdistance", 0, 50, 1,
-                    Core.settings.getFloat("assistdistance"),
-                    v -> Core.settings.put("assistdistance", v), "px");
-        }).left().row();
-
-        all.add("@client.fdtrash.autotransfer").left().padTop(10).row();
-        addSeparator(Pal.accent);
-        all.table(ttt -> {
-            ttt.defaults().left().pad(4);
-
-
-            ttt.check("@client.fdtrash.at.enabled", Core.settings.getBool("autotransfer", false), b -> {
+        section(Icon.box, "@client.fdtrash.autotransfer", t -> {
+            check(t, "@client.fdtrash.at.enabled", Core.settings.getBool("autotransfer", false), b -> {
                 Core.settings.put("autotransfer", b);
                 AutoTransfer.enabled = b;
-            }).row();
-
-            ttt.check("@client.fdtrash.at.fromcores", Core.settings.getBool("autotransfer-fromcores", true), b -> {
+            });
+            check(t, "@client.fdtrash.at.fromcores", Core.settings.getBool("autotransfer-fromcores", true), b -> {
                 Core.settings.put("autotransfer-fromcores", b);
                 AutoTransfer.Settings.setFromCores(b);
-            }).row();
-
-            ttt.check("@client.fdtrash.at.fromcontainers", Core.settings.getBool("autotransfer-fromcontainers", true), b -> {
+            });
+            check(t, "@client.fdtrash.at.fromcontainers", Core.settings.getBool("autotransfer-fromcontainers", true), b -> {
                 Core.settings.put("autotransfer-fromcontainers", b);
                 AutoTransfer.Settings.setFromContainers(b);
-            }).row();
+            });
 
-            addSlider(ttt, "@client.fdtrash.at.mincore", 0, 5000, 1,
-                    (float)Core.settings.getInt("autotransfer-mincoreitems", 10),
-                    v -> {
-                        Core.settings.put("autotransfer-mincoreitems", v.intValue());
-                        AutoTransfer.Settings.setMinCoreItems(v.intValue());
-                    }, "");
+            slider(t, "@client.fdtrash.at.mincore", 0, 5000, 10, Core.settings.getInt("autotransfer-mincoreitems", 10), v -> {
+                Core.settings.put("autotransfer-mincoreitems", v.intValue());
+                AutoTransfer.Settings.setMinCoreItems(v.intValue());
+            }, "");
+            slider(t, "@client.fdtrash.at.delay", 0, 500, 5, Core.settings.getFloat("autotransfer-transferdelay", 60f), v -> {
+                Core.settings.put("autotransfer-transferdelay", v);
+                AutoTransfer.Settings.setDelay(v);
+            }, " " + Core.bundle.get("client.fdtrash.ticks"));
 
-            addSlider(ttt, "@client.fdtrash.at.delay", 0, 500, 1,
-                    Core.settings.getFloat("autotransfer-transferdelay", 60F),
-                    v -> {
-                        Core.settings.put("autotransfer-transferdelay", v);
-                        AutoTransfer.Settings.setDelay(v);
-                    }, " ticks");
-
-
-            all.add("@client.fdtrash.autotransfer.filters").left().padTop(5).row();
-            all.table(filters -> {
-                filters.defaults().left().pad(4);
-
+            t.add("@client.fdtrash.autotransfer.filters").color(Color.lightGray).left().padTop(8f).row();
+            t.table(filters -> {
+                filters.left().defaults().left().padRight(20f).padTop(4f);
                 filters.check("@client.fdtrash.at.t_turrets", Core.settings.getBool("autotransfer-t-turrets"), b -> {
                     Core.settings.put("autotransfer-t-turrets", b);
                     AutoTransfer.Settings.setTargetTurrets(b);
                 });
-
                 filters.check("@client.fdtrash.at.t_prod", Core.settings.getBool("autotransfer-t-prod"), b -> {
                     Core.settings.put("autotransfer-t-prod", b);
                     AutoTransfer.Settings.setTargetProduction(b);
                 });
-
                 filters.row();
-
                 filters.check("@client.fdtrash.at.t_units", Core.settings.getBool("autotransfer-t-units"), b -> {
                     Core.settings.put("autotransfer-t-units", b);
                     AutoTransfer.Settings.setTargetUnitFactories(b);
                 });
-
                 filters.check("@client.fdtrash.at.t_recons", Core.settings.getBool("autotransfer-t-recons"), b -> {
                     Core.settings.put("autotransfer-t-recons", b);
                     AutoTransfer.Settings.setTargetReconstructors(b);
                 });
-                addSeparator(Pal.gray);
             }).left().row();
+        });
 
-        }).left().row();
+        section(Icon.eye, "@client.fdtrash.light", t -> {
+            check(t, "@client.fdtrash.enableDarkness", enableDarkness, b -> enableDarkness = b);
+            check(t, "@client.fdtrash.enableLight", enableLight, b -> enableLight = b);
+            check(t, "@client.fdtrash.fog", state.rules.fog, b -> state.rules.fog = b);
+        });
 
-        addSeparator(Pal.accent);
-
-//        all.add("@client.fdtrash.mining").left().padTop(10).row();
-//
-//        all.table(tt -> {
-//            tt.defaults().left().pad(4);
-//            addSlider(tt, "@client.fdtrash.minUnitsPerResource", 0, 15, 1,
-//                    Core.settings.getFloat("fd-minUMine", 1f),
-//                    v -> {
-//                        Core.settings.put("fd-minUMine", v);
-//                        PanelFragment.minMinUnitsSet(v.intValue());
-//                    }, " x");
-//
-//            addSlider(tt, "@client.fdtrash.crisisThreshold", 1f, 50f, 1f,
-//                    PanelFragment.crisisThreshold * 100,
-//                    v -> {
-//                        PanelFragment.crisisThreshold = v/100;
-//                    }, " %");
-//            tt.check("@client.fdtrash.mineMonos", PanelFragment.mineMonos, b -> PanelFragment.mineMonos = b).row();
-//            tt.check("@client.fdtrash.minePolys", PanelFragment.minePolys, b -> PanelFragment.minePolys = b).row();
-//            tt.check("@client.fdtrash.minePulss", PanelFragment.minePulss, b -> PanelFragment.minePulss = b).row();
-//            tt.check("@client.fdtrash.mineQuazs", PanelFragment.mineQuazs, b -> PanelFragment.mineQuazs = b).row();
-//            tt.check("@client.fdtrash.mineMegas", PanelFragment.mineMegas, b -> PanelFragment.mineMegas = b).row();
-//            tt.check("@client.fdtrash.megaAutoHeal", PanelFragment.autoHealMegas, b -> PanelFragment.autoHealMegas = b).row();
-//            addSlider(tt, "@client.fdtrash.megadistheal", 10, 500, 10,
-//                    PanelFragment.autoHealDist,
-//                    v -> {
-//                        PanelFragment.autoHealDist = v;
-//                    }, " x");
-//
-//            addSlider(tt, "@client.fdtrash.updatetime", 1, 20, 1,
-//                    MinersFDAI.AIMiningUpdateTime,
-//                    v -> {
-//                        MinersFDAI.AIMiningUpdateTime = v.intValue();
-//                        Core.settings.put("AIUpTime", v.intValue());
-//                    }, " x");
-//
-//
-//        }).left().row();
-
-        all.add("@client.fdtrash.light").left().padTop(10).row();
-        addSeparator(Pal.accent);
-
-        all.table(tt -> {
-            tt.defaults().left().pad(4);
-            tt.check("@client.fdtrash.enableDarkness", enableDarkness, b -> enableDarkness = b).row();
-            tt.check("@client.fdtrash.enableLight", enableLight, b -> enableLight = b).row();
-            tt.check("@client.fdtrash.fog", state.rules.fog, b -> state.rules.fog = b).row();
-        }).left().row();
-
-        all.add("@client.fdtrash.frags").left().padTop(10).row();
-        addSeparator(Pal.accent);
-
-        all.add("@client.fdtrash.frags").left().color(Pal.accent).row();
-
-        // --- WAVE FRAGMENT SETTINGS ---
-        all.add("@client.fdtrash.wavefrag").left().padTop(10).row();
-        all.table(main -> {
-            main.left();
-
-            // Левая колонка: вертикальная таблица со слайдерами
-            main.table(sliders -> {
-                sliders.defaults().left();
-                addSlider(sliders, "@client.fdtrash.wavefragheigh", 50, 700, 50,
-                        Core.settings.getFloat("wavefragheigh", 400),
-                        vh -> {
-                            Core.settings.put("wavefragheigh", vh);
-                            if(ui.waveInfoFrag != null) ui.waveInfoFrag.updateSize();
-                        }, "px");
-
-                addSlider(sliders, "@client.fdtrash.wavefragwidt", 50, 700, 50,
-                        Core.settings.getFloat("wavefragwidth", 400),
-                        vw -> {
-                            Core.settings.put("wavefragwidth", vw);
-                            if(ui.waveInfoFrag != null) ui.waveInfoFrag.updateSize();
-                        }, "px");
-
-                addSlider(sliders, "@client.fdtrash.wave_font_offset", 1, 3, 0.1f,
-                        Core.settings.getFloat("wave_font_offset", 1),
-                        vo -> {
-                            Core.settings.put("wave_font_offset", vo);
-                            if(ui.waveInfoFrag != null) ui.waveInfoFrag.updateSize();
-                        }, "px");
-            }).left();
-
-            // Правая часть: Кнопка сброса (будет справа от таблицы слайдеров)
-            main.button(t -> {
-                t.image(Icon.refresh).row();
-                t.add("Update").fontScale(0.7f);
-            }, Styles.defaulti, () -> {
+        section(Icon.layers, "@client.fdtrash.frags", t -> {
+            subheader(t, "@client.fdtrash.wavefrag", () -> {
                 Core.settings.remove("wavefrag-x");
                 Core.settings.remove("wavefrag-y");
-                if(ui.waveInfoFrag != null) ui.waveInfoFrag.updateSize(); // Вызываем обновление размеров
-                ui.showInfoFade("Position Reset");
-            }).size(70f, 80f).padLeft(10f); // Задаем размер и отступ слева
+                if(ui.waveInfoFrag != null){
+                    ui.waveInfoFrag.resetPos();
+                    ui.waveInfoFrag.updateSize();
+                }
+            });
+            slider(t, "@client.fdtrash.wavefragheigh", 50, 700, 50, Core.settings.getFloat("wavefragheigh", 400), v -> {
+                Core.settings.put("wavefragheigh", v);
+                if(ui.waveInfoFrag != null) ui.waveInfoFrag.updateSize();
+            }, "px");
+            slider(t, "@client.fdtrash.wavefragwidt", 50, 700, 50, Core.settings.getFloat("wavefragwidth", 400), v -> {
+                Core.settings.put("wavefragwidth", v);
+                if(ui.waveInfoFrag != null) ui.waveInfoFrag.updateSize();
+            }, "px");
+            slider(t, "@client.fdtrash.wave_font_offset", 1, 3, 0.1f, Core.settings.getFloat("wave_font_offset", 1), v -> {
+                Core.settings.put("wave_font_offset", v);
+                if(ui.waveInfoFrag != null) ui.waveInfoFrag.updateSize();
+            }, "x");
 
-            main.button(t -> {
-                t.image(Icon.refresh).row();
-                t.add("Reset").fontScale(0.7f);
-            }, Styles.defaulti, () -> {
-                Core.settings.remove("wavefrag-x");
-                Core.settings.remove("wavefrag-y");
-                if(ui.waveInfoFrag != null) ui.waveInfoFrag.resetPos();
-                ui.showInfoFade("Position Reset");
-            }).size(70f, 80f).padLeft(10f); // Задаем размер и отступ слева
-
-
-        }).left().row();
-
-        addSeparator(Pal.accent); // Разделительная линия
-
-        // --- MAP FRAGMENT SETTINGS ---
-        all.add("@client.fdtrash.mapfrag").left().padTop(10).row();
-        all.table(main -> {
-            main.left();
-
-            main.table(sliders -> {
-                sliders.defaults().left();
-                addSlider(sliders, "@client.fdtrash.mapfragheigh", 50, 1000, 50,
-                        Core.settings.getFloat("mapfragheigh", 700),
-                        v -> {
-                            Core.settings.put("mapfragheigh", v);
-                            if(ui.mapInfoFrag != null) ui.mapInfoFrag.updateSize();
-                        }, "px");
-
-                addSlider(sliders, "@client.fdtrash.mapfragwidt", 50, 1000, 50,
-                        Core.settings.getFloat("mapfragwidth", 500),
-                        v -> {
-                            Core.settings.put("mapfragwidth", v);
-                            if(ui.mapInfoFrag != null) ui.mapInfoFrag.updateSize();
-                        }, "px");
-            }).left();
-
-            main.button(t -> {
-                t.image(Icon.refresh).row();
-                t.add("Update").fontScale(0.7f);
-            }, Styles.defaulti, () -> {
+            subheader(t, "@client.fdtrash.mapfrag", () -> {
                 Core.settings.remove("mapfrag-x");
                 Core.settings.remove("mapfrag-y");
+                if(ui.mapInfoFrag != null){
+                    ui.mapInfoFrag.resetPos();
+                    ui.mapInfoFrag.updateSize();
+                }
+            });
+            slider(t, "@client.fdtrash.mapfragheigh", 50, 1000, 50, Core.settings.getFloat("mapfragheigh", 700), v -> {
+                Core.settings.put("mapfragheigh", v);
                 if(ui.mapInfoFrag != null) ui.mapInfoFrag.updateSize();
-                ui.showInfoFade("Position Reset");
-            }).size(70f, 80f).padLeft(10f);
+            }, "px");
+            slider(t, "@client.fdtrash.mapfragwidt", 50, 1000, 50, Core.settings.getFloat("mapfragwidth", 500), v -> {
+                Core.settings.put("mapfragwidth", v);
+                if(ui.mapInfoFrag != null) ui.mapInfoFrag.updateSize();
+            }, "px");
 
-            main.button(t -> {
-                t.image(Icon.refresh).row();
-                t.add("Reset").fontScale(0.7f);
-            }, Styles.defaulti, () -> {
-                Core.settings.remove("mapfrag-x");
-                Core.settings.remove("mapfrag-y");
-                if(ui.mapInfoFrag != null) ui.mapInfoFrag.resetPos();
-                ui.showInfoFade("Position Reset");
-            }).size(70f, 80f).padLeft(10f);
+            subheader(t, "@client.fdtrash.uicontrolfrag", null);
+            slider(t, "@client.fdtrash.uicontrolfragoffset", -2000, 2000, 50, Core.settings.getFloat("uicontrolfragoffset", 0),
+                v -> Core.settings.put("uicontrolfragoffset", v), "px");
+        });
+    }
 
-        }).left().row();
+    private void rebuildUnitGrid(){
+        unitGrid.clear();
+        unitGrid.left();
+        int cols = Math.max(1, (int)((width - 30f) / (iconunitsize + 6f)));
+        int count = 0;
 
-        // --- UCONTROL FRAG SETTINGS ---
-        addSeparator(Pal.accent);
+        for(UnitType unit : Vars.content.units()){
+            if(unit.isHidden()) continue;
 
-        all.add("@client.fdtrash.uicontrolfrag").left().padTop(10).row();
-        all.table(main -> {
-            main.left();
-            main.table(sliders -> {
-                sliders.defaults().left();
-                addSlider(sliders, "@client.fdtrash.uicontrolfragoffset", -2000, 2000, 50,
-                        Core.settings.getFloat("uicontrolfragoffset", 0),
-                        vh -> {
-                            Core.settings.put("uicontrolfragoffset", vh);
-                        }, "px");
-            }).left();
-        }).left().row();
-        addSeparator(Pal.accent);
+            unitGrid.button(new TextureRegionDrawable(unit.uiIcon), Styles.clearNonei, iconunitsize, () -> {
+                hide();
+                if(Core.input.keyDown(KeyCode.shiftLeft)){
+                    InputHandler.last_select_units_type = unit;
+                    InputHandler.selectUnitsType(unit);
+                }else{
+                    ClientVars.clientCommandHandler.handleMessage("!uc " + unit.localizedName, player);
+                }
+            }).size(iconunitsize + 6f).tooltip(unit.localizedName);
 
+            if(++count % cols == 0) unitGrid.row();
+        }
+    }
 
+    /** A titled block in the style of the vanilla settings categories: accent title, accent line, dark panel. */
+    private void section(Drawable icon, String title, Cons<Table> content){
+        all.table(head -> {
+            head.left();
+            head.image(icon).color(Pal.accent).size(24f).padRight(8f);
+            head.add(title).color(Pal.accent).left();
+        }).width(width).padTop(16f).left().row();
+        all.image().color(Pal.accent).height(3f).width(width).padTop(4f).padBottom(6f).row();
 
-        // --- AG SETTINGS ---
-//
-//        all.add("@client.fdtrash.agbuttons, dont touch").left().padTop(10).row();
-//
-//        all.add("Triangle Unit Control").left().padTop(10).row();
-//        all.table(t -> {
-//            t.left();
-//
-//            t.table(sliders -> {
-//                sliders.defaults().left().padLeft(10);
-//
-//                // 1. Слайдер выбора типа юнита (Сортировка по ХП)
-//                addSlider(sliders, "Unit Type", 0, PanelFragment.sortedUnitTypes.size - 1, 1,
-//                        PanelFragment.triUnitTypeIndex, v -> { PanelFragment.triUnitTypeIndex = v.intValue();}, "");
-//                // Подпись текущего юнита и его ХП
-//                sliders.label(() -> {
-//                    UnitType ut = PanelFragment.sortedUnitTypes.get(PanelFragment.triUnitTypeIndex);
-//                    return "[accent]" + ut.localizedName + " [white](" + (int)ut.health + " HP)";
-//                }).row();
-//
-//                // 2. Кол-во
-//                addSlider(sliders, "Count", 3, 100, 1, PanelFragment.triUnitCount, v -> PanelFragment.triUnitCount = v.intValue(), "");
-//
-//                // 3. Размер
-//                addSlider(sliders, "Size", 30, 800, 10, PanelFragment.triSize, v -> PanelFragment.triSize = v, "px");
-//
-//                // 4. Скорость
-//                addSlider(sliders, "Speed", -2, 2, 0.1f, PanelFragment.triRotSpeed, v -> PanelFragment.triRotSpeed = v, "x");
-//
-//            });
-//        }).left().row();
+        all.table(Styles.grayPanel, t -> {
+            t.left().top().margin(10f);
+            t.defaults().left();
+            content.get(t);
+        }).width(width).row();
+    }
 
-//        all.add("@client.fdtrash.agbuttons").left().color(Pal.accent).padTop(10).row();
-//        all.table(main -> {
-//            main.left();
-//            //main.button("Stop All Processors", Icon.star, Styles.flatBordert, this::stopAllProcessors).size(280f, 50f).color(Color.scarlet);
-//        }).left().row();
+    /** Small grey title inside a section, with an optional "reset position" button on the right. */
+    private void subheader(Table t, String title, @Nullable Runnable resetPos){
+        t.table(h -> {
+            h.left();
+            h.add(title).color(Color.lightGray).left().growX();
+            if(resetPos != null){
+                h.button("@client.fdtrash.resetpos", Icon.refreshSmall, Styles.flatBordert, () -> {
+                    resetPos.run();
+                    ui.showInfoFade("@client.fdtrash.resetpos.done");
+                }).height(36f).padLeft(8f);
+            }
+        }).growX().padTop(12f).row();
+    }
 
+    private void check(Table t, String name, boolean current, Boolc changed){
+        t.check(name, current, changed).left().padTop(4f).row();
+    }
 
+    /** Slider with the name and value drawn over it, same as the vanilla settings sliders. */
+    private void slider(Table t, String name, float min, float max, float step, float current, Cons<Float> changed, String unit){
+        Slider slider = new Slider(min, max, step, false);
+        slider.setValue(current);
+
+        Label value = new Label("", Styles.outlineLabel);
+        Runnable updateValue = () -> {
+            float v = slider.getValue();
+            value.setText((step < 1f ? Strings.autoFixed(v, 1) : String.valueOf((int)v)) + unit);
+        };
+        updateValue.run();
+
+        Table content = new Table();
+        content.add(name, Styles.outlineLabel).left().growX().wrap();
+        content.add(value).padLeft(10f).right();
+        content.margin(3f, 33f, 3f, 33f);
+        content.touchable = Touchable.disabled;
+
+        slider.changed(() -> {
+            changed.get(slider.getValue());
+            updateValue.run();
+        });
+
+        t.stack(slider, content).growX().padTop(6f).row();
     }
 
     private void stopAllProcessors() {
@@ -465,27 +310,6 @@ public class TrashDialog extends BaseDialog {
                     Log.err(e);
                 }
             });
-    }
-
-    private void addSeparator(Color color){
-        all.image().growX().pad(5).height(2).color(color).row();
-    }
-
-    private void addSlider(Table t, String name, float min, float max, float step, float current, Cons<Float> changed, String unit){
-        t.table(s -> {
-            s.add(name).minWidth(180).left();
-            Slider slider = new Slider(min, max, step, false);
-            slider.setValue(current);
-            Label label = new Label((int)current + unit, Styles.outlineLabel);
-
-            slider.changed(() -> {
-                changed.get(slider.getValue());
-                label.setText((int)slider.getValue() + unit);
-            });
-
-            s.add(slider).width(250).padLeft(10);
-            s.add(label).width(60).padLeft(10);
-        }).row();
     }
 
     private static final String[] ATTEM_STUFF = {
