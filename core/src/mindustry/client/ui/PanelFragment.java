@@ -445,7 +445,11 @@ public class PanelFragment extends Table{
         }
         return g.button(icon, iconStyle, iconSize(), action).tooltip(t -> {
             t.background(Styles.black6).margin(4f);
-            t.add(tooltipText).style(Styles.outlineLabel).left();
+            // long descriptions wrap instead of stretching across the whole screen
+            Label label = new Label(tooltipText, Styles.outlineLabel);
+            float width = Math.min(label.getPrefWidth() / Scl.scl(1f), 340f);
+            label.setWrap(true);
+            t.add(label).width(width).left();
             if(state != null){
                 t.row();
                 t.label(() -> state.get() ? "[accent]" + bundle.get("fdpanel.on") : "[lightgray]" + bundle.get("fdpanel.off")).style(Styles.outlineLabel).left();
