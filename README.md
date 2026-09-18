@@ -1,101 +1,46 @@
-![Logo](foo.png)
+![GL Client](gl.png)
 
-[![Release Update](../../workflows/Release%20Update/badge.svg)](https://mindustry-antigrief.github.io/mindustry-client)
-[![Tests (Unstable)](../../workflows/Java%20Tests/badge.svg?branch=v8)](https://mindustry-antigrief.github.io/mindustry-client-v8-builds)
-[![Discord](https://img.shields.io/discord/741710208501547161.svg?logo=discord&logoColor=white&logoWidth=20&labelColor=7289DA&label=Discord&color=17cf48)](https://discord.gg/yp9ZW7j)
+# GL Client
 
-# Installer
-Install `mindustry-antigrief/client-installer` through the mod browser in the vanilla game and allow the game to restart, upon restarting you will be prompted with an install popup, choose a version and it will install itself.
+**GL Client** — кастомный клиент для [Mindustry](https://github.com/Anuken/Mindustry) (v8 / build 160).
 
-## [Changelog](./core/assets/changelog)
-## [Development/Unstable Builds](../../../mindustry-client-v8-builds)
-## Steam
-### Windows
-There are 3 methods to install the client on steam for windows.
-#### Automatic Installer
-Refer to [the installer section](https://github.com/mindustry-antigrief/mindustry-client/tree/v8#installer)
-#### Single Command Installer
-Run this command in a CMD window [**as admin**](https://www.howtogeek.com/howto/windows-vista/run-a-command-as-administrator-from-the-windows-vista-run-box/) (replace the path if needed): `cd /d "C:\Program Files (x86)\Steam\steamapps\common\Mindustry" && del Mindustry.exe && mklink Mindustry.exe C:\Windows\System32\cmd.exe && curl -L -o jre\client.jar https://github.com/mindustry-antigrief/mindustry-client-v8-builds/releases/latest/download/desktop.jar && echo Done!` then [set the game's launch options](https://support.steampowered.com/kb_article.php?ref=1040-JWMT-2947) to `/c java -jar "%cd%\jre\client.jar"`
-#### Semi Automated Install
-1. [Download](../../../mindustry-client-v8-builds/releases/latest/download/desktop.jar) the `desktop.jar` file from the latest release.
-2. [Download](https://github.com/mindustry-antigrief/mindustry-client/blob/v8/steam_appid.txt) the `steam_appid.txt` file and place it in the same folder as the jar.
-3. Place the `desktop.jar` and `steam_appid.txt` in the same folder.
-4. Ensure steam is running and you are logged in, double click the jar and it should then open the client on steam.
-#### Manual Install
-*Removed due to this no longer working correctly in v7+, may rewrite later.*
+Это форк двух клиентов:
+- [Foo's Client](https://github.com/mindustry-antigrief/mindustry-client) (mindustry-antigrief) — основа: антигриф, навигация, автопередача, команды клиента и многое другое;
+- **FD client** — боковая панель, логи действий игроков, авто-добыча юнитами, информация о волнах и карте, быстрые схемы, анализатор производства и другие инструменты.
 
-### Mac OS
-1. [Download](../../../mindustry-client-v8-builds/releases/latest/download/desktop.jar) the `desktop.jar` file from the latest release.
-1. Open the game install folder, right click the `Mindustry.app` file and click `Show Package Contents`.
-1. Navigate to the `Resources` folder `Contents > Resources`.
-1. Replace the `desktop.jar` with the one you just downloaded.
-1. Launching the game should now start the client.
-- To uninstall the client, delete the `desktop.jar` file in `Resources` as well as the `Mindustry` file in the `MacOS` folder. Start the game, accept the error and start it again.
+Поверх них GL Client добавляет собственный интерфейс и доработки.
 
-### Linux
-1. You are using linux, I'm sure you can figure this out yourself.
+## Что есть в клиенте
 
-## Contributing
+- **Боковая панель GL** слева под волнами — вкладки «Добыча», «Отображение», «Бой», «Автоматика», «Сервер», все кнопки подписаны и оформлены в стиле интерфейса игры.
+- Всё из Foo's Client: антигриф и логи тайлов, навигация и автоматика, автопередача предметов, клиентские команды (`!fixpower`, `!fixcode`, `!uc` и т.д.), связь между клиентами.
+- Функции FD: логи игроков в реальном времени и по тайлам, авто-добыча и помощь в строительстве юнитами, умный прицел, информация о волнах и карте, быстрые схемы, анализ производства, оповещения о гибели ядер и массовых действиях с юнитами.
 
-See [CONTRIBUTING](CONTRIBUTING.md) for general code style and PR guidelines.
+## Установка
 
-If you are a first-time contributor looking for features to implement or bugs to fix, see the issues tagged with 'candidate' [in the Mindustry-Suggestions repostiory](https://github.com/Anuken/Mindustry-Suggestions/issues?q=is%3Aissue%20state%3Aopen%20label%3Acandidate).
+1. Скачайте `desktop.jar` из [Releases](../../releases) (или соберите сами, см. ниже).
+2. Запустите:
+   ```
+   java -jar desktop.jar
+   ```
+   Нужна Java 17 или новее.
 
-## Building
+Клиент хранит данные отдельно от обычной игры, в папке `MindustryFD` (на Windows — `%APPDATA%\MindustryFD`), так что ваши обычные сохранения и моды не пострадают.
 
-Unstable builds are generated automatically for every commit. You can see them [here](https://github.com/mindustry-antigrief/mindustry-client-v8-builds/releases).
+## Сборка из исходников
 
-If you'd rather compile on your own, follow these instructions.
-First, make sure you have [JDK 17](https://adoptium.net/temurin/releases/?os=any&arch=any&version=17) installed. **Other JDK versions will not work.** Open a terminal in the Mindustry directory and run the following commands:
+```
+git clone https://github.com/GLaziness/GL-Client
+cd GL-Client
+./gradlew desktop:dist
+```
 
-### Windows
+Готовый файл появится в `desktop/build/libs/Mindustry.jar`. Для запуска без сборки jar: `./gradlew desktop:run`.
 
-_Running:_ `gradlew desktop:run`  
-_Building:_ `gradlew desktop:dist`  
-_Sprite Packing:_ `gradlew tools:pack`
+## Благодарности и лицензия
 
-### Linux/Mac OS
+- [Anuke](https://github.com/Anuken) — Mindustry.
+- Команда [mindustry-antigrief](https://github.com/mindustry-antigrief/mindustry-client) — Foo's Client.
+- Автор FD client — функции панели и инструменты FD.
 
-_Running:_ `./gradlew desktop:run`  
-_Building:_ `./gradlew desktop:dist`  
-_Sprite Packing:_ `./gradlew tools:pack`
-
-### Server
-
-The client doesn't work as a server believe it or not.
-
-### Android
-
-1. Install the Android SDK [here.](https://developer.android.com/studio#command-tools) Make sure you're downloading the "Command line tools only", as Android Studio is not required.
-2. In the unzipped Android SDK folder, find the cmdline-tools directory. Then create a folder inside of it called `latest` and put all of its contents into the newly created folder.
-3. In the same directory run the command `sdkmanager --licenses` (or `./sdkmanager --licenses` if on linux/mac)
-4. Set the `ANDROID_HOME` environment variable to point to your unzipped Android SDK directory.
-5. Enable developer mode on your device/emulator. If you are on testing on a phone you can follow [these instructions](https://developer.android.com/studio/command-line/adb#Enabling), otherwise you need to google how to enable your emulator's developer mode specifically.
-6. Run `gradlew android:assembleDebug` (or `./gradlew` if on linux/mac). This will create an unsigned APK in `android/build/outputs/apk`.
-
-To debug the application on a connected device/emulator, run `gradlew android:installDebug android:run`.
-
-### Troubleshooting
-
-#### Permission Denied
-
-If the terminal returns `Permission denied` or `Command not found` on Mac/Linux, run `chmod +x ./gradlew` before running `./gradlew`. *This is a one-time procedure.*
-
-#### Where is the `mindustry.gen` package?
-
-As the name implies, `mindustry.gen` is generated *at build time* based on other code. You will not find source code for this package in the repository, and it should not be edited by hand.
-
-The following is a non-exhaustive list of the "source" of generated code in `mindustry.gen`:
-
-- `Call`, `*Packet` classes: Generated from methods marked with `@Remote`.
-- All entity classes (`Unit`, `EffectState`, `Posc`, etc): Generated from component classes in the `mindustry.entities.comp` package, and combined using definitions in `mindustry.content.UnitTypes`.
-- `Sounds`, `Musics`, `Tex`, `Icon`, etc: Generated based on files in the respective asset folders.
-
----
-
-Gradle may take up to several minutes to download files. Be patient. <br>
-After building, the output .JAR file should be in `/desktop/build/libs/Mindustry.jar`
-
-## Feature Requests
-
-Please post feature requests and bug reports in the [discord](https://discord.gg/yp9ZW7j)
+Проект распространяется под лицензией [GNU GPL v3](LICENSE), как и Mindustry и Foo's Client.
