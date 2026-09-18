@@ -544,6 +544,7 @@ public class SettingsMenuDialog extends BaseDialog{
         client.checkPref("client-experimentals", false);
 
         client.category("fallen");
+        client.checkPref("hidecursor", false);
         client.sliderPref("placefragwidth", 7,  3, 10, 1, String::valueOf);
         client.checkPref("tilefragment", true);
         client.checkPref("historyfragment", false);

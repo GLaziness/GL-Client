@@ -2,6 +2,7 @@ package mindustry.client
 
 import arc.*
 import arc.graphics.*
+import arc.math.*
 import arc.math.geom.*
 import arc.struct.*
 import arc.util.*
@@ -282,24 +283,40 @@ object Main : ApplicationListener {
         val show = Core.settings.getBool("displayasuser")
         return when {
             Vars.player.dead() -> Tmp.v1.set(0F, 0F)
-            Server.current.ghost -> Tmp.v1.set(Vars.player.unit().aimX, Vars.player.unit().aimY)
+            Server.current.ghost -> Tmp.v1.set(sentAimX(), sentAimY())
             Navigation.currentlyFollowing is AssistPath && show ->
                 Tmp.v1.set(
-                    FloatEmbed.embedInFloat(Vars.player.unit().aimX, ClientVars.FOO_USER),
-                    FloatEmbed.embedInFloat(Vars.player.unit().aimY, ClientVars.ASSISTING)
+                    FloatEmbed.embedInFloat(sentAimX(), ClientVars.FOO_USER),
+                    FloatEmbed.embedInFloat(sentAimY(), ClientVars.ASSISTING)
                 )
             Navigation.currentlyFollowing is AssistPath ->
                 Tmp.v1.set(
-                    FloatEmbed.embedInFloat(Vars.player.unit().aimX, ClientVars.ASSISTING),
-                    FloatEmbed.embedInFloat(Vars.player.unit().aimY, ClientVars.ASSISTING)
+                    FloatEmbed.embedInFloat(sentAimX(), ClientVars.ASSISTING),
+                    FloatEmbed.embedInFloat(sentAimY(), ClientVars.ASSISTING)
                 )
             show ->
                 Tmp.v1.set(
-                    FloatEmbed.embedInFloat(Vars.player.unit().aimX, ClientVars.FOO_USER),
-                    FloatEmbed.embedInFloat(Vars.player.unit().aimY, ClientVars.FOO_USER)
+                    FloatEmbed.embedInFloat(sentAimX(), ClientVars.FOO_USER),
+                    FloatEmbed.embedInFloat(sentAimY(), ClientVars.FOO_USER)
                 )
-            else -> Tmp.v1.set(Vars.player.unit().aimX, Vars.player.unit().aimY)
+            else -> Tmp.v1.set(sentAimX(), sentAimY())
         }
+    }
+
+    /**
+     * GL: with "hidecursor" on, other players (and mods that draw cursors) see a point just in front of the unit
+     * instead of the real cursor. The real aim is only sent while shooting, since the server aims the weapons with it.
+     */
+    private fun hideCursor() = Core.settings.getBool("hidecursor", false) && !Vars.player.shooting
+
+    private fun sentAimX(): Float {
+        val unit = Vars.player.unit()
+        return if (hideCursor()) unit.x + Angles.trnsx(unit.rotation, unit.hitSize * 1.5f) else unit.aimX
+    }
+
+    private fun sentAimY(): Float {
+        val unit = Vars.player.unit()
+        return if (hideCursor()) unit.y + Angles.trnsy(unit.rotation, unit.hitSize * 1.5f) else unit.aimY
     }
 
     private fun sendBuildPlans(num: Int = 500) {
