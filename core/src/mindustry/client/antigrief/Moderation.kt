@@ -125,7 +125,7 @@ class Moderation {
             // Don't send in admin chat as it can get spammy
 //            if (info.timesJoined > 10 && info.timesKicked < 3) Vars.player.sendMessage("[accent]${player.name}[accent] has joined ${info.timesJoined-1} times before, they have been kicked ${info.timesKicked} times")
 //            else sendMessage("/a [scarlet]${player.name}[scarlet] has joined ${info.timesJoined-1} times before, they have been kicked ${info.timesKicked} times")
-            Vars.player.sendMessage("[scarlet]${player.name} [scarlet]has joined ${info.timesJoined-1} times before, they have been kicked ${info.timesKicked} times")
+            Vars.player.sendMessage(Core.bundle.format("client.moderation.joinedbefore", player.name, info.timesJoined - 1, info.timesKicked))
         }
 
         if (!Server.corium()) { // This doesn't work on corium for now
