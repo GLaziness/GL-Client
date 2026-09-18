@@ -260,6 +260,8 @@ public class PanelFragment extends Table{
     private void collectPanels(Group group, float[] bottom){
         for(Element e : group.getChildren()){
             if(e == fdpanel || !e.visible || e.getWidth() <= 0f || e.getHeight() <= 0f) continue;
+            // GL Admin Mode attaches its panel under this one, attaching to it back would make both jump
+            if(e.name != null && e.name.startsWith("gl-admin")) continue;
 
             if(e instanceof Table table && table.getBackground() != null){
                 Vec2 pos = e.localToStageCoordinates(Tmp.v1.set(0f, 0f));
