@@ -268,6 +268,15 @@ public class OreSafety {
 
     /** Вспомогательный метод: проверяет, безопасна ли ближайшая жила ресурса от конкретного ядра */
     public static boolean isCoreOreSafe(Building core, Item item) {
+        Cluster nearest = nearestCluster(core, item);
+
+        // Если жилы нет вообще или ближайшая к ядру жила простреливается — небезопасно.
+        // GL: юниты возят руду между ядром и жилой, поэтому и дорога туда-обратно не должна идти через огонь.
+        return nearest != null && !nearest.threatened && pathSafe(core.x, core.y, nearest.x, nearest.y);
+    }
+
+    /** Жила ресурса, ближайшая к ядру: именно её копает ванильный MinerAI. */
+    static Cluster nearestCluster(Building core, Item item) {
         Cluster nearest = null;
         float minDst = Float.MAX_VALUE;
 
@@ -279,10 +288,31 @@ public class OreSafety {
                 nearest = c;
             }
         }
+        return nearest;
+    }
 
-        // Если жилы нет вообще или ближайшая к ядру жила простреливается — небезопасно.
-        // GL: юниты возят руду между ядром и жилой, поэтому и дорога туда-обратно не должна идти через огонь.
-        return nearest != null && !nearest.threatened && pathSafe(core.x, core.y, nearest.x, nearest.y);
+    /**
+     * GL: другая жила того же ресурса. ИИ копки на сервере всегда летит к жиле, ближайшей к ядру, возле которого юнит,
+     * поэтому «другая жила» — это жила у другого ядра. Возвращает ядро, к которому надо перелететь, или null.
+     * Жила должна быть безопасной, ядро не под огнём, а у самой жилы ближайшим должно быть это же ядро,
+     * иначе юнит, долетев до руды, переключится обратно на старое ядро.
+     */
+    public static Building relocationCore(Unit u, Item item) {
+        Building own = u.closestCore();
+        Building best = null;
+        float bestDst = Float.MAX_VALUE;
+        for (Building core : u.team.cores()) {
+            if (core == own || isThreatened(core.x, core.y) || !isCoreOreSafe(core, item)) continue;
+            Cluster vein = nearestCluster(core, item);
+            if (Vars.state.teams.closestCore(vein.x, vein.y, u.team) != core) continue;
+            if (!pathSafe(u.x, u.y, core.x, core.y)) continue;
+            float dst = u.dst2(core);
+            if (dst < bestDst) {
+                bestDst = dst;
+                best = core;
+            }
+        }
+        return best;
     }
 
     /** GL: safe flight along a straight line: at most PATH_BLOCKED_FRACTION of the samples under fire. */

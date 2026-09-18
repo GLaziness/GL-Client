@@ -71,6 +71,10 @@ public class MinersSettingsDialog extends BaseDialog{
                 MinersFDAI.AIMiningUpdateTime = v.intValue();
                 Core.settings.put("AIUpTime", v.intValue());
             }, " " + Core.bundle.get("unit.seconds"));
+            slider(t, "@client.fdmami.refresh", 0, 120, 5, MinersFDAI.commandRefreshTime, v -> {
+                MinersFDAI.commandRefreshTime = v.intValue();
+                Core.settings.put("fdmai-refresh", v.intValue());
+            }, " " + Core.bundle.get("unit.seconds"));
             check(t, "@client.fdmami.manualCommands", MinersFDAI.respectManualCommands, b -> {
                 MinersFDAI.respectManualCommands = b;
                 Core.settings.put("respmancommands", b);
