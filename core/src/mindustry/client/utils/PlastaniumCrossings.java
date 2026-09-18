@@ -112,7 +112,7 @@ public class PlastaniumCrossings{
             // both ends must be the same bridge: an existing one of that kind only gets relinked, anything else is replaced
             add(new BuildPlan(src.x, src.y, dir, bridge, new Point2(dst.x - src.x, dst.y - src.y)));
             if(dst.block() != bridge) add(new BuildPlan(dst.x, dst.y, dir, bridge));
-            if(bridge.consumesPower){
+            if(bridge.hasPower && bridge.consumesPower){ // consumesPower alone is true by default
                 if(!powered(src, bridge)) phaseEnds.add(src);
                 if(!powered(dst, bridge)) phaseEnds.add(dst);
             }
