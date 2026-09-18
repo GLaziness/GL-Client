@@ -287,13 +287,22 @@ public class PanelFragment extends Table{
                     }
                 }).row();
 
-                root.add(body).padTop(2f);
+                root.add(body).width(contentWidth()).padTop(2f);
                 buildSection(body);
-            }).width(panelWidth).padTop(settings.getInt("yoffssetfdpamel", -200) * 1f);
+            }).left().padTop(settings.getInt("yoffssetfdpamel", -200) * 1f);
         });
     }
 
-    private static final float panelWidth = 220f;
+    /** Width of the widest section, so the panel keeps one size across tabs and never gets clipped by long labels. */
+    private float contentWidth(){
+        float width = 0f;
+        for(int i = 0; i < sections.length; i++){
+            Table probe = new Table();
+            fillSection(probe, i);
+            width = Math.max(width, probe.getPrefWidth());
+        }
+        return width;
+    }
 
     private final Section[] sections = {
         new Section("fdpanel.tab.mining", Icon.production, this::buildMining),
@@ -329,11 +338,14 @@ public class PanelFragment extends Table{
     private void buildSection(Table body){
         body.clear();
         if(tab < 0 || tab >= sections.length) return;
+        fillSection(body, tab);
+    }
 
-        body.defaults().growX();
-        Section section = sections[tab];
-        header(body, section.name);
-        section.builder.get(body);
+    private void fillSection(Table t, int index){
+        t.defaults().growX();
+        Section section = sections[index];
+        header(t, section.name);
+        section.builder.get(t);
     }
 
     private void buildMining(Table t){
@@ -455,7 +467,7 @@ public class PanelFragment extends Table{
     private static void rowContent(Button b, Drawable icon, String key, Boolp active){
         b.left().margin(0f, 6f, 0f, 6f);
         b.image(icon).size(iconSize()).padRight(8f).update(i -> i.setColor(active == null ? Color.white : active.get() ? Pal.accent : Color.lightGray));
-        b.labelWrap(bundle.get(key)).left().growX().update(l -> l.setColor(active == null || active.get() ? Color.white : Color.lightGray));
+        b.add(bundle.get(key)).left().growX().update(l -> l.setColor(active == null || active.get() ? Color.white : Color.lightGray));
     }
 
     /** Row that switches a flag; highlighted while the flag is on. */
