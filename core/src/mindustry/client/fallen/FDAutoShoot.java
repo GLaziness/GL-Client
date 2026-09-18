@@ -71,17 +71,19 @@ public class FDAutoShoot {
 
         float range = playerUnit.range() * multiplier;
         isHealingMode = false;
+        // "Только постройки": юниты игнорируются, хил своих построек идёт первым
+        boolean buildingsOnly = Core.settings.getBool("smartshoot-buildings", false);
 
         // --- ВЫБОР ЦЕЛИ ПО ПРИОРИТЕТАМ ---
         Position finalTarget = null;
 
         // Приоритет №1: Ручная цель
-        if (manualTarget != null) {
+        if (manualTarget != null && !(buildingsOnly && manualTarget instanceof Unit)) {
             finalTarget = (Position) manualTarget;
         }
 
         // Приоритет №2: Вражеские юниты
-        if (finalTarget == null && !Core.settings.getBool("ignoreunit", false)) {
+        if (finalTarget == null && !buildingsOnly && !Core.settings.getBool("ignoreunit", false)) {
             finalTarget = Units.closestEnemy(player.team(), playerUnit.x, playerUnit.y, range, u -> u.targetable(player.team()));
         }
 
