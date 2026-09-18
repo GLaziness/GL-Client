@@ -303,20 +303,14 @@ object Main : ApplicationListener {
         }
     }
 
-    /**
-     * GL: with "hidecursor" on, other players (and mods that draw cursors) see a point just in front of the unit
-     * instead of the real cursor. The real aim is only sent while shooting, since the server aims the weapons with it.
-     */
-    private fun hideCursor() = Core.settings.getBool("hidecursor", false) && !Vars.player.shooting
-
     private fun sentAimX(): Float {
         val unit = Vars.player.unit()
-        return if (hideCursor()) unit.x + Angles.trnsx(unit.rotation, unit.hitSize * 1.5f) else unit.aimX
+        return if (CursorHider.hiding()) CursorHider.hiddenX(unit) else unit.aimX
     }
 
     private fun sentAimY(): Float {
         val unit = Vars.player.unit()
-        return if (hideCursor()) unit.y + Angles.trnsy(unit.rotation, unit.hitSize * 1.5f) else unit.aimY
+        return if (CursorHider.hiding()) CursorHider.hiddenY(unit) else unit.aimY
     }
 
     private fun sendBuildPlans(num: Int = 500) {

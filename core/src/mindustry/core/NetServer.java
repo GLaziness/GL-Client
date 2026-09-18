@@ -1319,6 +1319,8 @@ public class NetServer implements ApplicationListener{
 
                 writeStateSnapshot();
 
+                mindustry.client.utils.CursorHider.beginHostSnapshot(); // GL: hide the host's cursor from the other players
+                try{
                 if(Vars.state.rules.fog){
                     //Serialize by teams
                     for(Team team : Team.all){ //Not Teams.active, because players can be on inactive teams
@@ -1331,6 +1333,9 @@ public class NetServer implements ApplicationListener{
                 }else{
                     //Serialize once for all players
                     writeEntitySnapshotsAll();
+                }
+                }finally{
+                    mindustry.client.utils.CursorHider.endHostSnapshot();
                 }
 
                 //write custom player-specific entities (usually labels)
