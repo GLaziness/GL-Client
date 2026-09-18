@@ -304,12 +304,13 @@ public class DesktopInput extends InputHandler{
             if(mode == placing && block != null){
                 for(int i = 0; i < linePlans.size; i++){
                     var plan = linePlans.get(i);
+                    if(plan.breaking && plan.config instanceof BuildPlan later) plan = later; // GL: show the conveyor that replaces a crossed conduit
                     if(i == linePlans.size - 1 && plan.block.rotate && plan.block.drawArrow){
                         drawArrow(block, plan.x, plan.y, plan.rotation);
                     }
-                    drawPlan(linePlans.get(i));
+                    drawPlan(plan);
                 }
-                linePlans.each(this::drawOverPlan);
+                linePlans.each(plan -> { if(plan.breaking && plan.config instanceof BuildPlan later) drawOverPlan(later, true); else drawOverPlan(plan); });
             }else if(isPlacing()){
                 int rot = block == null ? rotation : block.planRotation(rotation);
                 if(block.rotate && block.drawArrow){

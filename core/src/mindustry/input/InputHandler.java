@@ -24,6 +24,7 @@ import mindustry.client.*;
 import mindustry.client.antigrief.*;
 import mindustry.client.navigation.*;
 import mindustry.client.navigation.waypoints.*;
+import mindustry.client.utils.*;
 import mindustry.content.*;
 import mindustry.core.*;
 import mindustry.entities.*;
@@ -1982,6 +1983,7 @@ public abstract class InputHandler implements InputProcessor, GestureListener{
 
             if (plan.breaking) {
                 tryBreakBlock(plan.x, plan.y, freeze);
+                PlastaniumCrossings.flushed(plan); // GL: conveyor waiting for the conduit under it to be removed
                 continue;
             }
 

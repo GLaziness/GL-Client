@@ -12,7 +12,7 @@ import mindustry.content.*;
 import mindustry.entities.*;
 import mindustry.entities.units.*;
 import mindustry.gen.*;
-import mindustry.input.*;
+import mindustry.client.utils.*;
 import mindustry.graphics.*;
 import mindustry.type.*;
 import mindustry.world.*;
@@ -43,11 +43,10 @@ public class StackConveyor extends Block implements Autotiler{
     public Effect loadEffect = Fx.conveyorPoof;
     public Effect unloadEffect = Fx.conveyorPoof;
 
-    /** GL: with the "plastbridges" setting on, a line drawn over other buildings bridges over them instead of replacing them. */
+    /** GL: crossed conveyors, ducts and conduits get a bridge over the new line instead of being cut. */
     @Override
     public void handlePlacementLine(Seq<BuildPlan> plans){
-        if(!arc.Core.settings.getBool("plastbridges", false)) return;
-        Placement.calculateBridgesOverAll(plans, this == Blocks.plastaniumConveyor ? Blocks.itemBridge : Blocks.ductBridge);
+        PlastaniumCrossings.handleLine(plans);
     }
 
     public StackConveyor(String name){

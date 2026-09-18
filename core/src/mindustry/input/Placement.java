@@ -202,29 +202,11 @@ public class Placement{
             return;
         }
 
-        smartCalculateBridges(plans, bridge, hasJunction, avoid, null);
+        smartCalculateBridges(plans, bridge, hasJunction, avoid);
     }
 
-    /** GL: bridges over every existing building on the line instead of replacing it (used for plastanium conveyors). */
-    public static void calculateBridgesOverAll(Seq<BuildPlan> plans, Block bridgeBlock){
-        BridgePlacer bridge =
-            bridgeBlock instanceof ItemBridge b ? new ItemBridgePlacer(b) :
-            bridgeBlock instanceof DirectionBridge b ? new DirectionBridgePlacer(b) :
-            null;
-        if(bridge == null || isSidePlace(plans) || plans.size == 0) return;
-        if(!(plans.first().x == plans.peek().x || plans.first().y == plans.peek().y) || !bridge.unlockedNow()) return;
-
-        smartCalculateBridges(plans, bridge, false, b -> false, plan -> {
-            Tile tile = plan.tile();
-            if(tile == null) return false;
-            //empty ground (or boulders) is free, the same block facing the same way just continues the line
-            if(tile.build == null) return plan.placeable(player.team());
-            return tile.block() == plan.block && tile.build.rotation == plan.rotation;
-        });
-    }
-
-    private static void smartCalculateBridges(Seq<BuildPlan> plans, BridgePlacer bridge, boolean hasJunction, Boolf<Block> avoid, @arc.util.Nullable Boolf<BuildPlan> placeableOverride){
-        Boolf<BuildPlan> placeable = placeableOverride != null ? placeableOverride : plan ->
+    private static void smartCalculateBridges(Seq<BuildPlan> plans, BridgePlacer bridge, boolean hasJunction, Boolf<Block> avoid){
+        Boolf<BuildPlan> placeable = plan ->
         (plan.placeable(player.team()) || (plan.tile() != null && plan.tile().block() == plan.block && plan.tile().interactable(player.team()))) &&  //don't count the same block as inaccessible
         !(plan != plans.first() && plan.build() != null && plan.build().rotation != plan.rotation && avoid.get(plan.tile().block()));
 
