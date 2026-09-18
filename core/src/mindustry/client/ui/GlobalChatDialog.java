@@ -27,6 +27,7 @@ public class GlobalChatDialog extends Table{
         fontColor = Color.white;
         over = down = ((arc.scene.style.TextureRegionDrawable)Tex.whiteui).tint(1f, 1f, 1f, 0.12f);
     }};
+    private static final Color globalColor = Color.valueOf("7fd3ff"), serverColor = Color.valueOf("a3e87a");
     /** Tabs: see-through too, the selected one is tinted with the accent color. */
     private static final TextButton.TextButtonStyle tabStyle = new TextButton.TextButtonStyle(){{
         font = Fonts.def;
@@ -113,11 +114,11 @@ public class GlobalChatDialog extends Table{
                         Core.bundle.format("client.globalchat.tab.global", GlobalChat.connected() ? GlobalChat.online() : 0)));
             }).growX().padTop(4f).row();
 
-            root.label(() -> serverTab ?
+            root.label(() -> noPrefix(serverTab ?
                 (!GlobalChat.serverOn() ? Core.bundle.get("client.globalchat.serveroff.window") :
                 GlobalChat.channel().isEmpty() ? GlobalChat.status() :
                 Core.bundle.format("client.globalchat.serverstatus", GlobalChat.channel(), GlobalChat.serverOnline())) :
-                (!GlobalChat.globalOn() ? Core.bundle.get("client.globalchat.off.window") : GlobalChat.status()))
+                (!GlobalChat.globalOn() ? Core.bundle.get("client.globalchat.off.window") : GlobalChat.status())))
                 .fontScale(0.85f).wrap().growX().left().padTop(2f).row();
             root.add("@client.globalchat.copyhint").color(Color.gray).fontScale(0.75f).left().padTop(2f).row();
             root.image().color(Pal.accent).height(2f).growX().padTop(4f).padBottom(4f).row();
@@ -147,6 +148,13 @@ public class GlobalChatDialog extends Table{
             // left the server: back to the global chat
             if(serverTab && !GlobalChat.onServer()) setTab(false);
         });
+    }
+
+    /** Lines and statuses without the [GL] / [GL-S] label: the window shows icons instead. */
+    private static String noPrefix(String line){
+        if(line.startsWith(GlobalChat.serverPrefix)) return line.substring(GlobalChat.serverPrefix.length());
+        if(line.startsWith(GlobalChat.prefix)) return line.substring(GlobalChat.prefix.length());
+        return line;
     }
 
     private void tab(TextButton b, boolean selected, boolean disabled, String text){
@@ -322,15 +330,18 @@ public class GlobalChatDialog extends Table{
             String copy = GlobalChat.copies.get(i), line = GlobalChat.log.get(i);
             String from = GlobalChat.lineTags.get(i), name = GlobalChat.lineNames.get(i);
             // owner and moderators: a click (left or right) on [GL] of someone's message opens the actions for that player
-            String start = line.startsWith(GlobalChat.serverPrefix) ? GlobalChat.serverPrefix : GlobalChat.prefix;
-            boolean menu = !from.isEmpty() && line.startsWith(start);
+            // an icon instead of the [GL] / [GL-S] label: planet - global chat, server - chat of this server, i - system lines
+            int kind = GlobalChat.lineKinds.get(i);
+            boolean server = kind == GlobalChat.kindServer || line.startsWith(GlobalChat.serverPrefix);
+            arc.scene.style.Drawable icon = server ? Icon.host : kind == GlobalChat.kindGlobal ? Icon.planet : Icon.info;
+            Color color = server ? serverColor : kind == GlobalChat.kindGlobal ? globalColor : Color.lightGray;
+            boolean menu = !from.isEmpty();
             lines.table(row -> {
                 row.top().left();
-                String text = line;
                 if(menu){
-                    text = line.substring(start.length());
-                    TextButton gl = row.button(start.substring(0, start.length() - 3), lineStyle, () -> playerMenu(from, name)).top().get();
-                    gl.margin(2f, 4f, 2f, 2f);
+                    // a click (left or right) on the icon of someone's message opens the actions for that player
+                    ImageButton gl = row.button(icon, Styles.clearNonei, 22f, () -> playerMenu(from, name)).size(32f).top().get();
+                    gl.getImage().setColor(color);
                     gl.addListener(new ClickListener(KeyCode.mouseRight){
                         @Override
                         public void clicked(InputEvent event, float x, float y){
@@ -338,9 +349,11 @@ public class GlobalChatDialog extends Table{
                         }
                     });
                     gl.addListener(new Tooltip(t -> t.background(Styles.black8).margin(4f).add("@client.globalchat.menuhint")));
+                }else{
+                    row.image(icon).color(color).size(22f).pad(5f).top();
                 }
-                String shown = text;
-                row.button(b -> b.add(shown).left().wrap().width(menu ? (start == GlobalChat.prefix ? 370f : 355f) : 410f), lineStyle, () -> {
+                String shown = noPrefix(line);
+                row.button(b -> b.add(shown).left().wrap().width(372f), lineStyle, () -> {
                     Core.app.setClipboardText(copy);
                     ui.showInfoFade("@client.globalchat.copied");
                 }).left().growX().get().left().margin(2f, 4f, 2f, 4f);
