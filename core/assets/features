@@ -19,6 +19,7 @@
 # GL global chat
  * A chat shared by every GL Client player on any server. Turn it on in Settings, Client, Chat or in Recommended add-ons
  * {p}g text - send a message, {p}g alone - status and players online
+ * {p}ghelp or the book button in the chat window - help on every chat command
  * Pick the !g mode in the chat with {chat_mode} to write without the command, like /t and /a
  * Alt + left click, Global chat - a floating window with the global chat only; click a message to copy it
  * The short tag after the name (#ab12cd) is given by the server and cannot be faked

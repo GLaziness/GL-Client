@@ -80,6 +80,8 @@ public class GlobalChatDialog extends Table{
                     .tooltip("@client.globalchat.onlinehint").get().getImage().setColor(Pal.accent);
                 head.add("@client.globalchat.title").color(Pal.accent);
                 head.add().growX();
+                head.button(Icon.book, Styles.clearNonei, () -> ui.showInfoText("@client.globalchat.help.title", Core.bundle.get("client.globalchat.help")))
+                    .size(36f).tooltip("@client.globalchat.help.hint");
                 head.button(Icon.copy, Styles.clearNonei, () -> {
                     // my tag, also when banned: it is what a moderator needs to lift a punishment
                     if(GlobalChat.tag().isEmpty()){

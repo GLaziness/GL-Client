@@ -437,6 +437,11 @@ fun setupCommands() {
         else mindustry.client.utils.GlobalChat.send(args[0]) // writes the reason to the chat when it cannot send
     }
 
+    register("ghelp", Core.bundle.get("client.command.ghelp.description")) { _, player ->
+        // GL: all commands and controls of the global chat
+        player.sendMessage("[accent]" + Core.bundle.get("client.globalchat.help.title") + "[]\n" + Core.bundle.get("client.globalchat.help"))
+    }
+
     register("gs [message...]", Core.bundle.get("client.command.gs.description")) { args, player ->
         // GL: chat of the server I am on (all its modes), through the global chat server
         val chat = mindustry.client.utils.GlobalChat.channel()
