@@ -87,6 +87,9 @@ public class PanelFragment extends Table{
     public static boolean forcesavelogs = false;
     public static boolean rtvWaveKey = false;
     public static boolean rtvKey = false;
+    /** GL: run "!fixpower c" by itself once a minute (right click on the power grids button). */
+    public static boolean autoFixPower = false;
+    private static final Interval fixPowerTimer = new Interval();
 
     private static final GlyphLayout layout = new GlyphLayout();
     private static final StringBuilder sb = new StringBuilder();
@@ -117,6 +120,7 @@ public class PanelFragment extends Table{
             if(!Vars.state.isMenu()) {
 //                FDAutoFill.update();
                 CustomBuildLogic.update();
+                if(autoFixPower && state.isGame() && fixPowerTimer.get(60f * 60f)) fixPower();
             }
         });
 
@@ -371,7 +375,10 @@ public class PanelFragment extends Table{
             transferTarget(Blocks.siliconSmelter, "fdpanel.target.prod", "autotransfer-t-prod", AutoTransfer.Settings::setTargetProduction),
             transferTarget(Blocks.groundFactory, "fdpanel.target.units", "autotransfer-t-units", AutoTransfer.Settings::setTargetUnitFactories),
             transferTarget(Blocks.additiveReconstructor, "fdpanel.target.recons", "autotransfer-t-recons", AutoTransfer.Settings::setTargetReconstructors),
-            action(Icon.power, "fdpanel.fixpower", () -> ClientVars.clientCommandHandler.handleMessage("!fixpower c", player)),
+            autoAction(Icon.power, "fdpanel.fixpower", PanelFragment::fixPower, () -> autoFixPower, () -> {
+                autoFixPower = !autoFixPower;
+                fixPowerTimer.reset(0, 0f); // the first automatic run waits a full minute
+            }),
             action(Icon.logic, "fdpanel.fixcode", () -> ClientVars.clientCommandHandler.handleMessage("!fixcode r", player)),
             settingToggle(Icon.eraser, "fdpanel.schemcleanup", "placeSchematicWithCleanup"),
             settingToggle(icon(Blocks.itemBridge), "fdpanel.plastbridges", "plastbridges"),
@@ -392,6 +399,10 @@ public class PanelFragment extends Table{
             autoAction(Icon.waves, "fdpanel.rtvwave", () -> Call.sendChatMessage("/rtv wave"), () -> rtvWaveKey, () -> rtvWaveKey = !rtvWaveKey),
             action(Icon.book, "fdpanel.history", () -> Call.sendChatMessage("/history"))
         );
+    }
+
+    private static void fixPower(){
+        ClientVars.clientCommandHandler.handleMessage("!fixpower c", player);
     }
 
     // region panel widgets
