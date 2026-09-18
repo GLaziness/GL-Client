@@ -573,10 +573,11 @@ public class PanelFragment extends Table{
                     settings.put("placeSchematicWithCleanup", !settings.getBool("placeSchematicWithCleanup"));
                 }).update(i -> i.setChecked(settings.getBool("placeSchematicWithCleanup"))).name("placeSchematicWithCleanup").tooltip("placeSchematicWithCleanup");
 
-                t.button(Icon.androidSmall, sstylet, () -> {
-                    settings.put("mobilemovement", !settings.getBool("mobilemovement"));
-                    DesktopInput.mobileMode = !DesktopInput.mobileMode;
-                }).update(i -> i.setChecked(settings.getBool("mobilemovement"))).name("mobilemovement").tooltip("mobilemovement");
+                // TODO: DesktopInput.mobileMode was never implemented in the FD client
+//                t.button(Icon.androidSmall, sstylet, () -> {
+//                    settings.put("mobilemovement", !settings.getBool("mobilemovement"));
+//                    DesktopInput.mobileMode = !DesktopInput.mobileMode;
+//                }).update(i -> i.setChecked(settings.getBool("mobilemovement"))).name("mobilemovement").tooltip("mobilemovement");
 
 //                t.button(Icon.trelloSmall, sstylet, () -> {
 //                    settings.put("mobilegayming", !settings.getBool("mobilegayming"));
