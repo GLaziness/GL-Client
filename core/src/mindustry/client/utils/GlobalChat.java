@@ -51,7 +51,7 @@ public class GlobalChat{
     /** "mod" when the player is a moderator of the server he is on. */
     private static volatile String serverRole = "";
     private static String pendingHost = "";
-    private static boolean hooked;
+    private static boolean hooked, joining;
     /** Why the chat is not connected (shown to the player), null when there is no problem. */
     private static volatile @Nullable String error;
     private static Thread thread;
@@ -71,9 +71,16 @@ public class GlobalChat{
         if(!hooked){
             hooked = true;
             // the server channel follows the game server: set when its world is loaded, cleared in the menu
-            Events.on(EventType.ClientServerConnectEvent.class, e -> pendingHost = e.ip);
+            Events.on(EventType.ClientServerConnectEvent.class, e -> {
+                pendingHost = e.ip;
+                joining = true;
+            });
             Events.on(EventType.WorldLoadEvent.class, e -> {
-                if(net.client()) setServer(pendingHost);
+                if(!net.client()) return;
+                // joining a server (not a new map on it) turns its chat on, unless that is off in the settings
+                if(joining && Core.settings.getBool("globalchat-server-auto", true) && !serverOn()) setServerOn(true);
+                joining = false;
+                setServer(pendingHost);
             });
             Events.on(EventType.MenuReturnEvent.class, e -> setServer(""));
         }

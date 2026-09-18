@@ -415,7 +415,7 @@ public class SettingsMenuDialog extends BaseDialog{
 
         client.category("chat");
         client.checkPref("globalchat", false, mindustry.client.utils.GlobalChat::setEnabled);
-        client.checkPref("globalchat-server", true, mindustry.client.utils.GlobalChat::setEnabled);
+        client.checkPref("globalchat-server-auto", true); // GL: the server chat is turned on on every join (the window button turns it off until then)
         client.checkPref("clearchatonleave", true);
         client.checkPref("logmsgstoconsole", true);
         client.checkPref("clientjoinleave", true);
