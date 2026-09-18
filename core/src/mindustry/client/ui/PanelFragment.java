@@ -120,7 +120,7 @@ public class PanelFragment extends Table{
             if(!Vars.state.isMenu()) {
 //                FDAutoFill.update();
                 CustomBuildLogic.update();
-                if(autoFixPower && state.isGame() && fixPowerTimer.get(60f * 60f)) fixPower();
+                if(autoFixPower && state.isGame() && fixPowerTimer.get(60f * 60f)) fixPowerQuiet();
             }
         });
 
@@ -405,7 +405,12 @@ public class PanelFragment extends Table{
     }
 
     private static void fixPower(){
-        ClientVars.clientCommandHandler.handleMessage(autoFixPower ? "!fixpower c q" : "!fixpower c", player);
+        ClientVars.clientCommandHandler.handleMessage("!fixpower c", player);
+    }
+
+    /** The automatic run: silent when there is nothing to connect. */
+    private static void fixPowerQuiet(){
+        ClientVars.clientCommandHandler.handleMessage("!fixpower c q", player);
     }
 
     // region panel widgets
