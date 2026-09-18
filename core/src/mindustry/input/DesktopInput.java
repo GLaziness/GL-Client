@@ -169,7 +169,7 @@ public class DesktopInput extends InputHandler{
                         }else if(Navigation.state == NavigationState.FOLLOWING){
                             str.append("\n").append(bundle.format("client.stoppath", Binding.stopFollowingPath.value.key.toString()));
                         }
-                        if(panning){
+                        if(panning || spectating != null){
                             str.append("\n").append(bundle.format("client.resetcamera", Binding.resetCamera.value.key.toString()));
                         }
 
@@ -839,6 +839,7 @@ public class DesktopInput extends InputHandler{
 
         if(!commandMode && input.keyTap(Binding.resetCamera) && scene.getKeyboardFocus() == null && (cursor == null || cursor.build == null || !(cursor.build.block.rotate && cursor.build.block.quickRotate && cursor.build.interactable(player.team()))) && !input.alt()){
             panning = false;
+            spectating = null; // GL: also stop following a unit picked in a players list (mods call spectate())
             Spectate.INSTANCE.setPos(null); // FINISHME: Vanilla has a spectate feature now
             if(ui.listfrag.shown()) ui.listfrag.rebuild();
         }
