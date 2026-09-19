@@ -35,13 +35,13 @@ public class ActivityLogger {
             if (Vars.ui.chatfrag == null || !Vars.state.isGame()) return;
 
             StringBuilder stats = new StringBuilder();
-            stats.append("[accent]History Status: [white]")
-                    .append("Blocks: ").append(ActionsHistory.blocksplayersplans.size).append(" | ")
-                    .append("Configs: ").append(ActionsHistory.blockconfplayersplans.size).append(" | ")
-                    .append("Items: ").append(ActionsHistory.playeritemsplans.size).append(" | ")
-                    .append("Deaths: ").append(ActionsHistory.deathunitsplan.size).append(" | ")
-                    .append("UnitsCmd: ").append(ActionsHistory.unitcommandsplans.size).append(" | ")
-                    .append("UnitsState: ").append(ActionsHistory.unitstatesplans.size);
+            stats.append(arc.Core.bundle.get("gl.ui.activitylogger.1"))
+                    .append((arc.Core.bundle.get("gl.ui.activitylogger.2") + " ")).append(ActionsHistory.blocksplayersplans.size).append(" | ")
+                    .append((arc.Core.bundle.get("gl.ui.activitylogger.3") + " ")).append(ActionsHistory.blockconfplayersplans.size).append(" | ")
+                    .append((arc.Core.bundle.get("gl.ui.activitylogger.4") + " ")).append(ActionsHistory.playeritemsplans.size).append(" | ")
+                    .append((arc.Core.bundle.get("gl.ui.activitylogger.5") + " ")).append(ActionsHistory.deathunitsplan.size).append(" | ")
+                    .append((arc.Core.bundle.get("gl.ui.activitylogger.6") + " ")).append(ActionsHistory.unitcommandsplans.size).append(" | ")
+                    .append((arc.Core.bundle.get("gl.ui.activitylogger.7") + " ")).append(ActionsHistory.unitstatesplans.size);
 
             String finalMsg = stats.toString();
 

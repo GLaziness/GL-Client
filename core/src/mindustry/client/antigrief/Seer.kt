@@ -46,7 +46,7 @@ object Seer { // FINISHME: Fully implement and test this
     private fun warnIfNeeded(data: PlayerData, player: Player) { // FINISHME: Bundles
         if (!Core.settings.getBool("seer-warnings")) return
         if (data.score >= Core.settings.getInt("seer-warnthreshold")) {
-            Vars.player.sendMessage("${player.coloredName()} [accent]exceeded warn threshold! ${data.score}")
+            Vars.player.sendMessage(arc.Core.bundle.format("gl.ui.seer.p1", player.coloredName(), data.score.toString()))
         }
         if (Core.settings.getBool("seer-autokick") && data.score >= Core.settings.getInt("seer-autokickthreshold")) {
             Call.sendChatMessage("/votekick #${player.id}")

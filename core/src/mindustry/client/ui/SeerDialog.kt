@@ -11,11 +11,11 @@ import java.time.temporal.*
 
 object SeerDialog : BaseDialog("Seer") { // FINISHME: Bundle
     init {
-        cont.button("Cached players") {
+        cont.button(arc.Core.bundle.get("gl.ui.seer.1")) {
             showCachedPlayers()
         }.size(200f, 50f)
 
-        cont.button("Settings") {
+        cont.button(arc.Core.bundle.get("gl.ui.seer.2")) {
             // FINISHME: Separate UI
             Vars.ui.settings.visible(3) // Activate client settings
         }.size(200f, 50f)
@@ -46,7 +46,7 @@ object SeerDialog : BaseDialog("Seer") { // FINISHME: Bundle
                 table.field(search) { search = it; pane.widget = createPane(search) }
             }.center().row()
 
-            cont.label("Click on player to copy their id").center().row()
+            cont.label(arc.Core.bundle.get("gl.ui.seer.3")).center().row()
             cont.add(pane)
 
             addCloseButton()

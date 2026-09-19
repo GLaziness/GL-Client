@@ -44,7 +44,7 @@ fun rollbackTiles(tiles: Iterable<Tile>, timeInstant: Instant){
             if (numPlans == 0 && numConfigs == 0) {
                 Core.app.post { player.sendMessage(Core.bundle.get("client.norebuildsfound")) }
             } else {
-                player.sendMessage("[accent]Queued [white]${numPlans}[] builds and [white]${numConfigs}[] configs.")
+                player.sendMessage(arc.Core.bundle.format("gl.ui.restore.p1", numPlans.toString(), numConfigs.toString()))
             }
             plans.clear()
         }
@@ -112,7 +112,7 @@ fun rebuildBroken(tiles: Iterable<Tile>, timeStart: Instant, timeEnd: Instant, r
         }
         Core.app.post {
             control.input.flushPlans(plans)
-            player.sendMessage("[accent]Queued [white]${plans.size} blocks for rebuilding.")
+            player.sendMessage(arc.Core.bundle.format("gl.ui.restore.p2", plans.size.toString()))
             plans.clear()
         }
     }
@@ -163,9 +163,9 @@ fun undoPlayer(tiles: Iterable<Tile>, id: Int){
         Core.app.post {
             val numConfigs = configs.size
             val numPlans = player.unit().plans.size
-            player.sendMessage("[accent]Found [white]${plans.size}[] potential plans to undo actions by $playerName[accent].")
+            player.sendMessage(arc.Core.bundle.format("gl.ui.restore.p3", plans.size.toString(), playerName.toString()))
             control.input.flushPlans(plans, false, true, false) // Overplace
-            player.sendMessage("[accent]Queued as [white]${player.unit().plans.size - numPlans}[] builds and [white]${configs.size - numConfigs}[] configs.")
+            player.sendMessage(arc.Core.bundle.format("gl.ui.restore.p1", (player.unit().plans.size - numPlans).toString(), (configs.size - numConfigs).toString()))
             plans.clear()
         }
     }

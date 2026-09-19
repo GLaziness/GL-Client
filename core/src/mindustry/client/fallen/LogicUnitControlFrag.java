@@ -36,7 +36,7 @@ public class LogicUnitControlFrag extends Table {
                 //main.touchable = Touchable.enabled;
 
                 main.table(h -> {
-                    h.add("[accent]LOGIC CONTROL[]").left().growX();
+                    h.add(arc.Core.bundle.get("gl.ui.logicunitcontrol.1")).left().growX();
                     h.button(Icon.refresh, Styles.cleari, this::rebuild).size(30f);
                 }).growX().pad(4).row();
 
@@ -140,7 +140,7 @@ public class LogicUnitControlFrag extends Table {
         }
 
         if (procData.isEmpty()) {
-            listTable.add("[gray]< No logic units >").pad(10f);
+            listTable.add(arc.Core.bundle.get("gl.ui.logicunitcontrol.2")).pad(10f);
         }
     }
 

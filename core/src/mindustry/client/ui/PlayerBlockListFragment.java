@@ -99,9 +99,9 @@ public class PlayerBlockListFragment {
 
                         info.button(Icon.book, () -> {
                             ui.historyFrag.toggle();
-                        }).size(45).pad(4).tooltip("Toggle History Log");
+                        }).size(45).pad(4).tooltip(arc.Core.bundle.get("gl.ui.playerblocklist.1"));
 
-                        info.button("Clear Filter", () -> {
+                        info.button(arc.Core.bundle.get("gl.ui.playerblocklist.2"), () -> {
                             name_for_plans = null;
                         }).tooltip("Сбросить");
 

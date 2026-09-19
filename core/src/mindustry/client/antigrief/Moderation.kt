@@ -62,7 +62,7 @@ class Moderation {
 
                         if (games < 3 || buildings < 1000 || time < 60) { // Low-stat player; show a warning FINISHME: Settings for these values
                             fun Int.s() = if (this == Int.MAX_VALUE) "unknown" else toString()
-                            Vars.ui.chatfrag.addMsg("[scarlet]Player $name [scarlet](${player.serverID}) has ${games.s()} games, ${buildings.s()} builds, ${time.s()} mins")
+                            Vars.ui.chatfrag.addMsg(arc.Core.bundle.format("gl.ui.moderation.p1", name, player.serverID.toString(), games.s(), buildings.s(), time.s()))
                                 .addButton(name) { Spectate.spectate(player) }
                                 .addButton(player.serverID) { Call.sendChatMessage("/stats ${player.id}") }
                         }
@@ -75,7 +75,7 @@ class Moderation {
                 if (Core.settings.getBool("logfreeze_confirm")) Log.debug(json)
 
                 val player = Groups.player.getByID(json.getInt("id", Int.MAX_VALUE)) ?: return@addPacketHandler
-                Vars.ui.chatfrag.addMsg("[accent]${player.coloredName()}[accent]'s freeze state was updated to: ${json.getString("frozen", "unknown")}")
+                Vars.ui.chatfrag.addMsg(arc.Core.bundle.format("gl.ui.moderation.p2", player.coloredName(), json.getString("frozen", "unknown")))
             }
 
             Events.on(EventType.PlayerJoin::class.java) { e ->

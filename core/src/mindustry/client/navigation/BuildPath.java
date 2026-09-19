@@ -149,7 +149,7 @@ public class BuildPath extends Path { // FINISHME: Dear god, this file does not 
                 );
 
                 if (item != null && core.items.get(item) <= (cap == 0 ? core.storageCapacity : cap) / 2) { // Switch back to MinePath when core is low on items
-                    player.sendMessage("[accent]Automatically switching to back to MinePath as the core is low on items.");
+                    player.sendMessage(arc.Core.bundle.get("gl.ui.buildpath.1"));
                     Navigation.follow(new MinePath(mineItems, cap));
                 }
             }

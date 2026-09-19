@@ -341,10 +341,10 @@ public class QuickSchemFrag extends Table {
 
     // Настройка КОНКРЕТНОЙ вкладки
     private void showTabSettings(QuickTab tab, int tabIndex) {
-        BaseDialog dialog = new BaseDialog("Tab Settings");
+        BaseDialog dialog = new BaseDialog(arc.Core.bundle.get("gl.ui.quickschem.1"));
         dialog.cont.table(t -> {
             t.table( tn ->{
-                tn.add("Tab Name:").left();
+                tn.add(arc.Core.bundle.get("gl.ui.quickschem.2")).left();
                 tn.field(tab.name, val -> {
                     tab.name = val;
                     saveData();
@@ -352,25 +352,25 @@ public class QuickSchemFrag extends Table {
                 }).growX().row();
             }).growX().row();
 
-            t.check("Use Icon instead of text", tab.useIcon, val -> {
+            t.check(arc.Core.bundle.get("gl.ui.quickschem.3"), tab.useIcon, val -> {
                 tab.useIcon = val;
                 saveData();
                 rebuild();
             }).row();
 
-            t.button("Pick Tab Icon", () -> {
+            t.button(arc.Core.bundle.get("gl.ui.quickschem.4"), () -> {
                 showIconPicker(null, tab, false, dialog);
             }).size(200, 45).row();
 
             t.table(di->{
-                di.add("Default icon for slots in this tab:").left().padTop(10);
+                di.add(arc.Core.bundle.get("gl.ui.quickschem.5")).left().padTop(10);
                 di.button(getIconDrawable(tab.defaultSlotIcon, tab.defaultSlotIsContent), () -> {
                     showIconPickerForTabDefault(tab, dialog);
                 }).size(45).get();
             }).get().row();
             t.row();
             t.table( tb ->{
-                tb.button("Delete Current Tab", Icon.trash, () -> {
+                tb.button(arc.Core.bundle.get("gl.ui.quickschem.6"), Icon.trash, () -> {
                     if (tabs.size > 1) {
                         tabs.remove(tabIndex);
                         currentTab = Math.min(currentTab, tabs.size - 1);
@@ -402,7 +402,7 @@ public class QuickSchemFrag extends Table {
 
     // ГЛОБАЛЬНЫЕ настройки интерфейса
     private void showSettings() {
-        BaseDialog dialog = new BaseDialog("Global QuickSchems Settings");
+        BaseDialog dialog = new BaseDialog(arc.Core.bundle.get("gl.ui.quickschem.7"));
 
         setupSettingsContent(dialog);
 
@@ -453,7 +453,7 @@ public class QuickSchemFrag extends Table {
             }).row();
 
             p.table(t -> {
-                t.add("Default Not Select Icon: ").left();
+                t.add((arc.Core.bundle.get("gl.ui.quickschem.8") + " ")).left();
 
                 // Показываем текущую дефолтную иконку
                 String defName = Core.settings.getString("qs-default-icon", "infoSmall");
@@ -466,7 +466,7 @@ public class QuickSchemFrag extends Table {
 
             p.image().height(2).color(Pal.accent).row();
 
-            p.label(() -> "Manage Tabs").color(Pal.accent).padBottom(10).row();
+            p.label(() -> arc.Core.bundle.get("gl.ui.quickschem.9")).color(Pal.accent).padBottom(10).row();
             p.table(tabsTable -> {
                 tabsTable.defaults().pad(2);
 
@@ -506,7 +506,7 @@ public class QuickSchemFrag extends Table {
                 }
             }).growX().row();
 
-            p.button("Add Tab", Icon.add, () -> {
+            p.button(arc.Core.bundle.get("gl.ui.quickschem.10"), Icon.add, () -> {
                 QuickTab nt = new QuickTab("New");
                 nt.iconName = Core.settings.getString("qs-default-icon", "infoSmall");
                 nt.isContent = Core.settings.getBool("qs-default-iscontent", false);
@@ -515,7 +515,7 @@ public class QuickSchemFrag extends Table {
                 rebuild();
             }).height(50).row();
 
-            p.button("Delete Tab", Icon.trash, () -> {
+            p.button(arc.Core.bundle.get("gl.ui.quickschem.11"), Icon.trash, () -> {
                 if (tabs.size > 1) {
                     tabs.remove(currentTab);
                     currentTab = 0;
@@ -549,7 +549,7 @@ public class QuickSchemFrag extends Table {
 
     // Универсальный выбор иконки (для слота или для вкладки)
     private void showIconPicker(QuickSlot slot, QuickTab tab, boolean editDefault, BaseDialog parent) {
-        BaseDialog picker = new BaseDialog("Select Icon");
+        BaseDialog picker = new BaseDialog(arc.Core.bundle.get("gl.ui.quickschem.12"));
         picker.setSize(Core.graphics.getWidth() * 0.8f, Core.graphics.getHeight() * 0.8f);
 
         // Контейнер для списка иконок, который мы будем перерисовывать
@@ -557,7 +557,7 @@ public class QuickSchemFrag extends Table {
 
         // Поле поиска
         picker.cont.table(t -> {
-            t.add("Search: ").padRight(8f);
+            t.add((arc.Core.bundle.get("gl.ui.quickschem.13") + " ")).padRight(8f);
             t.field("", text -> {
                 // При каждом изменении текста очищаем и пересобираем список
                 rebuildIconList(listTable, text.toLowerCase(), slot, tab, editDefault, picker, parent);
@@ -610,7 +610,7 @@ public class QuickSchemFrag extends Table {
                     Core.settings.put("qs-default-iscontent", false);
                 }
                 handleResult.run();
-            }).tooltip("No icon");
+            }).tooltip(arc.Core.bundle.get("gl.ui.quickschem.14"));
             if (++count % columns == 0) t.row();
         }
 
@@ -682,13 +682,13 @@ public class QuickSchemFrag extends Table {
     }
 
     private void showEditDialog(QuickSlot slot) {
-        BaseDialog dialog = new BaseDialog("Edit Slot");
-        dialog.cont.add("Schematic Name:").left().row();
+        BaseDialog dialog = new BaseDialog(arc.Core.bundle.get("gl.ui.quickschem.15"));
+        dialog.cont.add(arc.Core.bundle.get("gl.ui.quickschem.16")).left().row();
         dialog.cont.field(slot.schemName, val -> {
             slot.schemName = val;
             saveData();
         }).growX().row();
-        dialog.cont.button("Pick Icon", () -> showIconPicker(slot, null, false, dialog)).size(200, 50);
+        dialog.cont.button(arc.Core.bundle.get("gl.ui.quickschem.17"), () -> showIconPicker(slot, null, false, dialog)).size(200, 50);
         dialog.addCloseButton();
         dialog.hidden(this::rebuild);
         dialog.show();
@@ -700,7 +700,7 @@ public class QuickSchemFrag extends Table {
         if (schem != null) {
             Vars.control.input.useSchematic(schem);
         } else {
-            Vars.ui.showInfoFade("Not found: " + name);
+            Vars.ui.showInfoFade((arc.Core.bundle.get("gl.ui.quickschem.18") + " ") + name);
         }
     }
 

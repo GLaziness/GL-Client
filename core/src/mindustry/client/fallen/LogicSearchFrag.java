@@ -29,16 +29,16 @@ public class LogicSearchFrag extends Table {
 
             cont.table(Tex.buttonTrans, main -> {
                 main.margin(12f);
-                main.add("[accent]FIND LOGIC CODE[]").padBottom(8f).row();
+                main.add(arc.Core.bundle.get("gl.ui.logicsearch.1")).padBottom(8f).row();
 
                 searchField = main.field("", text -> {//автопоиск мб да
                 }).growX().pad(8).get();
-                searchField.setMessageText("Enter code snippet...");
+                searchField.setMessageText(arc.Core.bundle.get("gl.ui.logicsearch.2"));
                 searchField.setMaxLength(100);
 
                 main.row();
 
-                main.button("Find", Icon.zoomSmall, this::runSearch).growX().height(40f).pad(8).row();
+                main.button(arc.Core.bundle.get("gl.ui.logicsearch.3"), Icon.zoomSmall, this::runSearch).growX().height(40f).pad(8).row();
 
                 main.pane(listTable).grow().maxHeight(400f).scrollX(false).row();
 
@@ -65,7 +65,7 @@ public class LogicSearchFrag extends Table {
         }
 
         if (foundCount == 0) {
-            listTable.add("[gray]No matches found").pad(20);
+            listTable.add(arc.Core.bundle.get("gl.ui.logicsearch.4")).pad(20);
         }
     }
 
@@ -76,7 +76,7 @@ public class LogicSearchFrag extends Table {
             row.image(lb.block.uiIcon).size(24).padRight(8);
 
             String coords = "(" + lb.tileX() + ", " + lb.tileY() + ")";
-            row.add("[white]Processor at [accent]" + coords).growX().left();
+            row.add(arc.Core.bundle.get("gl.ui.logicsearch.5") + coords).growX().left();
 
             row.button(Icon.moveSmall, Styles.cleari, () -> {
                 Spectate.INSTANCE.spectate(lb);

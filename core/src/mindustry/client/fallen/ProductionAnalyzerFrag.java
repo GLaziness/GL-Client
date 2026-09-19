@@ -78,16 +78,16 @@ public class ProductionAnalyzerFrag extends Table {
 
             t.table(Styles.black6, main -> {
                 main.margin(12f);
-                main.add("[accent]PRODUCTION ANALYZER[]").colspan(4).padBottom(6f).row();
+                main.add(arc.Core.bundle.get("gl.ui.productionanalyzer.1")).colspan(4).padBottom(6f).row();
                 main.image().growX().height(2f).color(Pal.accent).colspan(4).padBottom(8f).row();
                 main.table(s -> summaryTable = s).growX().padBottom(4f).maxWidth(tableWidth+colName+colVal+colReq).row();
                 main.image().growX().height(2f).color(Pal.accent).colspan(4).padBottom(8f).row();
                 main.table(h -> {
                     h.defaults().pad(2).fontScale(0.85f);
-                    h.add("[lightgray]Block / Resource").width(colName).left();
-                    h.add("[lightgray]Realtime").width(colVal).center();
+                    h.add(arc.Core.bundle.get("gl.ui.productionanalyzer.2")).width(colName).left();
+                    h.add(arc.Core.bundle.get("gl.ui.productionanalyzer.3")).width(colVal).center();
                     h.add("[lightgray]Max").width(colVal).center();
-                    h.add("[lightgray]Required").width(colReq).center();
+                    h.add(arc.Core.bundle.get("gl.ui.productionanalyzer.4")).width(colReq).center();
                 }).growX().row();
 
                 main.image().growX().height(1f).color(Color.darkGray).colspan(4).padBottom(6f).row();

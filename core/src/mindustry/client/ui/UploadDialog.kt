@@ -38,7 +38,7 @@ object UploadDialog : BaseDialog("@client.uploadtitle") { // FINISHME: Somehow s
 
         keyDown(Binding.paste) {
             // For some reason, it seems that interacting with the clipboard breaks sdl on Mac
-            if (OS.isMac) Vars.ui.showInfoToast("Image pasting does not work on mac.", 3f)
+            if (OS.isMac) Vars.ui.showInfoToast(arc.Core.bundle.get("gl.ui.upload.1"), 3f)
             else {
                 addImage(pixmapFromClipboard() ?: return@keyDown)
             }

@@ -436,7 +436,7 @@ public class JoinDialog extends BaseDialog{
         }
 
         if(fetchingCommunityServersErrored){ // FINISHME: Bundle
-            global.add("Error: Unable to fetch community servers list.").color(Color.red).center();
+            global.add(arc.Core.bundle.get("gl.ui.join.1")).color(Color.red).center();
             global.row();
         }
 

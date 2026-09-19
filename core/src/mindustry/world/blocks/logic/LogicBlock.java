@@ -840,7 +840,7 @@ public class LogicBlock extends Block{
                         new ConfigRequest(this, compress("end\n" + code, relativeConnections())).run();
                         Timer.schedule(() -> ClientVars.configs.add(new ConfigRequest(this, LogicBlock.compress(original, relativeConnections()))), net.client() ? netClient.getPing()/1000f : 0);
                     });
-                }).size(40).tooltip("Restart code execution").disabled(b -> !ClientVars.configs.isEmpty());
+                }).size(40).tooltip(arc.Core.bundle.get("gl.ui.logicblock.1")).disabled(b -> !ClientVars.configs.isEmpty());
                 table.button(Icon.copy, Styles.cleari, () ->{
                     Core.app.setClipboardText(this.code);
                 }).tooltip("@schematic.copy").size(40);
@@ -853,13 +853,13 @@ public class LogicBlock extends Block{
                 table.row();
                 table.button(Icon.trash, Styles.cleari, () -> {
                     if(Core.input.shift()) removeCode();
-                    else ui.showConfirm("@confirm", "Are you sure you want to delete this processor's code?", this::removeCode);
-                }).size(40).tooltip("Remove code").disabled(b -> !accessible() || !ClientVars.configs.isEmpty());
+                    else ui.showConfirm("@confirm", arc.Core.bundle.get("gl.ui.logicblock.2"), this::removeCode);
+                }).size(40).tooltip(arc.Core.bundle.get("gl.ui.logicblock.3")).disabled(b -> !accessible() || !ClientVars.configs.isEmpty());
 
                 table.button(Icon.eyeOff, Styles.cleari, () -> {
                     if(Core.input.shift()) removeLinks();
-                    else ui.showConfirm("@confirm", "Are you sure you want to remove all links?", this::removeLinks);
-                }).size(40).tooltip("Remove all links").disabled(b -> !accessible() || !ClientVars.configs.isEmpty());
+                    else ui.showConfirm("@confirm", arc.Core.bundle.get("gl.ui.logicblock.4"), this::removeLinks);
+                }).size(40).tooltip(arc.Core.bundle.get("gl.ui.logicblock.5")).disabled(b -> !accessible() || !ClientVars.configs.isEmpty());
 
                 table.button(Icon.tree, Styles.cleari, () -> {
                     if(Core.input.shift()){
@@ -888,7 +888,7 @@ public class LogicBlock extends Block{
 
                     dialog.addCloseButton();
                     dialog.show();
-                }).size(40).tooltip("Copy/paste Code").disabled(b -> !accessible());
+                }).size(40).tooltip(arc.Core.bundle.get("gl.ui.logicblock.6")).disabled(b -> !accessible());
             }
 
         }

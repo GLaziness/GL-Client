@@ -80,7 +80,7 @@ public class MapInfoFrag extends Table {
 
                 });
 
-                hp.add("[accent]MAP ANALYZER[]").padLeft(10).growX().left();
+                hp.add(arc.Core.bundle.get("gl.ui.mapinfo.1")).padLeft(10).growX().left();
                 hp.button(Icon.refresh, Styles.cleari, () -> {setPosition(graphics.getWidth() / 2f, graphics.getHeight() / 2f, Align.center); scanWorld();}).size(35f);
                 hp.button(Icon.edit, Styles.cleari, () -> {ui.mapInfoDial.show();}).size(40f);
                 hp.button(Icon.cancel, Styles.cleari, this::toggle).size(35f);
@@ -97,7 +97,7 @@ public class MapInfoFrag extends Table {
 
                     // Левая колонка: Attributes
                     top.table(Styles.black3, t -> {
-                        t.add("[accent]Attributes[]").colspan(2).padBottom(4).row();
+                        t.add(arc.Core.bundle.get("gl.ui.mapinfo.2")).colspan(2).padBottom(4).row();
                         addProp(t, "Size:", () -> world.width() + "x" + world.height(), null);
                         addProp(t, "Waves:", () -> state.rules.waves ? "Yes" : "No", true);
                         addProp(t, "Win Wave:", () -> state.rules.winWave > 0 ? "" + state.rules.winWave : "Inf", 0);
@@ -109,7 +109,7 @@ public class MapInfoFrag extends Table {
 
                     // Правая колонка: Multipliers
                     top.table(Styles.black3, t -> {
-                        t.add("[accent]Multipliers[]").colspan(2).padBottom(4).row();
+                        t.add(arc.Core.bundle.get("gl.ui.mapinfo.3")).colspan(2).padBottom(4).row();
                         float d = 1.0f;
                         addProp(t, "Build Cost:", () -> state.rules.buildCostMultiplier + "x", d);
                         addProp(t, "Build Spd:", () -> state.rules.buildSpeedMultiplier + "x", d);
@@ -124,7 +124,7 @@ public class MapInfoFrag extends Table {
 
                 // 2. Rules (Широкая таблица, Booleans)
                 p.table(Styles.black3, t -> {
-                    t.add("[accent]Rules Settings[]").colspan(4).padBottom(4).row();
+                    t.add(arc.Core.bundle.get("gl.ui.mapinfo.4")).colspan(4).padBottom(4).row();
                     t.defaults().growX().left().fontScale(0.8f);
 
 
@@ -148,32 +148,32 @@ public class MapInfoFrag extends Table {
                 }).padTop(4).row();
 
                 p.table(Styles.black3, res -> {
-                    res.button(b -> b.add("[accent]Resources (Ores)").fontScale(0.8f), Styles.cleart, () -> {
+                    res.button(b -> b.add(arc.Core.bundle.get("gl.ui.mapinfo.5")).fontScale(0.8f), Styles.cleart, () -> {
                         copySection("Resources", orePositions);
                     }).growX().pad(4).row();
                     res.add(resTable).growX();
                 }).padTop(4).row();
                 p.table(Styles.black3, res -> {
-                    res.button(b -> b.add("[accent]Floors").fontScale(0.8f), Styles.cleart, () -> {
+                    res.button(b -> b.add(arc.Core.bundle.get("gl.ui.mapinfo.6")).fontScale(0.8f), Styles.cleart, () -> {
                         copySection("Floors", floorPositions);
                     }).growX().pad(4).row();
                     res.add(floorTable).growX();
                 }).padTop(4).row();
 
                 p.table(Styles.black3, walls -> {
-                    walls.button(b -> b.add("[accent]Environment Walls").fontScale(0.8f), Styles.cleart, () -> {
+                    walls.button(b -> b.add(arc.Core.bundle.get("gl.ui.mapinfo.7")).fontScale(0.8f), Styles.cleart, () -> {
                         copySection("Walls", wallPositions);
                     }).growX().pad(4).row();
                     walls.add(wallTable).growX();
                 }).padTop(4).row();
 
                 p.table(Styles.black3, teams -> {
-                    teams.add("[accent]Active Teams[]").pad(4).row();
+                    teams.add(arc.Core.bundle.get("gl.ui.mapinfo.8")).pad(4).row();
                     teams.add(teamTable).growX();
                 }).padTop(4).row();
 
                 p.table(Styles.black3, banned -> {
-                    banned.add("[accent]Banned Content[]").pad(4).row();
+                    banned.add(arc.Core.bundle.get("gl.ui.mapinfo.9")).pad(4).row();
                     banned.add(bannedTable).growX();
                 }).padTop(4).row();
 
@@ -315,21 +315,21 @@ public class MapInfoFrag extends Table {
 
         teamTable.table(header -> {
             header.defaults().pad(2).fontScale(0.8f);
-            header.add("[gray]Team").width(nameW).left();
+            header.add(arc.Core.bundle.get("gl.ui.mapinfo.10")).width(nameW).left();
 
             if (v.bh) { addVLine(header); header.add("[gray]BHp").width(mulW).center(); }
             if (v.bd) { addVLine(header); header.add("[gray]BDmg").width(mulW).center(); }
             if (v.bs) { addVLine(header); header.add("[gray]BSpd").width(mulW).center(); }
             if (v.us) { addVLine(header); header.add("[gray]USpd").width(mulW).center(); }
-            if (v.uc) { addVLine(header); header.add("[gray]UCost").width(mulW).center(); }
+            if (v.uc) { addVLine(header); header.add(arc.Core.bundle.get("gl.ui.mapinfo.11")).width(mulW).center(); }
             if (v.uh) { addVLine(header); header.add("[gray]UHp").width(mulW).center(); }
             if (v.ud) { addVLine(header); header.add("[gray]UDmg").width(mulW).center(); }
-            if (v.ucr) { addVLine(header); header.add("[gray]UCras").width(mulW).center(); }
+            if (v.ucr) { addVLine(header); header.add(arc.Core.bundle.get("gl.ui.mapinfo.12")).width(mulW).center(); }
 
             addVLine(header); header.add("[gray]" + Iconc.host).width(iconW).center();
             addVLine(header); header.add("[gray]" + Iconc.units).width(iconW).center();
             if (v.ir) { addVLine(header); header.add("[gray]InfRes").width(ruleW).center(); }
-            if (v.ia) { addVLine(header); header.add("[gray]InfAmmo").width(ruleW).center(); }
+            if (v.ia) { addVLine(header); header.add(arc.Core.bundle.get("gl.ui.mapinfo.13")).width(ruleW).center(); }
         }).growX().padBottom(2).row();
 
         for(Team team : activeTeams){
@@ -375,13 +375,13 @@ public class MapInfoFrag extends Table {
         // --- КОМАНДЫ (С множителями) ---
         teamTable.table(header -> {
             header.defaults().pad(2).fontScale(0.8f);
-            header.add("[gray]Team").width(90).left();
+            header.add(arc.Core.bundle.get("gl.ui.mapinfo.10")).width(90).left();
             header.image(Tex.whiteui).color(Color.gray).width(1f).fillY().padLeft(4).padRight(4);
             header.add("[gray]" + Iconc.host).width(30);
             header.image(Tex.whiteui).color(Color.gray).width(1f).fillY().padLeft(4).padRight(4);
             header.add("[gray]InfRes").width(50);
             header.image(Tex.whiteui).color(Color.gray).width(1f).fillY().padLeft(4).padRight(4);
-            header.add("[gray]InfAmmo").width(55);
+            header.add(arc.Core.bundle.get("gl.ui.mapinfo.13")).width(55);
         }).growX().row();
 
         for(Team team : Team.all){
@@ -407,7 +407,7 @@ public class MapInfoFrag extends Table {
         bannedTable.top().left();
 
         if(!state.rules.bannedBlocks.isEmpty()){
-            bannedTable.add("[lightgray]Blocks: ").padRight(4);
+            bannedTable.add((arc.Core.bundle.get("gl.ui.mapinfo.14") + " ")).padRight(4);
             int i = 0;
             for(Block b : state.rules.bannedBlocks){
                 if(b == null) continue;
@@ -419,7 +419,7 @@ public class MapInfoFrag extends Table {
 
         if(!state.rules.bannedUnits.isEmpty()){
             float padTop = state.rules.bannedBlocks.isEmpty() ? 0 : 4f;
-            bannedTable.add("[lightgray]Units: ").padRight(4).padTop(padTop);
+            bannedTable.add((arc.Core.bundle.get("gl.ui.mapinfo.15") + " ")).padRight(4).padTop(padTop);
             int i = 0;
             for(UnitType u : state.rules.bannedUnits){
                 if(u == null) continue;
@@ -429,7 +429,7 @@ public class MapInfoFrag extends Table {
         }
 
         if(state.rules.bannedBlocks.isEmpty() && state.rules.bannedUnits.isEmpty()){
-            bannedTable.add("No bans on this map").color(Color.gray).fontScale(0.8f);
+            bannedTable.add(arc.Core.bundle.get("gl.ui.mapinfo.16")).color(Color.gray).fontScale(0.8f);
         }
     }
 

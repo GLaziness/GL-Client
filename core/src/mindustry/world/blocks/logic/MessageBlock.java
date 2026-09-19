@@ -138,7 +138,7 @@ public class MessageBlock extends Block{
                     a.setMaxLength(maxTextLength);
                     dialog.cont.row();
                     dialog.cont.label(() -> a.getText().length() + " / " + maxTextLength).color(Color.lightGray);
-                    dialog.buttons.button("Use for chat verification", () -> {
+                    dialog.buttons.button(arc.Core.bundle.get("gl.ui.messageblock.1"), () -> {
                         configure(ClientVars.MESSAGE_BLOCK_PREFIX);
                         dialog.hide();
                     }).size(150f, 60f);

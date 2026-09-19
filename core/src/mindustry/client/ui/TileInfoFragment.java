@@ -9,6 +9,7 @@ import mindustry.*;
 import mindustry.client.antigrief.*;
 import mindustry.core.*;
 import mindustry.gen.*;
+import mindustry.ui.*;
 import mindustry.world.*;
 
 import java.util.concurrent.atomic.*;
@@ -50,9 +51,22 @@ public class TileInfoFragment extends Table {
             var logs = record.lastLogs(displayLogs);
 
             builder.setLength(0);
-            for (var item : logs) builder.append(item.toShortString()).append(" (").append(UI.formatMinutesFromMillis(Time.timeSinceMillis(item.getTime().toEpochMilli()))).append(")\n");
-            if (pending && logs.size() < displayLogs) builder.append("[accent]Server Logs Pending[]\n"); // Append if the logs aren't already full since these are always older than client logs FINISHME: Bundle
+            for (var item : logs) builder.append(compact(item)).append(" [lightgray]").append(UI.formatMinutesFromMillis(Time.timeSinceMillis(item.getTime().toEpochMilli()))).append("[]\n");
+            if (pending && logs.size() < displayLogs) builder.append((arc.Core.bundle.get("gl.ui.tileinfo.1") + "\n")); // Append if the logs aren't already full since these are always older than client logs FINISHME: Bundle
             label.setText(builder.length() == 0 ? "" : builder.substring(0, builder.length() - 1)); // This is awful
         });
+    }
+
+    /** GL: the same log line with the block (or unit) name replaced by its icon, so the panel stays narrow. */
+    private static String compact(TileLog item){
+        String s = item.toShortString();
+        if (item instanceof AbstractTileLog log) return iconFor(s, log.getBlock().localizedName, log.getBlock().name);
+        if (item instanceof UnitDestroyedLog log) return iconFor(s, log.getUnitType().localizedName, log.getUnitType().name);
+        return s;
+    }
+
+    private static String iconFor(String s, String localized, String name) {
+        String icon = Fonts.getUnicodeStr(name);
+        return icon == null || icon.isEmpty() ? s : s.replace(localized, icon);
     }
 }

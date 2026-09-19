@@ -123,11 +123,11 @@ class TileState {
                 config is Array<*> && config.getOrNull(0) is Point2 -> {
                     // shut up I promise it's an array of point2s
                     val array = config as Array<Point2>
-                    table.add("${array.size} blocks: " + array.joinToString(limit = 5) { "(${it.x + x}, ${it.y + y})" })
+                    table.add((arc.Core.bundle.format("gl.ui.tilestate.p1", array.size.toString()) + " ") + array.joinToString(limit = 5) { "(${it.x + x}, ${it.y + y})" })
                     table.button(Icon.copySmall) { Core.app.clipboardText = array.joinToString { "(${it.x + x}, ${it.y + y})" } }
                 }
 
-                config is String -> table.add("Text config:\n${config}")
+                config is String -> table.add(arc.Core.bundle.get("gl.ui.tilestate.p2") + "\n" + config)
 
                 config is Boolean && block is Door -> table.add(if(config) "open" else "closed")
 

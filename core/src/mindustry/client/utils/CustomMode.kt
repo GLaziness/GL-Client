@@ -47,7 +47,7 @@ enum class CustomMode(
                 }
 
                 fun download(update: Boolean = false) { // Downloads and enables the mod
-                    Toast(3f).add(if (update) "Updating" else "Installing" + " FloodCompat")
+                    Toast(3f).add(arc.Core.bundle.get(if (update) "gl.ui.custommode.updating" else "gl.ui.custommode.installing"))
                     Log.debug(if (update) "Updating" else "Installing" + " FloodCompat")
                     ui.mods.githubImportMod(floodCompatRepo, true, null, false, floodMod?.meta?.version) {
                         val new = mods.mods.last { it.name == "floodcompat"} // newly downloaded flood compat if any
@@ -59,7 +59,7 @@ enum class CustomMode(
                         }
                         val reload = Reflect.get<Boolean>(mods, "requiresReload")
                         Reflect.set(mods, "requiresReload", reload)
-                        if (installed) Toast(3f).add("FloodCompat " + if (update) "updated" else "installed" + " successfully!")
+                        if (installed) Toast(3f).add(arc.Core.bundle.get(if (update) "gl.ui.custommode.updated" else "gl.ui.custommode.installed"))
                         Core.settings.put("mod-floodcompat-enabled", false) // Set as disabled as there's no reason to load it outside of flood gamemode
                         floodMod = mods.getMod("floodcompat") // floodMod is still null from before, set it to the mod we just downloaded
                         enable()
@@ -67,8 +67,8 @@ enum class CustomMode(
                 }
 
                 if (floodMod === null) {
-                    ui.showConfirm("[scarlet]FloodCompat mod not found!", "Installing the [accent]${floodCompatRepo}[] mod is recommended for a better game experience. Would you like to install it?\nThis will not require a restart.") {
-                        Toast(3f).add("Downloading mod")
+                    ui.showConfirm(arc.Core.bundle.get("gl.ui.custommode.1"), arc.Core.bundle.format("gl.ui.custommode.p1", floodCompatRepo)) {
+                        Toast(3f).add(arc.Core.bundle.get("gl.ui.custommode.2"))
                         download()
                     }
                 } else if (!floodMod.enabled()) {

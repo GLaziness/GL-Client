@@ -76,7 +76,7 @@ public class WaveInfoFrag extends Table {
                     displayMode = DisplayMode.values()[(displayMode.ordinal() + 1) % DisplayMode.values().length];
                     Core.settings.put("wavefrag-mode", displayMode.ordinal());
                     rebuild();
-                }).size(35f).tooltip("Toggle display mode:\n[gray]MIN[] - Icons only\n[accent]STD[] - With HP/Shield bars\n[orange]DET[] - +Per-unit stats");
+                }).size(35f).tooltip(arc.Core.bundle.get("gl.ui.waveinfo.1"));
                 ctrl.add().growX();
                 ctrl.button(Icon.cancel, Styles.cleari, this::toggle).size(35f);
             }).growX().top().pad(2f);
@@ -215,7 +215,7 @@ public class WaveInfoFrag extends Table {
                         }
 
                         if (flatMap.isEmpty()) {
-                            units.add("No units").color(Color.gray).fontScale(0.7f * font_offset).center().growX();
+                            units.add(arc.Core.bundle.get("gl.ui.waveinfo.2")).color(Color.gray).fontScale(0.7f * font_offset).center().growX();
                         } else {
                             int col = 0;
                             for (var entry : flatMap.entries()) {
@@ -264,7 +264,7 @@ public class WaveInfoFrag extends Table {
                         }
 
                         if (allStatsMap.isEmpty() && groupedSpecificStats.isEmpty()) {
-                            units.add("No units").color(Color.gray).fontScale(0.7f * font_offset).center().growX();
+                            units.add(arc.Core.bundle.get("gl.ui.waveinfo.2")).color(Color.gray).fontScale(0.7f * font_offset).center().growX();
                         } else {
                             // Отрисовка суммарной таблицы (в STD это будет всё, в DET - только юниты "All Spawns")
                             if (!allStatsMap.isEmpty()) {

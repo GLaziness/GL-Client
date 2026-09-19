@@ -11,16 +11,16 @@ import mindustry.gen.*
 import mindustry.ui.dialogs.*
 import kotlin.random.*
 
-object MarkerDialog : BaseDialog("Markers") {
+object MarkerDialog : BaseDialog(arc.Core.bundle.get("gl.ui.marker.1")) {
     val pane = Table()
     init {
-        cont.add("Minimap Markers").center().top()
+        cont.add(arc.Core.bundle.get("gl.ui.marker.2")).center().top()
         cont.row()
         cont.pane(pane).width(800f).grow()
         pane.add().width(pane.width)
         cont.row()
         buttons.button(Icon.add) { MarkerAddDialog().show() }.growX()
-        buttons.button("Close") { hide() }.growX()
+        buttons.button(arc.Core.bundle.get("gl.ui.marker.3")) { hide() }.growX()
         addCloseListener()
         updatePane()
 
@@ -43,7 +43,7 @@ object MarkerDialog : BaseDialog("Markers") {
             }
 
             table.add(marker.name).left().pad(5f).growX().get().clicked {
-                ui.showTextInput("Name", "Name", marker.name) {
+                ui.showTextInput(arc.Core.bundle.get("gl.ui.marker.5"), arc.Core.bundle.get("gl.ui.marker.5"), marker.name) {
                     if (it.isNotBlank()) {
                         marker.name = it
                     }
@@ -72,10 +72,10 @@ object MarkerDialog : BaseDialog("Markers") {
         }
     }
 
-    class MarkerAddDialog : BaseDialog("Add Marker") {
+    class MarkerAddDialog : BaseDialog(arc.Core.bundle.get("gl.ui.marker.4")) {
         init {
             val nameField = TextField("")
-            nameField.messageText = "Name"
+            nameField.messageText = arc.Core.bundle.get("gl.ui.marker.5")
             cont.row(nameField)
 
             val xField = cont.field("") {}.valid(Strings::canParsePositiveInt).growX().get()

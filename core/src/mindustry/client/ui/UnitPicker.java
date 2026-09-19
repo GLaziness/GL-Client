@@ -132,7 +132,7 @@ public class UnitPicker extends BaseDialog {
                         } else if (event.oldUnit.getPlayer() != null && !event.oldUnit.isLocal()) {
                             t.add(Core.bundle.format("client.unitpicker.alreadyinuse", event.oldUnit.type, event.oldUnit.getPlayer().name));
                             type = event.oldUnit.type;
-                        } else t.add("[scarlet]This wasn't supposed to happen...");
+                        } else t.add(arc.Core.bundle.get("gl.ui.unitpicker.1"));
                     }
                 }), net.client() ? netClient.getPing()/1000f + .3f: 0);
             }), net.client() ? netClient.getPing()/1000f + .3f: 0);

@@ -138,7 +138,7 @@ public class FavoriteServersFrag extends Table {
         int col = 0;
 
         if (favorites.isEmpty()) {
-            container.add("[gray]No favorite servers[]").color(Color.gray).fontScale(0.8f).center().growX().padTop(10f);
+            container.add(arc.Core.bundle.get("gl.ui.favoriteservers.1")).color(Color.gray).fontScale(0.8f).center().growX().padTop(10f);
             return;
         }
 
@@ -197,13 +197,13 @@ public class FavoriteServersFrag extends Table {
 
             // Интервал авто-обновления
             t.table(refreshInfo -> {
-                refreshInfo.add("[lightgray]Auto-refresh interval:[]").fontScale(0.75f).right();
+                refreshInfo.add(arc.Core.bundle.get("gl.ui.favoriteservers.2")).fontScale(0.75f).right();
                 int currentInterval = Core.settings.getInt("fav-refresh-interval", 30);
                 refreshInfo.add(" " + currentInterval + "s[]").color(Pal.accent).fontScale(0.85f);
                 refreshInfo.button(Icon.refresh, Styles.cleari, () -> {
                     refreshAll();
                     Log.info("Refreshing servers...");
-                }).size(28f).tooltip("Refresh now");
+                }).size(28f).tooltip(arc.Core.bundle.get("gl.ui.favoriteservers.3"));
             }).growX().right();
             t.row();
 
@@ -224,7 +224,7 @@ public class FavoriteServersFrag extends Table {
             t.row();
 
             // Количество колонок
-            t.add("Columns:").left().padTop(8f).padBottom(3f).color(Pal.accent);
+            t.add(arc.Core.bundle.get("gl.ui.favoriteservers.4")).left().padTop(8f).padBottom(3f).color(Pal.accent);
             t.row();
 
             t.table(colsTable -> {
@@ -257,7 +257,7 @@ public class FavoriteServersFrag extends Table {
             ScrollPane scroll = new ScrollPane(new Table(list -> {
                 list.defaults().growX().pad(2f);
                 if (favorites.isEmpty()) {
-                    list.add("[gray]No servers[]").center().padTop(10f).fontScale(0.9f);
+                    list.add(arc.Core.bundle.get("gl.ui.favoriteservers.5")).center().padTop(10f).fontScale(0.9f);
                     return;
                 }
 
@@ -275,12 +275,12 @@ public class FavoriteServersFrag extends Table {
                                 dialog.hide();
                                 showSettings();
                             }
-                        }).size(26f).disabled(b -> index == 0).tooltip("Move up");
+                        }).size(26f).disabled(b -> index == 0).tooltip(arc.Core.bundle.get("gl.ui.favoriteservers.6"));
 
                         row.button(Icon.copy, Styles.cleari, () -> {
                             Core.app.setClipboardText(s.displayIP());
                             Vars.ui.showInfoFade("@copied");
-                        }).size(26f).tooltip("Copy IP");
+                        }).size(26f).tooltip(arc.Core.bundle.get("gl.ui.favoriteservers.7"));
 
                         row.button(Icon.downOpen, Styles.cleari, () -> {
                             if (index < favorites.size - 1) {
@@ -290,7 +290,7 @@ public class FavoriteServersFrag extends Table {
                                 dialog.hide();
                                 showSettings();
                             }
-                        }).size(26f).disabled(b -> index == favorites.size - 1).tooltip("Move down");
+                        }).size(26f).disabled(b -> index == favorites.size - 1).tooltip(arc.Core.bundle.get("gl.ui.favoriteservers.8"));
 
                         row.add(new Label(() -> s.displayName()))
                                 .growX()
@@ -323,7 +323,7 @@ public class FavoriteServersFrag extends Table {
     private void addFavoriteServer(TextField ipField, BaseDialog dialog) {
         String ip = ipField.getText().trim();
         if (ip.isEmpty()) {
-            ui.showInfo("Enter server address");
+            ui.showInfo(arc.Core.bundle.get("gl.ui.favoriteservers.9"));
             return;
         }
 
@@ -344,7 +344,7 @@ public class FavoriteServersFrag extends Table {
             String finalAddress = address;
             int finalPort = port;
             if (favorites.contains(s -> s.ip.equals(finalAddress) && s.port == finalPort)) {
-                ui.showInfo("Server already in favorites");
+                ui.showInfo(arc.Core.bundle.get("gl.ui.favoriteservers.10"));
                 return;
             }
 
@@ -357,7 +357,7 @@ public class FavoriteServersFrag extends Table {
             dialog.hide();
             showSettings();
         } catch (Exception e) {
-            ui.showInfo("Invalid format\nUse: IP:Port\nExample: 127.0.0.1:6567");
+            ui.showInfo(arc.Core.bundle.get("gl.ui.favoriteservers.11"));
         }
     }
 

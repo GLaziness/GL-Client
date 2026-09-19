@@ -57,7 +57,7 @@ fun setupCommands() {
                 player.sendMessage("[orange] ${clientCommandHandler.prefix}${command.text}[white] ${command.paramText}[lightgray] - ${command.description}")
                 return@register
             }
-            player.sendMessage("[scarlet]input must be a number or command.")
+            player.sendMessage(arc.Core.bundle.get("gl.ui.commands.1"))
             return@register
         }
         val commandsPerPage = 6
@@ -65,7 +65,7 @@ fun setupCommands() {
         val pages = Mathf.ceil(clientCommandHandler.commandList.size.toFloat() / commandsPerPage)
         page--
         if (page >= pages || page < 0) {
-            player.sendMessage("[scarlet]'page' must be a number between[orange] 1[] and[orange] $pages[scarlet].")
+            player.sendMessage(arc.Core.bundle.format("gl.ui.commands.p1", pages.toString()))
             return@register
         }
         val result = buildString {
@@ -234,7 +234,7 @@ fun setupCommands() {
 
     register("scanprocs [showslightlysus]", Core.bundle.get("client.command.scanprocs.description")) { args, player ->
         val showslightlysus = args.size == 1
-        player.sendMessage("[yellow]Scanning all processors...")
+        player.sendMessage(arc.Core.bundle.get("gl.ui.commands.2"))
         //Getting the list of processors must be done on the main thread
         val procs = player.team().data().buildings.filterIsInstance<LogicBlock.LogicBuild>()
         //The scanning is expensive so we run it on the client thread
@@ -257,8 +257,8 @@ fun setupCommands() {
                         noDetections = false
                     }
                 }
-                if(noDetections) player.sendMessage("[green]No suspicious processors found.")
-                else player.sendMessage("Scan complete.")
+                if(noDetections) player.sendMessage(arc.Core.bundle.get("gl.ui.commands.3"))
+                else player.sendMessage(arc.Core.bundle.get("gl.ui.commands.4"))
             }
         }
     }
@@ -340,10 +340,10 @@ fun setupCommands() {
     }
 
     register("distance [distance]", Core.bundle.get("client.command.distance.description")) { args, player ->
-        if (args.size != 1) player.sendMessage("[accent]The distance multiplier is ${Core.settings.getFloat("assistdistance", 5f)} (default is 5)")
+        if (args.size != 1) player.sendMessage(arc.Core.bundle.format("gl.ui.commands.p2", Core.settings.getFloat("assistdistance", 5f).toString()))
         else {
             Core.settings.put("assistdistance", abs(Strings.parseFloat(args[0], 5f)))
-            player.sendMessage("[accent]The distance multiplier is now ${Core.settings.getFloat("assistdistance")} (default is 5)")
+            player.sendMessage(arc.Core.bundle.format("gl.ui.commands.p3", Core.settings.getFloat("assistdistance").toString()))
         }
     }
 
@@ -399,8 +399,8 @@ fun setupCommands() {
 
         if (confirmed) {
             plans.chunked(200) { configs.add { Call.deletePlans(player, it.toIntArray()) } }
-            player.sendMessage("[accent]Removed ${plans.size} plans, ${player.team().data().plans.size - plans.size} remain")
-        } else player.sendMessage("[accent]Found ${plans.size} (out of ${player.team().data().plans.size}) block ghosts within turret range, run [coral]${clientCommandHandler.prefix}clearghosts c[] to remove them")
+            player.sendMessage(arc.Core.bundle.format("gl.ui.commands.p4", plans.size.toString(), (player.team().data().plans.size - plans.size).toString()))
+        } else player.sendMessage(arc.Core.bundle.format("gl.ui.commands.p5", plans.size.toString(), player.team().data().plans.size.toString(), clientCommandHandler.prefix))
     }
 
     register("e <certname> <message...>", Core.bundle.get("client.command.e.description")) { args, _ ->
@@ -425,7 +425,7 @@ fun setupCommands() {
         val player = Groups.player.find { it.id == Strings.parseInt(name) } ?:
             Groups.player.minByOrNull { biasedLevenshtein(Strings.stripColors(it.name), name, false, true) }!!
         Main.send(CommandTransmission(CommandTransmission.Commands.STOP_PATH, Main.keyStorage.cert() ?: run {
-            player.sendMessage("Failed to send transmission: invalid certificate!")
+            player.sendMessage(arc.Core.bundle.get("gl.ui.commands.5"))
             return@register
         }, player))
         ui.chatfrag.addMsg("Stopped pathing of player ${player.name}[white].")
@@ -527,7 +527,7 @@ fun setupCommands() {
 
     register("replacemessage <from> <to> [useRegex=t]", Core.bundle.get("client.command.replacemessage.description")) { args, player ->
         if (args[0].length < 3) {
-            player.sendMessage("[scarlet]That might not be a good idea...")
+            player.sendMessage(arc.Core.bundle.get("gl.ui.commands.6"))
             return@register
         }
         val useRegex = args.size > 2 && args[2] == "t"
@@ -539,7 +539,7 @@ fun setupCommands() {
         Core.bundle.get("client.command.replacemsgif.description")
     ) { args, player ->
         if (args[0].length < 3) {
-            player.sendMessage("[scarlet]That might not be a good idea...")
+            player.sendMessage(arc.Core.bundle.get("gl.ui.commands.6"))
             return@register
         }
         replaceMsg(args[0], args.size > 3 && args[3] == "t", args[1], args.size > 4 && args[4] == "t", args[2])
@@ -564,10 +564,10 @@ fun setupCommands() {
     register("pathing", Core.bundle.get("client.command.pathing.description")) { _, player ->
         if (navigator is AStarNavigator) {
             navigator = AStarNavigatorOptimised
-            player.sendMessage("[accent]Using [green]improved[] algorithm")
+            player.sendMessage(arc.Core.bundle.get("gl.ui.commands.7"))
         } else if (navigator is AStarNavigatorOptimised) {
             navigator = AStarNavigator
-            player.sendMessage("[accent]Using [gray]classic[] algorithm")
+            player.sendMessage(arc.Core.bundle.get("gl.ui.commands.8"))
         }
     }
 
@@ -793,8 +793,8 @@ fun setupCommands() {
                 ui.settings.show()
                 ui.settings.visible(4)
             }
-            "l", "leaves" -> Client.leaves?.leftList() ?: player.sendMessage("[scarlet]Leave logs are disabled")
-            else -> player.sendMessage("[scarlet]Invalid option specified, options are:\nSettings, Leaves")
+            "l", "leaves" -> Client.leaves?.leftList() ?: player.sendMessage(arc.Core.bundle.get("gl.ui.commands.9"))
+            else -> player.sendMessage(arc.Core.bundle.get("gl.ui.commands.10"))
         }
     }
 
@@ -846,7 +846,7 @@ fun setupCommands() {
                 time = Instant.now().minus(args[0].toLong(), ChronoUnit.MINUTES)
                 range = args[1].toFloat() * tilesize
             } catch (_: Exception) {
-                player.sendMessage("[scarlet]Invalid arguments! Please specify 2 numbers (time and range)!")
+                player.sendMessage(arc.Core.bundle.get("gl.ui.commands.11"))
                 return@register
             }
             Tmp.r1.set(player.x - range, player.y - range, range * 2, range * 2)
@@ -868,11 +868,11 @@ fun setupCommands() {
                 range = args[2].toFloat() * tilesize
             }
             catch (_: Exception) {
-                player.sendMessage("[scarlet]Invalid arguments!")
+                player.sendMessage(arc.Core.bundle.get("gl.ui.commands.12"))
                 return@register
             }
             if (timeStart >= timeEnd) { // I hate dealing with people
-                player.sendMessage("[scarlet]Invalid time interval! Start must be before end.")
+                player.sendMessage(arc.Core.bundle.get("gl.ui.commands.13"))
                 return@register
             }
 
@@ -890,7 +890,7 @@ fun setupCommands() {
                 range = if (args.size >= 2) args[1].toFloat() * tilesize else Float.MAX_VALUE
             }
             catch (_: Exception) {
-                player.sendMessage("[scarlet]Invalid args! Please specify a player id number and (optionally) a range number")
+                player.sendMessage(arc.Core.bundle.get("gl.ui.commands.14"))
                 return@register
             }
 
@@ -914,7 +914,7 @@ fun setupCommands() {
                 schematics.all().each {
                     val b = schematics.writeBase64(it)
                     if (b.length + 1 > 8_000_000) { // Who in their right mind has a schematic that's over 8 million characters
-                        Core.app.post { player.sendMessage("[scarlet]You have an insanely large schematic (${it.name()}) which will not be uploaded.") }
+                        Core.app.post { player.sendMessage(arc.Core.bundle.format("gl.ui.commands.p6", it.name())) }
                         return@each
                     }
                     if (sb.length + b.length > 8_000_000) uploadSchematics()
@@ -945,14 +945,14 @@ fun setupCommands() {
                 Http.get("https://cancer-co.de/raw/$id").timeout(60_000).submit { r ->  // FINISHME: Add handling for failed http requests
                     val str = r.resultAsString
                     if (str == "Paste not found!") { // FINISHME: Improve messaging for failed loads
-                        player.sendMessage("[scarlet]Failed to load https://cancer-co.de/raw/$id as it was not found.")
+                        player.sendMessage(arc.Core.bundle.format("gl.ui.commands.p7", id.toString()))
                         return@submit
                     }
                     val out = Seq<Schematic>()
                     for (s in str.split('\n')) out.add(Schematics.readBase64(s))
 
                     Core.app.post { // Do this on the main thread
-                        player.sendMessage("[accent]Finished loading $id")
+                        player.sendMessage(arc.Core.bundle.format("gl.ui.commands.p8", id.toString()))
                         dest.add(out)
                         browser.rebuildResults()
                     }
@@ -990,7 +990,7 @@ fun replaceMsg(match: String, matchRegex: Boolean, from: String, fromRegex: Bool
             configs.add(ConfigRequest(it.tileX(), it.tileY(), msg2))
             num++
         }
-        player.sendMessage("[accent]Queued $num messages for editing")
+        player.sendMessage(arc.Core.bundle.format("gl.ui.commands.p9", num.toString()))
     }
 }
 

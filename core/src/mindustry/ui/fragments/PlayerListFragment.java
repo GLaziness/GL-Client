@@ -381,7 +381,7 @@ public class PlayerListFragment{
                         () -> ui.showTextInput("@votekick.reason", Core.bundle.format("votekick.reason.message", user.name()), "", reason -> {
                             Call.sendChatMessage("/votekick #" + user.id() + " " + reason);
                             if(Server.io.b() && (user.trace != null || user.serverID != null))
-                                ui.showConfirm("@confirm", "Do you want to rollback this player's actions?", () ->
+                                ui.showConfirm("@confirm", arc.Core.bundle.get("gl.ui.playerlist.1"), () ->
                                     Call.sendChatMessage(Strings.format("/rollback @ 5", user.trace != null ? user.trace.uuid : user.serverID))
                                 );
                         })).size(h/2).tooltip("@player.kick").get().resizeImage(h/2.2f);

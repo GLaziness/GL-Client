@@ -68,7 +68,7 @@ object BuildPlanCommunicationSystem : CommunicationSystem() {
 
     override fun send(bytes: ByteArray) {
         if (!Vars.player.unit().canBuild()) {
-            Toast(3f).add("[scarlet]Failed to send packet, build plan networking doesn't work if you can't build.")
+            Toast(3f).add(arc.Core.bundle.get("gl.ui.buildplancommunicationsystem.1"))
             return
         }
 //        val config = bytes.base32768().chunked(LAssembler.maxTokenLength - 2).joinToString("\n", prefix = PREFIX.format(Random.nextLong())) { "print \"$it\"" }

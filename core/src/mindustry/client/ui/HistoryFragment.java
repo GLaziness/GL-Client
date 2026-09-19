@@ -61,12 +61,12 @@ public class HistoryFragment extends Table {
                     }
                 });
 
-                hTable.add(new Label(" LOG HISTORY ")).color(Pal.accent).padLeft(5);
+                hTable.add(new Label((" " + arc.Core.bundle.get("gl.ui.history.1") + " "))).color(Pal.accent).padLeft(5);
                 hTable.add().growX();
 
                 hTable.button(Icon.refresh, Styles.cleari, () -> {
                     setPosition(Core.graphics.getWidth() / 2f, Core.graphics.getHeight() / 2f, Align.center);
-                }).size(40).tooltip("Reset position");
+                }).size(40).tooltip(arc.Core.bundle.get("gl.ui.history.2"));
 
                 hTable.button(Icon.cancel, Styles.cleari, this::toggle).size(40);
             }).growX().color(Color.valueOf("3a3a3a"));
@@ -76,7 +76,7 @@ public class HistoryFragment extends Table {
             pane.field(searchText, text -> {
                 searchText = text.toLowerCase();
                 rebuildContent();
-            }).growX().pad(8).get().setMessageText("Search by player, block or item...");
+            }).growX().pad(8).get().setMessageText(arc.Core.bundle.get("gl.ui.history.3"));
 
             pane.row();
 
@@ -139,7 +139,7 @@ public class HistoryFragment extends Table {
         listTable.top();
 
         if (currentTab == null) {
-            listTable.add("Please select a category above").color(Color.lightGray).pad(40);
+            listTable.add(arc.Core.bundle.get("gl.ui.history.4")).color(Color.lightGray).pad(40);
             return;
         }
 
@@ -153,7 +153,7 @@ public class HistoryFragment extends Table {
         }
 
         if (listTable.getChildren().isEmpty()) {
-            listTable.add("< No logs here >").color(Color.gray).pad(20);
+            listTable.add(arc.Core.bundle.get("gl.ui.history.5")).color(Color.gray).pad(20);
         }
     }
 
@@ -260,7 +260,7 @@ public class HistoryFragment extends Table {
                             unitIcons.image(ut.type.uiIcon).size(14).padRight(2);
                             unitIcons.add(ut.count + "").fontScale(0.7f).color(Color.lightGray).padRight(6);
                         }
-                        unitIcons.add("[gray]Target:[] " + p.targetName).fontScale(0.75f).padLeft(4);
+                        unitIcons.add((arc.Core.bundle.get("gl.ui.history.6") + " ") + p.targetName).fontScale(0.75f).padLeft(4);
                     }).left();
                 }).growX().left();
 
@@ -298,7 +298,7 @@ public class HistoryFragment extends Table {
                             unitIcons.image(ut.type.uiIcon).size(14).padRight(2);
                             unitIcons.add(ut.count + "").fontScale(0.7f).color(Color.lightGray).padRight(6);
                         }
-                        unitIcons.add("[gray]Action:[] [sky]" + p.commandName).fontScale(0.75f).padLeft(4);
+                        unitIcons.add(arc.Core.bundle.get("gl.ui.history.7") + p.commandName).fontScale(0.75f).padLeft(4);
                     }).left();
                 }).growX().left();
 

@@ -69,7 +69,7 @@ public class MenuFragment{
         parent.fill(c ->
             c.bottom().left().image(
                     Core.atlas.find("gl-logo")
-            ).tooltip("GL Client - a fork of Foo's Client and the FD client")
+            ).tooltip(arc.Core.bundle.get("gl.ui.menu.1"))
             .size(146, 64).pad(5)
         );
 

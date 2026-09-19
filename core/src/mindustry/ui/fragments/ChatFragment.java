@@ -755,9 +755,9 @@ public class ChatFragment extends Table{
 
                 //send usage
                 if(response.type == CommandHandler.ResponseType.manyArguments){
-                    text = "[scarlet]Too many arguments. Usage:[lightgray] " + response.command.text + "[gray] " + response.command.paramText;
+                    text = (arc.Core.bundle.get("gl.ui.chat.1") + " ") + response.command.text + "[gray] " + response.command.paramText;
                 }else if(response.type == CommandHandler.ResponseType.fewArguments){
-                    text = "[scarlet]Too few arguments. Usage:[lightgray] " + response.command.text + "[gray] " + response.command.paramText;
+                    text = (arc.Core.bundle.get("gl.ui.chat.2") + " ") + response.command.text + "[gray] " + response.command.paramText;
                 }else{ //unknown command
                     int minDst = 0;
                     CommandHandler.Command closest = null;
@@ -771,9 +771,9 @@ public class ChatFragment extends Table{
                     }
 
                     if(closest != null){
-                        text = "[scarlet]Unknown command. Did you mean \"[lightgray]" + closest.text + "[]\"?";
+                        text = arc.Core.bundle.get("gl.ui.chat.3") + closest.text + "[]\"?";
                     }else{
-                        text = "[scarlet]Unknown command. Check [lightgray]!help[scarlet].";
+                        text = arc.Core.bundle.get("gl.ui.chat.4");
                     }
                 }
 

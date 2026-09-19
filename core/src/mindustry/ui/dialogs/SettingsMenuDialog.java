@@ -1377,7 +1377,7 @@ public class SettingsMenuDialog extends BaseDialog{
 
                             settings.put("updateuuid", newGen);
                             field.setText(newGen);
-                        }).size(32).padLeft(8).tooltip("Random UUID");
+                        }).size(32).padLeft(8).tooltip(arc.Core.bundle.get("gl.ui.settingsmenu.1"));
 
                     }).left().expandX();
                     table.row();
