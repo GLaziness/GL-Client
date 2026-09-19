@@ -70,7 +70,7 @@ public class MenuFragment{
             c.bottom().left().image(
                     Core.atlas.find("gl-logo")
             ).tooltip(arc.Core.bundle.get("gl.ui.menu.1"))
-            .size(146, 64).pad(5)
+            .size(146, 64).pad(5).with(mindustry.client.ui.GlEasterEgg::attach) // GL: five quick clicks
         );
 
         //info icon
@@ -122,33 +122,6 @@ public class MenuFragment{
                     })
                 ).size(200, 60).padRight(10);
 
-                // Switch to lower major version (v7)
-                c.bottom().right().button("@client.version.swap.v7", Icon.download, () -> {
-                    ui.loadfrag.show();
-                    becontrol.checkUpdate(result -> {
-                        ui.loadfrag.hide();
-                        if(!result){
-                            ui.showInfo("@be.noupdates");
-                        }else{
-                            becontrol.showUpdateDialog();
-                        }
-                    }, "mindustry-antigrief/mindustry-client-v7-builds");
-                }).size(200, 60).padRight(10);
-
-                // "Switch to (un)stable" button
-                c.button("", Icon.refresh, () -> {
-                    Core.settings.put("updateurl", (Core.settings.getString("updateurl") + "-v8-builds").replaceFirst("((-v[6-8])?-builds) {2}", ""));
-                    ui.loadfrag.show();
-                    becontrol.checkUpdate(result -> {
-                        ui.loadfrag.hide();
-                        if(!result){
-                            ui.showInfo("@be.noupdates");
-                        }else{
-                            becontrol.showUpdateDialog();
-                        }
-                    });
-                }).size(200, 60).padRight(10).update(t -> t.getLabel().setText(Core.settings.getString("updateurl").endsWith("-builds") ? "@client.version.swap.stable" : "@client.version.swap.unstable")).disabled(true); // FINISHME: Re-enable when v7 releases
-
                 // "Check for updates" button
                 c.bottom().right().button("@be.check", Icon.refresh, () -> {
                     ui.loadfrag.show();
@@ -165,7 +138,7 @@ public class MenuFragment{
         }
 
         parent.fill((x, y, w, h) -> {
-            String versionText = ((Version.build == -1) ? "[#fc8140aa]" : "[#ffffffba]") + Version.combined() + Strings.format("\n[gray]Don't press H[]\nCursedness Level: @", CursednessLevel.fromInteger(Core.settings.getInt("cursednesslevel")).name());
+            String versionText = versionText();
 
             TextureRegion logo = Core.atlas.find("logo");
             float width = Core.graphics.getWidth(), height = Core.graphics.getHeight() - Core.scene.marginTop;
@@ -185,6 +158,21 @@ public class MenuFragment{
             Fonts.outline.setColor(Color.white);
             Fonts.outline.draw(versionText, fx, fy - logoh/2f - Scl.scl(2f), Align.center);
         }).touchable = Touchable.disabled;
+    }
+
+    private static String buildDateText;
+
+    /** GL: the text under the logo: game build, the date of this GL build, and the cursedness joke, all translated. */
+    private static String versionText(){
+        if(buildDateText == null){
+            buildDateText = Version.buildTime <= 0 ? "" : java.time.format.DateTimeFormatter.ofPattern("d MMMM yyyy", Core.bundle.getLocale())
+                .format(java.time.Instant.ofEpochMilli(Version.buildTime).atZone(java.time.ZoneId.systemDefault()));
+        }
+        String build = Version.build == -1 ? "[#fc8140aa]" + Core.bundle.get("gl.ui.menu.custombuild") : "[#ffffffba]" + Core.bundle.format("gl.ui.menu.build", Version.buildString());
+        String client = buildDateText.isEmpty() ? Core.bundle.get("gl.ui.menu.client") : Core.bundle.format("gl.ui.menu.clientdate", buildDateText);
+        CursednessLevel level = CursednessLevel.fromInteger(Core.settings.getInt("cursednesslevel"));
+        return build + "\n" + client + "\n[gray]" + Core.bundle.get("gl.ui.menu.dontpress") + "[]\n"
+            + Core.bundle.format("gl.ui.menu.cursedness", Core.bundle.get("gl.ui.cursedness." + level.name().toLowerCase(java.util.Locale.ROOT)));
     }
 
     private void buildMobile(){

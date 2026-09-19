@@ -504,8 +504,7 @@ public class GlobalChat{
                 serverRole = "";
                 connected = true;
                 error = null;
-                if(globalOn()) postRaw(Core.bundle.format("client.globalchat.connected", online), kindGlobal);
-                else postRaw(Core.bundle.get("client.globalchat.connected.serveronly"), kindServer);
+                // no notice on connecting, the status is in !ghelp and the chat window
                 if(!serverHost.isEmpty() && serverOn()) sendServer();
             }
             case "online" -> online = msg.getInt("n", online);
