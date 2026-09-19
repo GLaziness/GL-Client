@@ -371,6 +371,7 @@ public class NetClient implements ApplicationListener{
                 findPlayerName(output, playersender);
             } else {
                 // server message, unformatted is ignored
+                mindustry.client.utils.CursorHider.onServerMessage(message); // GL
                 output = ui.chatfrag.addMsg(message);
                 Server.current.handleButtons(output);
             }
@@ -397,6 +398,7 @@ public class NetClient implements ApplicationListener{
         if(Vars.ui == null) return;
 
         if (Core.settings.getBool("logmsgstoconsole") && net.client()) Log.infoTag("Chat (Server)", Strings.stripColors(InvisibleCharCoder.INSTANCE.strip(message)));
+        mindustry.client.utils.CursorHider.onServerMessage(message); // GL
         message = processCoords(message, true);
         var output = Vars.ui.chatfrag.addMsg(message);
 

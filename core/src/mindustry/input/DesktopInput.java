@@ -1434,6 +1434,9 @@ public class DesktopInput extends InputHandler{
                 // AFK mining: the mining path moves the unit and mines, the AI only watches for work
                 player.shooting = false;
                 unit.controlWeapons(true, false);
+                // the server gets the unit's aim as the cursor: it is the real cursor only while the server's /history
+                // is on (it shows the block under the cursor), otherwise the cursor stays hidden
+                if(mindustry.client.utils.CursorHider.historyMode()) unit.aim(Core.input.mouseWorld());
                 player.mouseX = unit.aimX();
                 player.mouseY = unit.aimY();
                 return;
@@ -1453,6 +1456,9 @@ public class DesktopInput extends InputHandler{
             }
             player.shooting = healing;
             unit.controlWeapons(true, healing);
+            // the server gets the unit's aim as the cursor: it is the real cursor only while the server's /history is on
+            // (it shows the block under the cursor), otherwise the cursor stays hidden; while healing it is the heal target
+            if(!healing && mindustry.client.utils.CursorHider.historyMode()) unit.aim(Core.input.mouseWorld());
             player.mouseX = unit.aimX();
             player.mouseY = unit.aimY();
             return;
@@ -1508,6 +1514,10 @@ public class DesktopInput extends InputHandler{
             }
 
             if ((!Core.input.keyDown(Binding.select) || block != null) && shouldShoot) AutoShootKt.autoShoot();
+        }else if(mindustry.client.utils.CursorHider.historyMode() && !player.shooting){
+            // GL: a path (AFK mining and so on) moves the unit and the aim used to stay where it was; while the server's
+            // /history is on, the aim follows the cursor, since the server shows the block under it
+            unit.aim(input.mouseWorldX(), input.mouseWorldY(), true);
         }
         unit.controlWeapons(true, player.shooting && !boosted);
 

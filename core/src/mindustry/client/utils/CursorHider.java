@@ -20,9 +20,14 @@ public class CursorHider{
     private static float[] mountAims = new float[0];
     /** The server's /history mode is on: it shows the history of the block under the cursor, so the real cursor is sent. */
     private static boolean historyMode;
+    private static long historySent;
 
     static{
         Events.on(EventType.ResetEvent.class, e -> historyMode = false);
+    }
+
+    public static boolean historyMode(){
+        return historyMode;
     }
 
     public static boolean hiding(){
@@ -33,9 +38,22 @@ public class CursorHider{
     public static void onChatSent(String message){
         if(message == null || !message.trim().equalsIgnoreCase("/history")) return;
         historyMode = !historyMode;
-        if(Core.settings.getBool("hidecursor", false)){
-            player.sendMessage(Core.bundle.get(historyMode ? "client.hidecursor.history.on" : "client.hidecursor.history.off"));
-        }
+        historySent = arc.util.Time.millis();
+    }
+
+    /**
+     * Server messages right after /history: the server's answer ("Включил!" / "Отключил!", "enabled" / "disabled") says
+     * the real state, so a toggle that got out of sync (the mode was already on from before) is fixed.
+     */
+    public static void onServerMessage(String message){
+        if(message == null || historySent == 0L || arc.util.Time.timeSinceMillis(historySent) > 5000) return;
+        String text = arc.util.Strings.stripColors(message).toLowerCase();
+        if(text.contains("отключ") || text.contains("выключ") || text.contains("disabl")){
+            historyMode = false;
+        }else if(text.contains("включ") || text.contains("enabl")){
+            historyMode = true;
+        }else return;
+        historySent = 0L;
     }
 
     public static float hiddenX(Unit unit){
