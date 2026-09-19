@@ -361,7 +361,7 @@ public class HudFragment{
 
                 // Если включена история - она идет первой (слева от карты)
                 if(showHistory){
-                    topRow.add(new HistoryInfoFragment()).name("log").maxWidth(500f).top();
+                    topRow.add(new HistoryInfoFragment()).name("log").top();
                 }
                 // Если история выключена, но включены тайлы - они занимают это место
                 else if(showTile){

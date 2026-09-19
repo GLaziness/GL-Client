@@ -269,7 +269,9 @@ public class PanelFragment extends Table{
                 Vec2 pos = e.localToStageCoordinates(Tmp.v1.set(0f, 0f));
                 float top = pos.y + e.getHeight();
                 boolean leftEdge = pos.x <= Scl.scl(10f);
-                boolean small = e.getWidth() < Core.scene.getWidth() / 2f && e.getHeight() < Core.scene.getHeight() / 2f;
+                // only skips tables that cover most of the screen; a half-screen limit dropped the wave info in small
+                // windows or with a big UI scale, and the side panel then went up over it
+                boolean small = e.getWidth() < Core.scene.getWidth() * 0.8f && e.getHeight() < Core.scene.getHeight() * 0.8f;
                 if(leftEdge && small && top >= Core.scene.getHeight() / 2f){
                     bottom[0] = Math.min(bottom[0], pos.y);
                 }
