@@ -66,7 +66,7 @@ public class ActivityLogger {
                 String msg;
 
                 if(core.team == player.team()){
-                    msg = "[#fa]Our core at " + cx + ", " + cy + " death...";
+                    msg = Core.bundle.format("client.coredeath.ours", String.valueOf(cx), String.valueOf(cy));
 
                     if(Core.settings.getBool("unitatchat") && !state.rules.coreCapture){
                         if(state.rules.pvp) {
@@ -78,7 +78,7 @@ public class ActivityLogger {
                         addLocalMessage(msg);
                     }
                 } else {
-                    msg = "[#" + core.team.color + "]" + core.team.name + " core at []" + cx + ", " + cy + " death.";
+                    msg = Core.bundle.format("client.coredeath.team", core.team.color, core.team.localized(), String.valueOf(cx), String.valueOf(cy));
                     addLocalMessage(msg);
                 }
             }
