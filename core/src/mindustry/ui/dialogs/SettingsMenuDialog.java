@@ -1358,7 +1358,7 @@ public class SettingsMenuDialog extends BaseDialog{
                             String val = settings.getString("updateuuid");
                             if(!val.isEmpty()) {
                                 Core.settings.put("uuid", val);
-                                ui.showInfo("UUID применен! Перезайди на сервер.");
+                                ui.showInfo(bundle.get("gl.ui.settingsmenu.uuidapplied"));
                             }
                         }).padRight(4);
 
@@ -1369,6 +1369,14 @@ public class SettingsMenuDialog extends BaseDialog{
                         }).width(400).get();
 
                         field.setMessageText("UUID...");
+                        // GL: hidden by default so it does not leak on stream or screen share
+                        field.setPasswordCharacter('*');
+                        field.setPasswordMode(true);
+
+                        t.button(Icon.eyeOff, Styles.clearNonei, 24, () -> field.setPasswordMode(!field.isPasswordMode()))
+                            .size(32).padLeft(4)
+                            .update(b -> b.getImage().setDrawable(field.isPasswordMode() ? Icon.eyeOff : Icon.eye))
+                            .tooltip(bundle.get("gl.ui.settingsmenu.uuidshow"));
 
                         t.button(Icon.box, Styles.cleari, () -> {
                             byte[] bytes = new byte[8];
