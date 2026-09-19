@@ -272,46 +272,104 @@ fun setupCommands() {
         ).findCoords()
     }
 
+    // GL: connects the grids with as few and as short links as possible (each pair of grids once, shortest first),
+    // and on a manual run removes node-to-node links that only close a loop (e.g. several links from one grid into
+    // another grid that is already connected). Removing such a link never cuts power, the grids stay connected.
     register("fixpower [c] [quiet]", Core.bundle.get("client.command.fixpower.description")) { args, player ->
         val start = Time.nanos()
-        val diodeLinks = PowerDiode.connections(player.team()) // Must be run on the main thread
-        val grids = Groups.powerGraph.array.select { it.graph().all.first().team == player.team() }.associate { it.graph().getID() to it.graph().all.copy() }
+        val team = player.team()
         val confirmed = args.any() && args[0] == "c" // Don't configure by default
+        // "!fixpower c q" is the automatic panel mode, which only adds links; every 5 minutes it runs "!fixpower c qc",
+        // which also removes the extra ones
+        val quiet = args.size > 1 && args[1].startsWith("q")
+        val cleanup = !quiet || args[1] == "qc"
         val inProgress = !configs.isEmpty()
-        var n = 0
-        var confs = 0
-        val newLinks = IntMap<IntSet>()
-        val configCache = Seq<Point2>(Point2::class.java) // Stores the partial config for this node
-        for ((grid, buildings) in grids) { // This is horrible but *mostly* works somehow FINISHME: rewrite this to work in realtime so that its not cursed
-            for (nodeBuild in buildings) {
-                if (nodeBuild !is PowerNodeBuild) continue
-                val nodeBlock = nodeBuild.block as PowerNode
-                var links = nodeBuild.power.links.size
-                nodeBlock.getPotentialLinks(nodeBuild.tile, player.team()) { link ->
-                    val min = min(grid, link.power.graph.getID())
-                    val max = max(grid, link.power.graph.getID())
-                    if (diodeLinks.any { it[0] == min && it[1] == max }) return@getPotentialLinks // Don't connect across diodes
-                    if (++links > nodeBlock.maxNodes) return@getPotentialLinks // Respect max links
-                    val t = newLinks.get(grid) { IntSet.with(grid) }
-                    val l = newLinks.get(link.power.graph.getID(), IntSet())
-                    if (l.add(grid) && t.add(link.power.graph.getID())) {
-                        l.addAll(t)
-                        newLinks.put(link.power.graph.getID(), l)
-                        configCache.add(Point2(link.tileX() - nodeBuild.tileX(), link.tileY() - nodeBuild.tileY()))
-                        n++
+        val diodeLinks = PowerDiode.connections(team) // Must be run on the main thread
+        val teamGraphs = Groups.powerGraph.array.map { it.graph() }.filter { it.all.any() && it.all.first().team == team }
+
+        // 1. Loops: join the buildings by everything except node lasers, then go through the lasers from the shortest
+        // one; a laser whose ends are already joined only closes a loop (like a node sending a laser to every building
+        // of a schematic that already powers itself), so the short inner links stay and the long extra ones go
+        val removed = ArrayList<Pair<PowerNodeBuild, Building>>()
+        if (cleanup) {
+            val index = IntIntMap()
+            val parent = IntSeq()
+            fun id(b: Building): Int {
+                val i = index.get(b.pos(), -1)
+                if (i != -1) return i
+                parent.add(parent.size)
+                index.put(b.pos(), parent.size - 1)
+                return parent.size - 1
+            }
+            fun find(i: Int): Int {
+                var x = i
+                while (parent.get(x) != x) {
+                    parent.set(x, parent.get(parent.get(x)))
+                    x = parent.get(x)
+                }
+                return x
+            }
+            val lasers = ArrayList<Pair<PowerNodeBuild, Building>>()
+            val conns = Seq<Building>()
+            for (graph in teamGraphs) for (b in graph.all) {
+                for (o in b.getPowerConnections(conns)) {
+                    if (b.power.links.contains(o.pos()) && (b is PowerNodeBuild || o is PowerNodeBuild)) {
+                        // each laser once, from the node side (a node to node laser is seen from the lower pos)
+                        if (b is PowerNodeBuild && (o !is PowerNodeBuild || b.pos() < o.pos())) lasers.add(b to o)
+                    } else {
+                        val x = find(id(b))
+                        val y = find(id(o))
+                        if (x != y) parent.set(x, y)
                     }
                 }
-                if (!configCache.isEmpty) {
-                    confs++
-                    if (confirmed && !inProgress) configs.add(ConfigRequest(nodeBuild, nodeBuild.config(configCache).toArray()))
-                    configCache.clear()
-                }
+            }
+            lasers.sortBy { it.first.dst2(it.second) }
+            for (pair in lasers) {
+                val x = find(id(pair.first))
+                val y = find(id(pair.second))
+                if (x == y) removed.add(pair) else parent.set(x, y)
             }
         }
 
-        // GL: "!fixpower c q" (the automatic panel mode) says nothing when there is nothing to connect
-        val quiet = args.size > 1 && args[1] == "q"
-        if (confirmed && n == 0) {
+        // 2. New links: shortest first, one per pair of grids, never across a diode and within the node limits
+        val gParent = IntIntMap()
+        fun gFind(g: Int): Int {
+            var x = g
+            while (true) {
+                val p = gParent.get(x, x)
+                if (p == x) return x
+                x = p
+            }
+        }
+        fun diodeBetween(a: Int, b: Int) = diodeLinks.any { (gFind(it[0]) == a && gFind(it[1]) == b) || (gFind(it[0]) == b && gFind(it[1]) == a) }
+        val linkCount = IntIntMap() // links of a node after the changes
+        fun links(b: Building) = linkCount.get(b.pos(), b.power.links.size)
+        for ((a, b) in removed) {
+            linkCount.put(a.pos(), links(a) - 1)
+            linkCount.put(b.pos(), links(b) - 1)
+        }
+        val candidates = ArrayList<Pair<PowerNodeBuild, Building>>()
+        for (graph in teamGraphs) for (b in graph.all) {
+            if (b is PowerNodeBuild) (b.block as PowerNode).getPotentialLinks(b.tile, team) { candidates.add(b to it) }
+        }
+        candidates.sortBy { it.first.dst2(it.second) }
+        val added = ArrayList<Pair<PowerNodeBuild, Building>>()
+        for ((node, other) in candidates) {
+            val a = gFind(node.power.graph.getID())
+            val b = gFind(other.power.graph.getID())
+            if (a == b || diodeBetween(a, b)) continue
+            if (links(node) >= (node.block as PowerNode).maxNodes) continue
+            if (other is PowerNodeBuild && links(other) >= (other.block as PowerNode).maxNodes) continue
+            gParent.put(a, b)
+            linkCount.put(node.pos(), links(node) + 1)
+            if (other is PowerNodeBuild) linkCount.put(other.pos(), links(other) + 1)
+            added.add(node to other)
+        }
+
+        val n = added.size
+        val r = removed.size
+        val nodes = (added.map { it.first.pos() } + removed.map { it.first.pos() }).toSet().size
+        if (confirmed && n == 0 && r == 0) {
             if (!quiet) ui.chatfrag.addMsg(Core.bundle.get("client.command.fixpower.nothing")).format()
             return@register
         }
@@ -319,16 +377,18 @@ fun setupCommands() {
         val msg = ui.chatfrag.addMsg("")
 
         msg.message = when {
-            confirmed && inProgress -> Core.bundle.format("client.command.fixpower.inprogress", configs.size, n, confs)
-            confirmed -> { // Actually fix the connections
+            confirmed && inProgress -> Core.bundle.format("client.command.fixpower.inprogress", configs.size, n, nodes)
+            confirmed -> { // Actually fix the connections: loops first, so their links free node slots
+                for ((a, b) in removed) configs.add(PowerLinkRequest(a.pos(), b.pos(), false))
+                for ((a, b) in added) configs.add(PowerLinkRequest(a.pos(), b.pos(), true))
                 configs.add { // This runs after the connections are made
-                    val active = Groups.powerGraph.array.select { it.graph().all.first().team == player.team() && it.graph().all.contains { it !is ItemBridge.ItemBridgeBuild || it.shouldConsume() } }.size // We don't care about unlinked bridge ends
-                    msg.message = Core.bundle.format("client.command.fixpower.success", n, active, confs)
+                    val active = Groups.powerGraph.array.select { it.graph().all.first().team == team && it.graph().all.contains { it !is ItemBridge.ItemBridgeBuild || it.shouldConsume() } }.size // We don't care about unlinked bridge ends
+                    msg.message = Core.bundle.format("client.command.fixpower.success", n, active, nodes, r)
                     msg.format()
                 }
-                Core.bundle.format("client.command.fixpower.confirmed", n, confs)
+                Core.bundle.format("client.command.fixpower.confirmed", n, nodes, r)
             }
-            else -> Core.bundle.format("client.command.fixpower.confirm", n, grids.size, confs)
+            else -> Core.bundle.format("client.command.fixpower.confirm", n, teamGraphs.size, nodes, r)
         }
         msg.format()
 
@@ -1030,5 +1090,15 @@ private fun connectTls(certname: String, onFinish: (Packets.CommunicationClient,
             // delayed to make sure receiving end is ready
             Timer.schedule({ onFinish(it, cert) }, .1F)
         }, { player.sendMessage(Core.bundle.get("client.tls.setupcommunication")) })
+    }
+}
+
+/** GL: links or unlinks a power node, checked right before sending, so a link someone already changed is not toggled back. */
+private class PowerLinkRequest(val node: Int, val target: Int, val link: Boolean) : Runnable {
+    override fun run() {
+        val build = world.build(node) as? PowerNodeBuild ?: return
+        if (build.team != player.team() || build.power.links.contains(target) == link) return
+        if (link && world.build(target)?.power == null) return
+        Call.tileConfig(player, build, target)
     }
 }
