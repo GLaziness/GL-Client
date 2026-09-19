@@ -57,6 +57,38 @@ public class SelfBuilderAI extends AIController{
     private static final int maxQueued = 12;
     private final arc.struct.Seq<BlockPlan> queued = new arc.struct.Seq<>();
     private final arc.struct.FloatSeq queuedWeights = new arc.struct.FloatSeq();
+    /** GL: plans this AI put into the queue. Everything else in the queue is the player's own, and the AI never removes it. */
+    private final arc.struct.Seq<BuildPlan> aiPlans = new arc.struct.Seq<>();
+
+    /** GL: the player queued something by hand, it is built first and the AI does not touch it. */
+    private boolean hasOwnPlans(){
+        for(BuildPlan plan : unit.plans){
+            if(!aiPlans.contains(plan, true)) return true;
+        }
+        return false;
+    }
+
+    /** GL: scrap walls and mines are neither rebuilt nor healed. */
+    public static boolean ignored(Block block){
+        return block instanceof mindustry.world.blocks.defense.ShockMine || block.name.startsWith("scrap-wall");
+    }
+
+    private boolean isAiPlan(BuildPlan plan){
+        return aiPlans.contains(plan, true);
+    }
+
+    /** GL: removes only the plans this AI added, the player's own plans stay. */
+    public void clearAiPlans(){
+        if(unit != null){
+            for(BuildPlan plan : aiPlans) unit.plans.remove(plan, true);
+        }
+        aiPlans.clear();
+    }
+
+    private void addAiPlan(BuildPlan plan, boolean first){
+        aiPlans.add(plan);
+        if(first) unit.plans.addFirst(plan); else unit.addBuild(plan);
+    }
     float retreatTimer;
     private static final float maxTurretCheckRange = 600f;
 
@@ -84,6 +116,14 @@ public class SelfBuilderAI extends AIController{
 
         unit.updateBuilding = true;
 
+        // forget the plans that are done or were removed some other way
+        aiPlans.removeAll(plan -> unit.plans.indexOf(plan, true) == -1);
+        boolean own = hasOwnPlans();
+        if(own){ // the player's own plans go first: stop helping until they are built
+            following = null;
+            clearAiPlans();
+        }
+
         if(assistFollowing != null && !assistFollowing.isValid()) assistFollowing = null;
         if(following != null && !following.isValid()) following = null;
 
@@ -92,7 +132,7 @@ public class SelfBuilderAI extends AIController{
             Player p = assistFollowing.getPlayer();
             if(p == null || !PolyFilter.canAssist(p)){
                 assistFollowing = null;
-            }else if(assistFollowing.activelyBuilding()){
+            }else if(assistFollowing.activelyBuilding() && !own){
                 following = assistFollowing;
             }
         }
@@ -108,18 +148,20 @@ public class SelfBuilderAI extends AIController{
             Player p = following.getPlayer();
             if(!following.isValid() || !following.activelyBuilding() || p == null || !PolyFilter.canAssist(p)){
                 following = null;
-                unit.plans.clear();
+                clearAiPlans();
                 return;
             }
 
             BuildPlan fPlan = following.buildPlan();
             if(fPlan != null && isPlanSafeAndAffordable(fPlan)){
-                unit.plans.clear();
-                unit.plans.addFirst(fPlan);
+                if(unit.buildPlan() != fPlan){
+                    clearAiPlans();
+                    addAiPlan(fPlan, true);
+                }
                 lastPlan = null;
             }else{
                 following = null;
-                unit.plans.clear();
+                clearAiPlans();
                 return;
             }
         }else if((unit.buildPlan() == null || alwaysFlee) && !hold){
@@ -130,7 +172,7 @@ public class SelfBuilderAI extends AIController{
 
             if((retreatTimer += Time.delta) >= retreatDelay || alwaysFlee){
                 if(enemy != null){
-                    unit.clearBuilding();
+                    clearAiPlans();
                     var core = unit.closestCore();
                     if(core != null && !unit.within(core, retreatDst)){
                         moveTo(core, retreatDst);
@@ -144,15 +186,16 @@ public class SelfBuilderAI extends AIController{
         if(unit.buildPlan() != null){
             if(!alwaysFlee) retreatTimer = 0f;
             BuildPlan req = unit.buildPlan();
+            boolean aiPlan = isAiPlan(req);
 
-            if(!isPlanSafeAndAffordable(req)){
+            if(aiPlan && !isPlanSafeAndAffordable(req)){
                 unit.plans.removeFirst();
                 lastPlan = null;
                 return;
             }
 
             // Отмена разборки, если другой игрок ломает
-            if(!req.breaking && timer.get(timerTarget2, 40f)){
+            if(aiPlan && !req.breaking && timer.get(timerTarget2, 40f)){
                 for(Player player : Groups.player){
                     if(player.isBuilder() && player.unit().activelyBuilding() && player.unit().buildPlan().samePos(req) && player.unit().buildPlan().breaking){
                         unit.plans.removeFirst();
@@ -171,11 +214,11 @@ public class SelfBuilderAI extends AIController{
                     float range = Math.min(unit.type.buildRange - unit.type.hitSize * 2f, buildRadius);
                     moveTo(req.tile(), range, 20f);
                     moving = !unit.within(req.tile(), range);
-                }else if(!unit.within(req, unit.type.buildRange - tilesize) && !state.rules.infiniteResources){
+                }else if(aiPlan && !unit.within(req, unit.type.buildRange - tilesize) && !state.rules.infiniteResources){
                     unit.plans.removeFirst();
                     lastPlan = null;
                 }
-            }else{
+            }else if(aiPlan){ // the player's own invalid plans are dropped by the builder itself, as without the AI
                 unit.plans.removeFirst();
                 lastPlan = null;
             }
@@ -247,6 +290,7 @@ public class SelfBuilderAI extends AIController{
                         continue;
                     }
 
+                    if(ignored(bp.block)) continue;
                     if(!Build.validPlace(bp.block, unit.team(), bp.x, bp.y, bp.rotation)) continue;
                     if(checkEnemyTurrets && isInEnemyTurretRange(bp.x * tilesize, bp.y * tilesize)) continue;
                     if(checkResources && !hasResources(bp.block)) continue;
@@ -284,7 +328,7 @@ public class SelfBuilderAI extends AIController{
                 if(queued.any()){
                     lastPlan = queued.first();
                     for(BlockPlan bp : queued){
-                        unit.addBuild(new BuildPlan(bp.x, bp.y, bp.rotation, bp.block, bp.config));
+                        addAiPlan(new BuildPlan(bp.x, bp.y, bp.rotation, bp.block, bp.config), false);
                         // plans taken now go to the end of the team queue, so other builders get different ones
                         blocks.remove(bp, true);
                         blocks.addLast(bp);
@@ -296,8 +340,17 @@ public class SelfBuilderAI extends AIController{
             // GL: the target is kept between searches and followed every frame (it used to move for a single frame out of 30),
             // the actual shooting is done by the input handler, see healing()
             if(healDamaged && unit.type.canHeal && unit.buildPlan() == null && following == null && !hold){
-                if(timer.get(timerTarget, 30f) || (healTarget != null && !(healTarget.isValid() && healTarget.damaged()))){
-                    Building damaged = Geometry.findClosest(unit.x, unit.y, indexer.getDamaged(unit.team));
+                if(timer.get(timerTarget, 30f) || (healTarget != null && !(healTarget.isValid() && healTarget.damaged() && !ignored(healTarget.block)))){
+                    Building damaged = null;
+                    float best = Float.MAX_VALUE;
+                    for(Building b : indexer.getDamaged(unit.team)){
+                        if(ignored(b.block)) continue;
+                        float dst = b.dst2(unit);
+                        if(dst < best){
+                            best = dst;
+                            damaged = b;
+                        }
+                    }
                     healTarget = damaged != null && damaged.within(unit, buildRadius) && !isInEnemyTurretRange(damaged.x, damaged.y) ? damaged : null;
                 }
                 if(healTarget != null){
@@ -375,7 +428,7 @@ public class SelfBuilderAI extends AIController{
         if(rebuildBlocks && !onlyAssist){
             for(BlockPlan bp : unit.team.data().plans){
                 Tile tile = world.tile(bp.x, bp.y);
-                if(tile == null || tile.block() == bp.block) continue;
+                if(tile == null || tile.block() == bp.block || ignored(bp.block)) continue;
                 if(!Build.validPlace(bp.block, unit.team(), bp.x, bp.y, bp.rotation)) continue;
                 if(checkEnemyTurrets && isInEnemyTurretRange(bp.x * tilesize, bp.y * tilesize)) continue;
                 if(checkResources && !hasResources(bp.block)) continue;
@@ -385,7 +438,7 @@ public class SelfBuilderAI extends AIController{
 
         if(healDamaged && unit.type.canHeal){
             for(Building b : indexer.getDamaged(unit.team)){
-                if(b.within(unit, buildRadius) && !isInEnemyTurretRange(b.x, b.y)) return true;
+                if(!ignored(b.block) && b.within(unit, buildRadius) && !isInEnemyTurretRange(b.x, b.y)) return true;
             }
         }
 

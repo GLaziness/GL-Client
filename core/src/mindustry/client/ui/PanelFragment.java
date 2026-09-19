@@ -397,7 +397,7 @@ public class PanelFragment extends Table{
                 settings.put("polyAiMode", polyAiMode);
                 if(!polyAiMode){
                     aiNotPolyAi.stopAfk();
-                    if(player.unit() != null) player.unit().plans.clear();
+                    aiNotPolyAi.clearAiPlans(); // the player's own plans stay
                 }
             }), () -> PolySettingsDialog.instance.show())
         );
