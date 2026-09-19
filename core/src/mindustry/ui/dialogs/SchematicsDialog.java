@@ -203,13 +203,17 @@ public class SchematicsDialog extends BaseDialog{
                         b.margin(0f);
                         b.table(buttons -> {
                             buttons.left();
-                            buttons.defaults().size(50f);
+                            buttons.defaults().size(40f); // GL: five buttons fit the 200 wide card
 
                             ImageButtonStyle style = Styles.emptyi;
 
                             buttons.button(Icon.info, style, () -> showInfo(s)).tooltip("@info.title");
                             buttons.button(Icon.upload, style, () -> showExport(s)).tooltip("@editor.export");
                             buttons.button(Icon.pencil, style, () -> showEdit(s)).tooltip("@schematic.edit");
+                            // GL: turns the saved schematic, right click turns it the other way
+                            buttons.button(Icon.rotate, style, () -> rotateSaved(s, -1)).tooltip("@gl.ui.schem.rotate")
+                                .disabled(rb -> s.mod != null || s.hasSteamID() || s.file == null)
+                                .with(rb -> rb.clicked(KeyCode.mouseRight, () -> rotateSaved(s, 1)));
 
                             if(s.hasSteamID()){
                                 buttons.button(Icon.link, style, () -> platform.viewListing(s)).tooltip("@view.workshop");
@@ -318,6 +322,30 @@ public class SchematicsDialog extends BaseDialog{
             pane.updateVisualScroll();
         }
         this.pane = pane;
+    }
+
+    /** GL: turns a saved schematic by 90 degrees (clockwise for a negative {@code times}) and writes it to its file. */
+    private void rotateSaved(Schematic s, int times){
+        if(s.mod != null || s.hasSteamID() || s.file == null) return;
+        Schematic rotated = Schematics.rotate(s, times);
+        Seq<Schematic.Stile> tiles = new Seq<>();
+        // the game turns around the old center (fine for placing), a saved one has to start at 0,0 again
+        int minX = Integer.MAX_VALUE, minY = Integer.MAX_VALUE, maxX = Integer.MIN_VALUE, maxY = Integer.MIN_VALUE;
+        for(Schematic.Stile tile : rotated.tiles){
+            tiles.add(tile.copy());
+            int size = tile.block.size, low = -(size - 1) / 2, high = size / 2;
+            minX = Math.min(minX, tile.x + low);
+            minY = Math.min(minY, tile.y + low);
+            maxX = Math.max(maxX, tile.x + high);
+            maxY = Math.max(maxY, tile.y + high);
+        }
+        if(tiles.isEmpty()) return;
+        for(Schematic.Stile tile : tiles){
+            tile.x -= minX;
+            tile.y -= minY;
+        }
+        schematics.overwrite(s, new Schematic(tiles, new StringMap(), maxX - minX + 1, maxY - minY + 1));
+        rebuildPane.run();
     }
 
     /** GL: opens the list to choose a schematic, {@code picked} gets the one clicked. */
