@@ -30,6 +30,8 @@ public class BeControl{
     private boolean updateAvailable;
     private String updateUrl;
     private String updateBuild;
+    /** GL: build time (ms) of the release found, 0 when the release does not say. */
+    private long updateBuildTime;
 
     /** @return whether this is a bleeding edge build. */
     public boolean active(){
@@ -88,6 +90,7 @@ public class BeControl{
                     updateUrl = asset.getString("browser_download_url", "");
                     updateAvailable = true;
                     updateBuild = newBuild;
+                    updateBuildTime = releaseBuildTime(val);
                     Core.app.post(() -> done.get(true));
                 }else{
                     Core.app.post(() -> done.get(false));
@@ -101,10 +104,26 @@ public class BeControl{
      * comment, see {@link Version#buildTime}.
      */
     private static boolean isNewer(Jval release, String releaseName){
-        java.util.regex.Matcher m = java.util.regex.Pattern.compile("buildTime:\\s*(\\d+)").matcher(release.getString("body", ""));
-        long releaseBuild = m.find() ? Strings.parseLong(m.group(1), 0L) : 0L;
+        long releaseBuild = releaseBuildTime(release);
         if(releaseBuild > 0 && Version.buildTime > 0) return releaseBuild > Version.buildTime;
         return !Version.clientVersion.equals(releaseName);
+    }
+
+    private static long releaseBuildTime(Jval release){
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("buildTime:\\s*(\\d+)").matcher(release.getString("body", ""));
+        return m.find() ? Strings.parseLong(m.group(1), 0L) : 0L;
+    }
+
+    /** GL: a build time as a date in the game language, like "19 сентября 2026"; empty when unknown. */
+    public static String buildDate(long time){
+        if(time <= 0) return "";
+        return java.time.format.DateTimeFormatter.ofPattern("d MMMM yyyy", Core.bundle.getLocale())
+            .format(java.time.Instant.ofEpochMilli(time).atZone(java.time.ZoneId.systemDefault()));
+    }
+
+    private static String buildText(long time, String fallback){
+        String date = buildDate(time);
+        return date.isEmpty() ? fallback : Core.bundle.format("gl.be.update.date", date);
     }
 
     /** @return whether a new update is available */
@@ -123,8 +142,10 @@ public class BeControl{
 
         if(!headless){
             checkUpdates = false;
-            ui.showCustomConfirm(
-                Core.bundle.format("be.update", "") + " Current: " + Version.clientVersion + " New: " + updateBuild, "@be.update.confirm", "@ok", "@be.ignore",
+            // GL: both builds shown by date, like under the menu logo
+            String text = Core.bundle.format("gl.be.update.current", buildText(Version.buildTime, Version.clientVersion)) + "\n"
+                + Core.bundle.format("gl.be.update.new", buildText(updateBuildTime, updateBuild)) + "\n\n" + Core.bundle.get("be.update.confirm");
+            ui.showCustomConfirm(Core.bundle.get("gl.be.update.title"), text, "@ok", "@be.ignore",
                 this::actuallyDownload, () -> checkUpdates = false);
         }else{
             Log.info("&lcCurrent: " + Version.clientVersion + " A new update is available: &lyBleeding Edge build @", updateBuild);

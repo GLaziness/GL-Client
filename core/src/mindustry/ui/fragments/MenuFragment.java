@@ -166,8 +166,7 @@ public class MenuFragment{
     /** GL: the text under the logo: game build, the date of this GL build, and the cursedness joke, all translated. */
     private static String versionText(){
         if(buildDateText == null){
-            buildDateText = Version.buildTime <= 0 ? "" : java.time.format.DateTimeFormatter.ofPattern("d MMMM yyyy", Core.bundle.getLocale())
-                .format(java.time.Instant.ofEpochMilli(Version.buildTime).atZone(java.time.ZoneId.systemDefault()));
+            buildDateText = mindustry.net.BeControl.buildDate(Version.buildTime);
         }
         String build = Version.build == -1 ? "[#fc8140aa]" + Core.bundle.get("gl.ui.menu.custombuild") : "[#ffffffba]" + Core.bundle.format("gl.ui.menu.build", Version.buildString());
         String client = buildDateText.isEmpty() ? Core.bundle.get("gl.ui.menu.client") : Core.bundle.format("gl.ui.menu.clientdate", buildDateText);
