@@ -51,16 +51,27 @@ public class TileInfoFragment extends Table {
             var logs = record.lastLogs(displayLogs);
 
             builder.setLength(0);
-            for (var item : logs) builder.append(compact(item)).append(" [lightgray]").append(UI.formatMinutesFromMillis(Time.timeSinceMillis(item.getTime().toEpochMilli()))).append("[]\n");
+            for (var item : logs) builder.append(compact(item, hovered.block())).append(" [lightgray]").append(UI.formatMinutesFromMillis(Time.timeSinceMillis(item.getTime().toEpochMilli()))).append("[]\n");
             if (pending && logs.size() < displayLogs) builder.append((arc.Core.bundle.get("gl.ui.tileinfo.1") + "\n")); // Append if the logs aren't already full since these are always older than client logs FINISHME: Bundle
             label.setText(builder.length() == 0 ? "" : builder.substring(0, builder.length() - 1)); // This is awful
         });
     }
 
-    /** GL: the same log line with the block (or unit) name replaced by its icon, so the panel stays narrow. */
-    private static String compact(TileLog item){
+    /**
+     * GL: the same log line with the block (or unit) name replaced by its icon, so the panel stays narrow.
+     * The block under the cursor is already shown big on the left, so its name is dropped from the line.
+     */
+    private static String compact(TileLog item, Block hoveredBlock){
         String s = item.toShortString();
-        if (item instanceof AbstractTileLog log) return iconFor(s, log.getBlock().localizedName, log.getBlock().name);
+        if (item instanceof AbstractTileLog log) {
+            Block block = log.getBlock();
+            if (block == hoveredBlock) {
+                String icon = Fonts.getUnicodeStr(block.name);
+                if (!icon.isEmpty()) s = s.replace(icon, "");
+                return s.replace(block.localizedName, "").replaceAll(" {2,}", " ").trim();
+            }
+            return iconFor(s, block.localizedName, block.name);
+        }
         if (item instanceof UnitDestroyedLog log) return iconFor(s, log.getUnitType().localizedName, log.getUnitType().name);
         return s;
     }
