@@ -1,7 +1,8 @@
 package mindustry.client.fallen.assistai;
 
 import arc.Core;
-import arc.math.geom.Geometry;
+import arc.math.*;
+import arc.math.geom.*;
 import arc.util.*;
 import mindustry.ai.UnitStance;
 import mindustry.ai.types.CommandAI;
@@ -92,6 +93,18 @@ public class SelfBuilderAI extends AIController{
     float retreatTimer;
     private static final float maxTurretCheckRange = 600f;
 
+    /** GL: where the unit leaves a turret zone to, and the target the safe way below is planned for, see safeMoveTo. */
+    private final Vec2 escapeTo = new Vec2();
+    private @Nullable Position safeFor;
+    private float safeRange, safeTime;
+    private boolean safeFound;
+    private final arc.struct.Seq<TurretBuild> threats = new arc.struct.Seq<>();
+    /** GL: the way to the safe spot, around the turret zones; the last point is the spot itself. */
+    private final arc.struct.Seq<Vec2> route = new arc.struct.Seq<>();
+    private int routeAt;
+    /** Largest grid for the way around, in cells: a bigger area gets bigger cells. */
+    private static final int maxRouteCells = 90000;
+
     public SelfBuilderAI(boolean alwaysFlee, float fleeRange){
         this.alwaysFlee = alwaysFlee;
         this.fleeRange = fleeRange;
@@ -139,6 +152,20 @@ public class SelfBuilderAI extends AIController{
 
         boolean moving = false;
         boolean hold = hasStance(UnitStance.holdPosition);
+
+        // GL: got into enemy turret range anyway (a new turret, knocked in, the player was there): leave it first
+        if(checkEnemyTurrets && !hold){
+            TurretBuild threat = threatAt(unit.x, unit.y);
+            if(threat != null){
+                float out = ((Turret)threat.block).range + unit.hitSize + 16f + tilesize * 3f;
+                escapeTo.set(unit.x - threat.x, unit.y - threat.y);
+                if(escapeTo.isZero()) escapeTo.set(1f, 0f);
+                escapeTo.setLength(out).add(threat.x, threat.y);
+                moveTo(escapeTo, 0f);
+                if(!unit.type.flying) unit.updateBoosting(true);
+                return;
+            }
+        }
 
         // 1. СЛЕДОВАНИЕ ЗА ДРУГИМ
         if(following != null){
@@ -212,7 +239,15 @@ public class SelfBuilderAI extends AIController{
             if(valid){
                 if(!hold){
                     float range = Math.min(unit.type.buildRange - unit.type.hitSize * 2f, buildRadius);
-                    moveTo(req.tile(), range, 20f);
+                    if(!safeMoveTo(req.tile(), range, 20f)){
+                        // no way to reach it without turrets on the way: drop what the AI took, the player's own plan just waits
+                        if(aiPlan){
+                            unit.plans.removeFirst();
+                            lastPlan = null;
+                            if(following != null) following = null;
+                        }
+                        return;
+                    }
                     moving = !unit.within(req.tile(), range);
                 }else if(aiPlan && !unit.within(req, unit.type.buildRange - tilesize) && !state.rules.infiniteResources){
                     unit.plans.removeFirst();
@@ -225,8 +260,9 @@ public class SelfBuilderAI extends AIController{
         }else{
             // 3. ЕСЛИ НЕТ ПЛАНА - ИЩЕМ ИГРОКА ДЛЯ ПОМОЩИ
             if(assistFollowing != null && !hold){
-                moveTo(assistFollowing, assistFollowing.type.hitSize + unit.type.hitSize/2f + 60f);
-                moving = !unit.within(assistFollowing, assistFollowing.type.hitSize + unit.type.hitSize/2f + 65f);
+                if(safeMoveTo(assistFollowing, assistFollowing.type.hitSize + unit.type.hitSize/2f + 60f, 100f)){
+                    moving = !unit.within(assistFollowing, assistFollowing.type.hitSize + unit.type.hitSize/2f + 65f);
+                }
             }
 
             if(timer.get(timerTarget2, 20f)){
@@ -354,8 +390,11 @@ public class SelfBuilderAI extends AIController{
                     healTarget = damaged != null && damaged.within(unit, buildRadius) && !isInEnemyTurretRange(damaged.x, damaged.y) ? damaged : null;
                 }
                 if(healTarget != null){
-                    moveTo(healTarget, healRange() * 0.7f);
-                    moving = !unit.within(healTarget, healRange());
+                    if(safeMoveTo(healTarget, healRange() * 0.7f, 100f)){
+                        moving = !unit.within(healTarget, healRange());
+                    }else{
+                        healTarget = null;
+                    }
                 }
             }else{
                 healTarget = null;
@@ -472,22 +511,211 @@ public class SelfBuilderAI extends AIController{
     }
 
     public boolean isInEnemyTurretRange(float wx, float wy, float margin){
+        return threatAt(wx, wy, margin) != null;
+    }
+
+    /** GL: a turret of this kind can shoot the unit: turrets for ground only leave a flying unit alone and back. */
+    private boolean canHit(Turret t){
+        return unit.isFlying() ? t.targetAir : t.targetGround;
+    }
+
+    private @Nullable TurretBuild threatAt(float wx, float wy){
+        return threatAt(wx, wy, 0f);
+    }
+
+    private @Nullable TurretBuild threatAt(float wx, float wy, float margin){
         for(var teamData : state.teams.present){
             if(teamData.team != unit.team && teamData.team != Team.derelict){
                 var tree = teamData.buildingTree;
                 if(tree != null){
                     float check = maxTurretCheckRange + margin;
                     Building danger = tree.find(wx - check, wy - check, check * 2f, check * 2f, b -> {
-                        if(b instanceof TurretBuild tb && tb.block instanceof Turret t){
+                        if(b instanceof TurretBuild tb && tb.block instanceof Turret t && canHit(t)){
                             return tb.within(wx, wy, t.range + unit.hitSize + 16f + margin);
                         }
                         return false;
                     });
-                    if(danger != null) return true;
+                    if(danger instanceof TurretBuild tb) return tb;
                 }
             }
         }
+        return null;
+    }
+
+    /**
+     * GL: like moveTo, but the unit never flies into enemy turret range. It stops next to the target on a spot out of
+     * range and flies there straight when it can, otherwise around the turret zones.
+     * @return false when there is no such spot or way: the target can not be reached safely.
+     */
+    private boolean safeMoveTo(Position target, float range, float smooth){
+        if(!checkEnemyTurrets || unit.within(target, range + 1f)){
+            route.clear();
+            moveTo(target, range, smooth);
+            return true;
+        }
+        if(safeFor != target || Math.abs(safeRange - range) > 1f || (safeTime += Time.delta) >= 45f){
+            safeFor = target;
+            safeRange = range;
+            safeTime = 0f;
+            safeFound = planRoute(target.getX(), target.getY(), Math.max(range * 0.9f, 0f));
+        }
+        if(!safeFound || route.isEmpty()) return false;
+
+        while(routeAt < route.size - 1 && unit.within(route.get(routeAt), tilesize * 1.5f)) routeAt++;
+        Vec2 next = route.get(routeAt);
+        if(routeAt < route.size - 1){
+            moveTo(next, 0f); // a corner of the way around: full speed through it
+        }else{
+            moveTo(next, 1f, smooth);
+        }
+        return true;
+    }
+
+    private boolean planRoute(float tx, float ty, float radius){
+        route.clear();
+        routeAt = 0;
+
+        // the turrets anywhere near the way and around the target, gathered once for all the checks below
+        threats.clear();
+        float pad = maxTurretCheckRange + radius;
+        float minX = Math.min(unit.x, tx) - pad, minY = Math.min(unit.y, ty) - pad;
+        float w = Math.abs(unit.x - tx) + pad * 2f, h = Math.abs(unit.y - ty) + pad * 2f;
+        for(var teamData : state.teams.present){
+            if(teamData.team == unit.team || teamData.team == Team.derelict || teamData.buildingTree == null) continue;
+            teamData.buildingTree.intersect(minX, minY, w, h, b -> {
+                if(b instanceof TurretBuild tb && tb.block instanceof Turret t && canHit(t)) threats.add(tb);
+            });
+        }
+        if(threats.isEmpty()){
+            Vec2 spot = new Vec2(tx, ty).sub(unit.x, unit.y);
+            spot.setLength(Math.max(spot.len() - radius, 0f)).add(unit.x, unit.y);
+            route.add(spot);
+            return true;
+        }
+
+        // a spot straight away: the near side first, then more and more around the target
+        float base = Angles.angle(tx, ty, unit.x, unit.y);
+        for(int i = 0; i <= 8; i++){
+            for(int sign = 1; sign >= -1; sign -= 2){
+                if(i == 0 && sign < 0) continue;
+                float a = base + sign * i * 22.5f;
+                float x = tx + Angles.trnsx(a, radius), y = ty + Angles.trnsy(a, radius);
+                if(!threatened(x, y) && pathSafe(unit.x, unit.y, x, y)){
+                    route.add(new Vec2(x, y));
+                    return true;
+                }
+            }
+        }
+        return planAround(tx, ty, radius);
+    }
+
+    /** A* on a coarse grid with the turret zones blocked, to any free cell within {@code radius} of the target. */
+    private boolean planAround(float tx, float ty, float radius){
+        float worldW = world.unitWidth(), worldH = world.unitHeight();
+        float pad = maxTurretCheckRange + tilesize * 10f;
+        float x0 = Mathf.clamp(Math.min(unit.x, tx) - pad, 0f, worldW), y0 = Mathf.clamp(Math.min(unit.y, ty) - pad, 0f, worldH);
+        float x1 = Mathf.clamp(Math.max(unit.x, tx) + pad, 0f, worldW), y1 = Mathf.clamp(Math.max(unit.y, ty) + pad, 0f, worldH);
+        float cell = tilesize * 2f;
+        float area = (x1 - x0) * (y1 - y0);
+        if(area / (cell * cell) > maxRouteCells) cell = (float)Math.sqrt(area / maxRouteCells) + 1f;
+        int gw = Math.max(1, Mathf.ceil((x1 - x0) / cell)), gh = Math.max(1, Mathf.ceil((y1 - y0) / cell));
+        int total = gw * gh;
+
+        // blocked cells: a cell counts when any of it can be in range
+        boolean[] blocked = new boolean[total];
+        for(TurretBuild tb : threats){
+            float r = ((Turret)tb.block).range + unit.hitSize + 16f + cell * 0.75f;
+            int cx0 = Math.max(0, (int)((tb.x - r - x0) / cell)), cx1 = Math.min(gw - 1, (int)((tb.x + r - x0) / cell));
+            int cy0 = Math.max(0, (int)((tb.y - r - y0) / cell)), cy1 = Math.min(gh - 1, (int)((tb.y + r - y0) / cell));
+            for(int cy = cy0; cy <= cy1; cy++){
+                for(int cx = cx0; cx <= cx1; cx++){
+                    if(Mathf.dst(x0 + (cx + 0.5f) * cell, y0 + (cy + 0.5f) * cell, tb.x, tb.y) <= r) blocked[cx + cy * gw] = true;
+                }
+            }
+        }
+
+        int sx = Mathf.clamp((int)((unit.x - x0) / cell), 0, gw - 1), sy = Mathf.clamp((int)((unit.y - y0) / cell), 0, gh - 1);
+        int start = sx + sy * gw;
+        float[] cost = new float[total];
+        int[] parent = new int[total];
+        java.util.Arrays.fill(cost, Float.MAX_VALUE);
+        cost[start] = 0f;
+        parent[start] = -1;
+        java.util.PriorityQueue<Long> open = new java.util.PriorityQueue<>();
+        open.add(key(0f, start));
+        int goal = -1;
+
+        while(!open.isEmpty()){
+            long k = open.poll();
+            int at = (int)(k & 0xffffffffL);
+            float f = Float.intBitsToFloat((int)(k >>> 32));
+            int ax = at % gw, ay = at / gw;
+            float cxw = x0 + (ax + 0.5f) * cell, cyw = y0 + (ay + 0.5f) * cell;
+            if(f > cost[at] + Math.max(Mathf.dst(cxw, cyw, tx, ty) - radius, 0f) / cell + 0.001f) continue; // stale entry
+            if(at != start && !blocked[at] && Mathf.within(cxw, cyw, tx, ty, radius)){
+                goal = at;
+                break;
+            }
+            for(int dx = -1; dx <= 1; dx++){
+                for(int dy = -1; dy <= 1; dy++){
+                    if(dx == 0 && dy == 0) continue;
+                    int nx = ax + dx, ny = ay + dy;
+                    if(nx < 0 || ny < 0 || nx >= gw || ny >= gh) continue;
+                    int n = nx + ny * gw;
+                    if(blocked[n]) continue;
+                    // no cutting a corner of a zone
+                    if(dx != 0 && dy != 0 && (blocked[ax + dx + ay * gw] || blocked[ax + (ay + dy) * gw])) continue;
+                    float c = cost[at] + (dx != 0 && dy != 0 ? 1.4142f : 1f);
+                    if(c >= cost[n]) continue;
+                    cost[n] = c;
+                    parent[n] = at;
+                    float hx = x0 + (nx + 0.5f) * cell, hy = y0 + (ny + 0.5f) * cell;
+                    open.add(key(c + Math.max(Mathf.dst(hx, hy, tx, ty) - radius, 0f) / cell, n));
+                }
+            }
+        }
+        if(goal == -1) return false;
+
+        arc.struct.Seq<Vec2> cells = new arc.struct.Seq<>();
+        for(int at = goal; at != -1 && at != start; at = parent[at]){
+            cells.add(new Vec2(x0 + (at % gw + 0.5f) * cell, y0 + (at / gw + 0.5f) * cell));
+        }
+        cells.reverse();
+
+        // keep only the corners: from each point, straight to the farthest one that is still safe
+        float px = unit.x, py = unit.y;
+        int i = 0;
+        while(i < cells.size){
+            int far = i;
+            while(far + 1 < cells.size && pathSafe(px, py, cells.get(far + 1).x, cells.get(far + 1).y)) far++;
+            Vec2 corner = cells.get(far);
+            route.add(corner);
+            px = corner.x;
+            py = corner.y;
+            i = far + 1;
+        }
+        return route.any();
+    }
+
+    private static long key(float f, int index){
+        return ((long)Float.floatToIntBits(f) << 32) | (index & 0xffffffffL);
+    }
+
+    private boolean threatened(float x, float y){
+        for(TurretBuild tb : threats){
+            if(tb.within(x, y, ((Turret)tb.block).range + unit.hitSize + 16f)) return true;
+        }
         return false;
+    }
+
+    private boolean pathSafe(float x1, float y1, float x2, float y2){
+        float dst = Mathf.dst(x1, y1, x2, y2);
+        int steps = Math.max(1, Mathf.ceil(dst / (tilesize * 2f)));
+        for(int i = 1; i <= steps; i++){
+            float f = i / (float)steps;
+            if(threatened(Mathf.lerp(x1, x2, f), Mathf.lerp(y1, y2, f))) return false;
+        }
+        return true;
     }
 
     public boolean hasResources(Block block){
