@@ -911,7 +911,8 @@ public class ChatFragment extends Table{
 
     /** Adds a message, see {@link #addMsg} for ChatMessage return type */
     public void addMessage(String message) {
-        addMsg(message);
+        // GL: local messages (from the client and mods, e.g. player.sendMessage) get clickable coordinates too
+        NetClient.findCoords(addMsg(message));
     }
 
     public void doFade(float seconds){
