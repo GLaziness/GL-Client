@@ -157,7 +157,7 @@ public class SelfBuilderAI extends AIController{
         if(checkEnemyTurrets && !hold){
             TurretBuild threat = threatAt(unit.x, unit.y);
             if(threat != null){
-                float out = ((Turret)threat.block).range + unit.hitSize + 16f + tilesize * 3f;
+                float out = reach(threat) + tilesize * 3f;
                 escapeTo.set(unit.x - threat.x, unit.y - threat.y);
                 if(escapeTo.isZero()) escapeTo.set(1f, 0f);
                 escapeTo.setLength(out).add(threat.x, threat.y);
@@ -514,9 +514,17 @@ public class SelfBuilderAI extends AIController{
         return threatAt(wx, wy, margin) != null;
     }
 
-    /** GL: a turret of this kind can shoot the unit: turrets for ground only leave a flying unit alone and back. */
-    private boolean canHit(Turret t){
-        return unit.isFlying() ? t.targetAir : t.targetGround;
+    /**
+     * GL: the turret can shoot the unit right now: it has ammo and power, and aims at flying units when the unit flies
+     * (turrets for ground only leave a flying unit alone, and back). Empty or unpowered turrets are no danger.
+     */
+    private boolean canHit(TurretBuild tb){
+        return tb.canShoot() && (unit.isFlying() ? tb.targetAir() : tb.targetGround());
+    }
+
+    /** How close the turret reaches the unit: its real range with the current ammo, plus the unit's size. */
+    private float reach(TurretBuild tb){
+        return tb.range() + unit.hitSize + 16f;
     }
 
     private @Nullable TurretBuild threatAt(float wx, float wy){
@@ -530,8 +538,8 @@ public class SelfBuilderAI extends AIController{
                 if(tree != null){
                     float check = maxTurretCheckRange + margin;
                     Building danger = tree.find(wx - check, wy - check, check * 2f, check * 2f, b -> {
-                        if(b instanceof TurretBuild tb && tb.block instanceof Turret t && canHit(t)){
-                            return tb.within(wx, wy, t.range + unit.hitSize + 16f + margin);
+                        if(b instanceof TurretBuild tb && canHit(tb)){
+                            return tb.within(wx, wy, reach(tb) + margin);
                         }
                         return false;
                     });
@@ -583,7 +591,7 @@ public class SelfBuilderAI extends AIController{
         for(var teamData : state.teams.present){
             if(teamData.team == unit.team || teamData.team == Team.derelict || teamData.buildingTree == null) continue;
             teamData.buildingTree.intersect(minX, minY, w, h, b -> {
-                if(b instanceof TurretBuild tb && tb.block instanceof Turret t && canHit(t)) threats.add(tb);
+                if(b instanceof TurretBuild tb && canHit(tb)) threats.add(tb);
             });
         }
         if(threats.isEmpty()){
@@ -624,7 +632,7 @@ public class SelfBuilderAI extends AIController{
         // blocked cells: a cell counts when any of it can be in range
         boolean[] blocked = new boolean[total];
         for(TurretBuild tb : threats){
-            float r = ((Turret)tb.block).range + unit.hitSize + 16f + cell * 0.75f;
+            float r = reach(tb) + cell * 0.75f;
             int cx0 = Math.max(0, (int)((tb.x - r - x0) / cell)), cx1 = Math.min(gw - 1, (int)((tb.x + r - x0) / cell));
             int cy0 = Math.max(0, (int)((tb.y - r - y0) / cell)), cy1 = Math.min(gh - 1, (int)((tb.y + r - y0) / cell));
             for(int cy = cy0; cy <= cy1; cy++){
@@ -703,7 +711,7 @@ public class SelfBuilderAI extends AIController{
 
     private boolean threatened(float x, float y){
         for(TurretBuild tb : threats){
-            if(tb.within(x, y, ((Turret)tb.block).range + unit.hitSize + 16f)) return true;
+            if(tb.within(x, y, reach(tb))) return true;
         }
         return false;
     }
