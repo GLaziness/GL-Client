@@ -95,11 +95,20 @@ public class Version{
         return build < 0 ? "custom" : build + (revision == 0 ? "" : "." + revision);
     }
 
+    /** GL: the client build as a date ("19 сентября 2026"), since the version itself never changes. */
+    public static String clientLabel(){
+        if(clientVersion.equals("v0.0.0")) return "Dev";
+        if(buildTime <= 0) return clientVersion;
+        java.util.Locale locale = arc.Core.bundle != null ? arc.Core.bundle.getLocale() : java.util.Locale.getDefault();
+        return java.time.format.DateTimeFormatter.ofPattern("d MMMM yyyy", locale)
+            .format(java.time.Instant.ofEpochMilli(buildTime).atZone(java.time.ZoneId.systemDefault()));
+    }
+
     /** get menu version without colors */
     public static String combined(){
         if(build == -1){
             return "custom build";
         }
-        return (type.equals("official") ? modifier : type) + " build " + build + (revision == 0 ? "" : "." + revision) + "\n(GL Client Version: " + (clientVersion.equals("v0.0.0") ? "Dev" : clientVersion) + ")" + (commitHash.equals("unknown") ? "" : " (" + commitHash + ")");
+        return (type.equals("official") ? modifier : type) + " build " + build + (revision == 0 ? "" : "." + revision) + "\n(GL Client: " + clientLabel() + ")" + (commitHash.equals("unknown") ? "" : " (" + commitHash + ")");
     }
 }

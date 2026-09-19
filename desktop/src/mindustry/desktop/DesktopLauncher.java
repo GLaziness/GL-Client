@@ -134,7 +134,10 @@ public class DesktopLauncher extends ClientLauncher{
     }
 
     private static String getWindowTitle() {
-        return Strings.format("Mindustry (v@) | GL Client (@) | @/@ Mods Enabled", Version.buildString(), Version.clientVersion.equals("v0.0.0") ? "Dev" : Version.clientVersion, mods == null ? 0 : mods.mods.count(Mods.LoadedMod::enabled), mods == null ? 0 : mods.mods.size);
+        int enabled = mods == null ? 0 : mods.mods.count(Mods.LoadedMod::enabled), total = mods == null ? 0 : mods.mods.size;
+        // GL: the client build by date; the mods part is translated once the bundle is loaded
+        String modsText = Core.bundle != null && Core.bundle.has("gl.title.mods") ? Core.bundle.format("gl.title.mods", enabled, total) : enabled + "/" + total + " Mods Enabled";
+        return Strings.format("Mindustry (v@) | GL Client (@) | @", Version.buildString(), Version.clientLabel(), modsText);
     }
 
     @Override
@@ -548,7 +551,7 @@ public class DesktopLauncher extends ClientLauncher{
 
             presence.largeImageKey = "logo";
             presence.smallImageKey = "foo";
-            presence.smallImageText = Strings.format("GL Client (@)", Version.clientVersion.equals("v0.0.0") ? "Dev" : Version.clientVersion);
+            presence.smallImageText = Strings.format("GL Client (@)", Version.clientLabel());
             presence.startTimestamp = state.tick == 0 ? beginTime/1000 : Time.timeSinceMillis((long)(state.tick * 16.666));
             presence.label1 = "Client Github";
             presence.url1 = "https://github.com/mindustry-antigrief/mindustry-client";
@@ -561,7 +564,7 @@ public class DesktopLauncher extends ClientLauncher{
             //Steam mostly just expects us to give it a nice string, but it apparently expects "steam_display" to always be a loc token, so I've uploaded this one which just passes through 'steam_status' raw.
             SVars.net.friends.setRichPresence("steam_display", "#steam_status_raw");
 
-            String status = Strings.format("GL Client (@) | @", Version.clientVersion.equals("v0.0.0") ? "Dev" : Version.clientVersion, inGame ? gameMapWithWave : uiState);
+            String status = Strings.format("GL Client (@) | @", Version.clientLabel(), inGame ? gameMapWithWave : uiState);
             SVars.net.friends.setRichPresence("steam_status", status);
             SVars.net.friends.setRichPresence("status", inGame ? status : null); // This shows in the view game info menu. We should add more stuff to it, using the steam_status value is just a placeholder as it's required for joining.
             String currentLobby = SVars.net.currentLobby == null ? null : "" + SVars.net.currentLobby.handle();
