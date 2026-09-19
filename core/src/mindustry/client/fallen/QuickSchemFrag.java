@@ -1,766 +1,685 @@
 package mindustry.client.fallen;
 
 import arc.*;
+import arc.files.*;
+import arc.func.*;
 import arc.graphics.*;
+import arc.graphics.g2d.*;
 import arc.input.*;
 import arc.math.*;
+import arc.math.geom.*;
 import arc.scene.*;
 import arc.scene.event.*;
-import arc.scene.style.TextureRegionDrawable;
+import arc.scene.style.*;
 import arc.scene.ui.*;
 import arc.scene.ui.layout.*;
 import arc.struct.*;
 import arc.util.*;
 import arc.util.serialization.*;
-import mindustry.Vars;
-import mindustry.ctype.ContentType;
-import mindustry.ctype.UnlockableContent;
-import mindustry.game.Schematic;
+import mindustry.*;
+import mindustry.ctype.*;
+import mindustry.game.*;
 import mindustry.gen.*;
-import mindustry.graphics.Pal;
+import mindustry.graphics.*;
+import mindustry.type.*;
 import mindustry.ui.*;
-import mindustry.ui.dialogs.BaseDialog;
-import mindustry.ui.dialogs.SchematicsDialog;
+import mindustry.ui.dialogs.*;
+import mindustry.world.*;
 
-import static mindustry.Vars.ui;
+import static arc.Core.*;
+import static mindustry.Vars.*;
 
+/**
+ * GL: quick schematics panel. Categories on top, a grid of schematic slots under them, the hovered schematic is
+ * previewed in the middle of the screen with its cost. Everything is set up right in the panel:
+ * <ul>
+ * <li>left click on a slot places its schematic, on an empty slot it opens the schematic list;</li>
+ * <li>right click on a slot opens its editor (schematic, icon, clearing);</li>
+ * <li>dragging a slot onto another swaps them;</li>
+ * <li>right click on a category (or its name) edits it, the gear opens the panel settings.</li>
+ * </ul>
+ * A slot without its own icon shows the biggest block of its schematic. Kept in quickschems.json, the old format loads as is.
+ */
+public class QuickSchemFrag extends Table{
+    private static final String file = "quickschems.json";
 
-public class QuickSchemFrag extends Table {
+    // region data
 
-    private static final int DEFAULT_TABS_PER_ROW = 6;
+    public static class QuickSlot{
+        public String schemName = "";
+        /** "none" means automatic: the biggest block of the schematic. */
+        public String iconName = "none";
+        public boolean isContent = false;
 
-    private Table container = new Table();
-    private Seq<QuickTab> tabs = new Seq<>();
-    private int currentTab = 0;
-    private Table tabTable;
-    private boolean visible = Core.settings.getBool("quickschems", false);
-    private Json json = new Json(){{
+        public QuickSlot(){}
+    }
+
+    public static class QuickTab{
+        public String name = "Tab";
+        public String iconName = "none";
+        public boolean isContent = false;
+        public boolean useIcon = false;
+        /** Old format fields, kept so older files still load. */
+        public String defaultSlotIcon = "none";
+        public boolean defaultSlotIsContent = false;
+        public Seq<QuickSlot> slots = new Seq<>();
+
+        public QuickTab(){}
+
+        public QuickTab(String name){
+            this.name = name;
+        }
+
+        void validate(){
+            if(name == null) name = "Tab";
+            if(iconName == null) iconName = "none";
+            if(defaultSlotIcon == null) defaultSlotIcon = "none";
+            if(slots == null) slots = new Seq<>();
+            slots.removeAll(s -> s == null);
+            for(QuickSlot slot : slots){
+                if(slot.iconName == null) slot.iconName = "none";
+                if(slot.schemName == null) slot.schemName = "";
+            }
+        }
+    }
+
+    private final Json json = new Json(){{
         setIgnoreUnknownFields(true);
-        // Регистрируем класс вкладки и слота со всеми возможными именами
         addClassTag("mindustry.client.fallen.QuickSchemFrag$QuickTab", QuickTab.class);
         addClassTag("mindustry.client.fallen.QuickSchemFrag.QuickTab", QuickTab.class);
         addClassTag("QuickTab", QuickTab.class);
         addClassTag("QuickSlot", QuickSlot.class);
-
         setElementType(QuickTab.class, "slots", QuickSlot.class);
     }};
 
-    private float lastX = 0, lastY = 0;
-    private boolean centered = false;
-    private float lastWidth = 0;
+    private Seq<QuickTab> tabs = new Seq<>();
+    private int currentTab;
 
-    // Структура данных для кнопки
-    public static class QuickSlot {
-        public String schemName = "";
-        public String iconName = "none";
-        public boolean isContent = false;
+    // endregion
+    // region state
 
-        public QuickSlot() {}
+    private boolean shown = settings.getBool("quickschems", false);
+    private final Table body = new Table();
+    private final Table preview = new Table();
+    private @Nullable Schematic hovered;
+    private final ObjectMap<Schematic, TextureRegion> autoIcons = new ObjectMap<>();
+    private ImageButton.ImageButtonStyle slotStyle, tabStyle;
+    /** Slot being dragged onto another one, -1 when nothing is dragged. */
+    private int dragFrom = -1;
+    private final Vec2 dragStart = new Vec2();
+    private boolean placed;
+
+    private static int cols(){
+        return settings.getInt("qs2-cols", 6);
     }
 
-    // Расширенная структура для вкладки
-    public static class QuickTab {
-        public String name = "Tab";
-        public String iconName = "infoSmall";
-        public String defaultSlotIcon = "none";
-        public boolean defaultSlotIsContent = false;
-        public boolean useIcon = false;
-        public boolean isContent = false;
-        public Seq<QuickSlot> slots = new Seq<>();
+    private static int rows(){
+        return settings.getInt("qs2-rows", 8);
+    }
 
-        public QuickTab() {}
-        public QuickTab(String name) { this.name = name; }
+    private static float size(){
+        return settings.getInt("qs2-size", 34);
+    }
 
-        public void validate() {
-            // 1. Проверка базовых полей вкладки
-            if (name == null) name = "Tab";
+    // endregion
 
-            // Если иконка вкладки null (старый конфиг), ставим "none" или системную
-            if (iconName == null) iconName = "infoSmall";
+    public void build(Group parent){
+        loadData();
 
-            // Новое поле: обязательно инициализируем, чтобы не было null
-            if (defaultSlotIcon == null) defaultSlotIcon = "none";
+        slotStyle = new ImageButton.ImageButtonStyle(){{
+            up = ((TextureRegionDrawable)Tex.whiteui).tint(0f, 0f, 0f, 0.35f);
+            over = Styles.flatOver;
+            down = Styles.flatDown;
+        }};
+        tabStyle = new ImageButton.ImageButtonStyle(){{
+            up = Styles.none;
+            over = Styles.flatOver;
+            down = Styles.flatDown;
+            checked = ((TextureRegionDrawable)Tex.whiteui).tint(Pal.accent.r, Pal.accent.g, Pal.accent.b, 0.3f);
+        }};
 
-            // 2. Проверка списка слотов
-            if (slots == null) {
-                slots = new Seq<>();
-            } else {
-                // Проходимся по всем загруженным слотам и лечим их тоже
-                for (QuickSlot slot : slots) {
-                    if (slot == null) continue; // На всякий случай
+        parent.addChild(this);
+        touchable = Touchable.childrenOnly;
+        visible(() -> ui.hudfrag.shown && shown && settings.getBool("quickschems", false));
+        add(body);
+        rebuild();
 
-                    // Если в старом конфиге иконка была null или не указана
-                    if (slot.iconName == null) slot.iconName = "none";
-
-                    // Чтобы не ловить ошибки при поиске схем
-                    if (slot.schemName == null) slot.schemName = "";
-                }
+        // keeps the top left corner in place when the panel changes size, and inside the screen
+        update(() -> {
+            float sw = scene.getWidth(), sh = scene.getHeight();
+            if(!placed && sw > 0){
+                placed = true;
+                x = settings.getFloat("qs2-x", sw - getPrefWidth() - Scl.scl(10f));
+                top = settings.getFloat("qs2-top", sh * 0.75f);
             }
+            setSize(getPrefWidth(), getPrefHeight());
+            top = Mathf.clamp(top, getHeight(), sh);
+            x = Mathf.clamp(x, 0f, Math.max(sw - getWidth(), 0f));
+            y = top - getHeight();
+            if(hovered != null && !hasMouse()) hovered = null;
+        });
+
+        parent.fill(t -> {
+            t.touchable = Touchable.disabled;
+            t.add(preview);
+            t.visible(() -> visible && hovered != null && settings.getBool("qs2-preview", true) && dragFrom == -1);
+            t.update(() -> buildPreview(hovered));
+        });
+    }
+
+    private float top;
+
+    public void toggle(){
+        shown = !shown;
+        if(shown){
+            if(!settings.getBool("quickschems", false)) settings.put("quickschems", true);
+            rebuild();
+            toFront();
         }
     }
 
-    public void build(Group parent) {
-        parent.addChild(this);
-        loadData();
-        for(QuickTab tab : tabs) tab.validate();
+    // region panel
 
-        visible(() -> ui.hudfrag.shown && visible && Core.settings.getBool("quickschems", false));
+    public void rebuild(){
+        if(tabs.isEmpty()) tabs.add(new QuickTab(bundle.get("gl.ui.qs.defaulttab")));
+        currentTab = Mathf.clamp(currentTab, 0, tabs.size - 1);
+        QuickTab tab = tabs.get(currentTab);
+        int cols = cols(), total = cols * rows();
+        while(tab.slots.size < total) tab.slots.add(new QuickSlot());
+        autoIcons.clear();
 
-        // Основной фон окна
-        background(Styles.black6);
-        // Главная таблица
-        table(main -> {
-            // Правая часть
-            main.table(content -> {
-                content.table(t -> {
-                    this.tabTable = t;
-                }).growX().left().row();
+        float size = size();
+        body.clear();
+        body.background(Tex.buttonEdge4);
+        body.margin(6f, 6f, 8f, 8f);
 
-                content.image().growX().height(2f).color(Pal.coalBlack).row();
+        // title row: drag handle, category name, new category, settings
+        body.table(h -> {
+            h.left();
+            ImageButton move = h.button(Icon.move, Styles.clearNonei, size * 0.55f, () -> {}).size(size * 0.8f).get();
+            move.addListener(new InputListener(){
+                float lx, ly;
 
-                content.table(c -> {
-                    c.add(container).top().left();
-                }).grow();
+                @Override
+                public boolean touchDown(InputEvent e, float x, float y, int pointer, KeyCode key){
+                    lx = e.stageX;
+                    ly = e.stageY;
+                    return true;
+                }
 
-                rebuild();
-            }).grow();
-        }).grow();
+                @Override
+                public void touchDragged(InputEvent e, float x, float y, int pointer){
+                    QuickSchemFrag.this.x += e.stageX - lx;
+                    top += e.stageY - ly;
+                    lx = e.stageX;
+                    ly = e.stageY;
+                }
 
-        // Позиционирование
-        update(() -> {
-            if(!centered && Core.graphics.getWidth() > 0){
-                float sx = Core.settings.getFloat("schemfrag-x", Core.graphics.getWidth() / 2f - width / 2f);
-                float sy = Core.settings.getFloat("schemfrag-y", Core.graphics.getHeight() / 2f - height / 2f);
-                // Ограничиваем, чтобы окно не появилось за пределами экрана
-                setPosition(Mathf.clamp(sx, 0, Core.graphics.getWidth() - width),
-                        Mathf.clamp(sy, 0, Core.graphics.getHeight() - height));
-                centered = true;
-            }
-        });
-        rebuild();
-    }
-
-    private void rebuildTabs() {
-        if (tabTable == null) return;
-
-        tabTable.clear();
-        tabTable.left().top().defaults().pad(2).size(Core.settings.getFloat("qs-btn-size", 64f));
-
-        int tabsPerRow = Core.settings.getInt("qs-tbs-cols", DEFAULT_TABS_PER_ROW);
-        int currentInRow = 0;
-        boolean dragAdded = false;
-
-        for (int i = 0; i < tabs.size; i++) {
-            int index = i;
-            QuickTab tab = tabs.get(i);
-
-            // Создаем кнопку вкладки
-            Button btn = tabTable.button(b -> {
-                if (tab.useIcon) b.image(getIconDrawable(tab.iconName, tab.isContent)).size(Core.settings.getFloat("qs-btn-size", 64f)*0.7f);
-                else b.add(tab.name).fontScale(0.5f).ellipsis(true);
-            }, Styles.flatBordert, () -> {
-                currentTab = index;
-                rebuild();
-            }).checked(currentTab == index).get();
-
-            btn.addListener(new InputListener() {
-                @Override public boolean touchDown(InputEvent e, float x, float y, int p, KeyCode b) {
-                    if (b == KeyCode.mouseRight) { showTabSettings(tab, index); return true; }
-                    return false;
+                @Override
+                public void touchUp(InputEvent e, float x, float y, int pointer, KeyCode key){
+                    settings.put("qs2-x", QuickSchemFrag.this.x);
+                    settings.put("qs2-top", top);
                 }
             });
+            tooltip(move, "gl.ui.qs.move");
 
-            currentInRow++;
+            Label name = h.add(tab.name, Styles.outlineLabel).color(Pal.accent).width(Math.max(cols * (size + 2f) - 3f * size * 0.8f - 8f, 20f)).padLeft(4f).padRight(4f).get(); // the room left by the buttons, a long name ends with "..."
+            name.setEllipsis(true);
+            name.setFontScale(0.85f);
+            name.clicked(KeyCode.mouseRight, () -> editTab(currentTab));
+            tooltip(name, "gl.ui.qs.tabname");
 
-            // ЛОГИКА ВСТАВКИ КНОПКИ ПЕРЕМЕЩЕНИЯ (В конец ПЕРВОГО ряда)
-            if (!dragAdded && currentInRow == tabsPerRow - 1) {
-                addDragButton(tabTable); // Вставляем кнопку в последнюю ячейку 1-го ряда
-                tabTable.row();
-                currentInRow = 0;
-                dragAdded = true;
-            }
-            // Перенос для всех последующих рядов (они будут длиннее на 1 кнопку)
-            else if (dragAdded && currentInRow == tabsPerRow) {
-                tabTable.row();
-                currentInRow = 0;
-            }
-        }
+            tooltip(h.button(Icon.add, Styles.clearNonei, size * 0.55f, () -> {
+                tabs.add(new QuickTab(bundle.format("gl.ui.qs.newtab", tabs.size + 1)));
+                currentTab = tabs.size - 1;
+                saveData();
+                rebuild();
+            }).size(size * 0.8f).get(), "gl.ui.qs.addtab");
+            tooltip(h.button(Icon.settings, Styles.clearNonei, size * 0.55f, this::showSettings).size(size * 0.8f).get(), "gl.ui.qs.settings");
+        }).growX().row();
 
-        // Если вкладок слишком мало и мы не дошли до конца 1-го ряда
-        if (!dragAdded) {
-            // Добавляем пустые ячейки, чтобы выровнять кнопку по правому краю
-            while (currentInRow < tabsPerRow - 1) {
-                tabTable.add().size(Core.settings.getFloat("qs-btn-size", 64f));
-                currentInRow++;
+        // categories
+        body.table(g -> {
+            g.left().defaults().size(size).pad(1f);
+            for(int i = 0; i < tabs.size; i++){
+                int index = i;
+                QuickTab t = tabs.get(i);
+                boolean withIcon = t.useIcon && !"none".equals(t.iconName);
+                ImageButton b = g.button(withIcon ? icon(t.iconName, t.isContent) : Styles.none, tabStyle, size * 0.7f, () -> {
+                    currentTab = index;
+                    rebuild();
+                }).get();
+                if(!withIcon){
+                    b.clearChildren();
+                    b.add(t.name.isEmpty() ? String.valueOf(index + 1) : t.name.substring(0, Math.min(2, t.name.length())), Styles.outlineLabel).fontScale(0.75f);
+                }
+                b.setChecked(index == currentTab);
+                b.clicked(KeyCode.mouseRight, () -> editTab(index));
+                b.addListener(new Tooltip(tt -> tt.background(Styles.black6).margin(4f).add(t.name, Styles.outlineLabel)));
+                if((i + 1) % cols == 0) g.row();
             }
-            addDragButton(tabTable);
-        }
+        }).left().padTop(2f).row();
+
+        body.image().color(Pal.accent).height(2f).growX().padTop(3f).padBottom(3f).row();
+
+        // slots
+        body.table(g -> {
+            g.left().defaults().size(size).pad(1f);
+            for(int i = 0; i < total; i++){
+                addSlot(g, tab, i, size);
+                if((i + 1) % cols == 0) g.row();
+            }
+        }).left();
+
+        pack();
     }
 
-    private void addDragButton(Table t) {
-        ImageButton drag = t.button(Icon.move, Styles.cleari, () -> {}).size(Core.settings.getFloat("qs-btn-size", 64f)).get();
-        drag.addListener(new InputListener() {
-            boolean isRightClick = false;
-            @Override public boolean touchDown(InputEvent e, float x, float y, int p, KeyCode b) {
-                if (b == KeyCode.mouseRight) { isRightClick = true; showSettings(); return true; }
-                isRightClick = false;
-                lastX = e.stageX; lastY = e.stageY;
+    private void addSlot(Table g, QuickTab tab, int index, float size){
+        QuickSlot slot = tab.slots.get(index);
+        Schematic schem = findSchem(slot.schemName);
+        Drawable drawable = schem == null ? Icon.pencil : "none".equals(slot.iconName) ? new TextureRegionDrawable(autoIcon(schem)) : icon(slot.iconName, slot.isContent);
+
+        ImageButton b = g.button(drawable, slotStyle, size * 0.7f, () -> {
+            if(schem != null) control.input.useSchematic(schem);
+            else pickSchematic(slot);
+        }).get();
+        b.userObject = index;
+        b.getImage().setScaling(Scaling.fit);
+        if(schem == null){
+            b.getImage().setColor(slot.schemName.isEmpty() ? Color.gray.cpy().a(0.5f) : Pal.remove); // red: the schematic was renamed or deleted
+            b.resizeImage(size * 0.45f);
+        }
+
+        b.hovered(() -> hovered = schem);
+        b.exited(() -> {
+            if(hovered == schem) hovered = null;
+        });
+        b.clicked(KeyCode.mouseRight, () -> editSlot(slot));
+        if(schem == null && !slot.schemName.isEmpty()) tooltipText(b, bundle.format("gl.ui.qs.missing", slot.schemName));
+
+        // drag a slot onto another one to swap them
+        b.addCaptureListener(new InputListener(){
+            @Override
+            public boolean touchDown(InputEvent e, float x, float y, int pointer, KeyCode key){
+                if(key != KeyCode.mouseLeft) return false;
+                dragFrom = -1;
+                dragStart.set(e.stageX, e.stageY);
                 return true;
             }
-            @Override public void touchDragged(InputEvent e, float x, float y, int p) {
-                if(!isRightClick) {
-                    moveBy(e.stageX - lastX, e.stageY - lastY);
-                    lastX = e.stageX; lastY = e.stageY;
-                }
-            }
-            @Override public void touchUp(InputEvent e, float x, float y, int p, KeyCode b) {
-                if(!isRightClick) {
-                    Core.settings.put("schemfrag-x", QuickSchemFrag.this.x);
-                    Core.settings.put("schemfrag-y", QuickSchemFrag.this.y);
-                }
-            }
-        });
-    }
 
-    public void rebuild() {
-        if (container == null || tabs.isEmpty()) return;
-
-        currentTab = Math.max(0, Math.min(currentTab, tabs.size - 1));
-        float btnSize = Core.settings.getFloat("qs-btn-size", 64f);
-
-        container.clear();
-        container.top().left();
-
-        QuickTab tab = tabs.get(currentTab);
-        // syncSlots больше НЕ удаляет лишние слоты — только дополняет недостающие.
-        // Возвращает актуальное кол-во ячеек текущей сетки (cols*rows),
-        // чтобы отрисовать ровно столько, сколько нужно сейчас,
-        // не трогая "спрятанные" слоты сверх этого количества.
-        int totalSlots = syncSlots(tab);
-        int cols = Core.settings.getInt("qs-cols", 5);
-
-        int count = 0;
-        for (int i = 0; i < totalSlots; i++) {
-            QuickSlot slot = tab.slots.get(i);
-            String iconToDraw = slot.iconName;
-            boolean isContentToDraw = slot.isContent;
-
-            if ("none".equals(iconToDraw)) {
-                // Если у слота нет иконки, берем дефолт вкладки
-                iconToDraw = tab.defaultSlotIcon;
-                isContentToDraw = tab.defaultSlotIsContent;
-
-                if ("none".equals(iconToDraw)) {
-                    // Если и у вкладки нет, берем глобальный дефолт
-                    iconToDraw = Core.settings.getString("qs-default-icon", "infoSmall");
-                    isContentToDraw = Core.settings.getBool("qs-default-iscontent", false);
-                }
+            @Override
+            public void touchDragged(InputEvent e, float x, float y, int pointer){
+                if(dragFrom == -1 && dragStart.dst(e.stageX, e.stageY) > Scl.scl(8f)) dragFrom = index;
             }
 
-            final String finalIcon = iconToDraw;
-            final boolean finalIsContent = isContentToDraw;
-
-            Button btn = container.button(b -> {
-                b.clearChildren();
-                TextureRegionDrawable dr = getIconDrawable(finalIcon, finalIsContent);
-                Image img = b.image(dr).size(btnSize * 0.6f).get();
-
-                // Если в итоге всё равно вышло "none", делаем невидимым
-                if ("none".equals(finalIcon)) img.color.a = 0f;
-            }, Styles.flatBordert, () -> useSchematic(slot.schemName)).size(btnSize).get();
-
-
-            // Делаем кнопку "призрачной" если нет схемы
-            if (slot.schemName.isEmpty()) {
-                btn.color.a = 0.3f;
-            } else {
-                btn.color.a = 1f;
-            }
-            btn.addListener(new InputListener() {
-                @Override
-                public boolean touchDown(InputEvent e, float x, float y, int p, KeyCode b) {
-                    if (b == KeyCode.mouseRight) {
-                        showEditDialog(slot);
-                        return true;
-                    }
-                    return false;
-                }
-
-            });
-            if (!slot.schemName.isEmpty()) {
-                // Ищем схему один раз при билде
-                Schematic schem = Vars.schematics.all().find(s -> s.name().equals(slot.schemName));
-
-                if (schem != null) {
-                    btn.addListener(new Tooltip(t -> {
-                        t.background(Styles.black8); // Темный фон как в игре
-                        t.margin(10f);
-
-                        // Заголовок: Размеры и кол-во блоков
-                        t.add(schem.width + "x" + schem.height + ", " + schem.tiles.size + " блоков")
-                                .style(Styles.outlineLabel).padBottom(4f).row();
-
-                        // Само изображение схемы
-                        // Ограничиваем размер превью (например, 200-250 пикселей)
-                        t.add(new SchematicsDialog.SchematicImage(schem)).size(Math.min(schem.width * 16, 250f), Math.min(schem.height * 16, 250f)).pad(4f).row();
-
-                        // Таблица с ресурсами и энергией
-                        t.table(stats -> {
-                            stats.left().defaults().left();
-
-                            // Сетка ресурсов
-                            stats.table(items -> {
-                                int itemIdx = 0;
-                                for (var stack : schem.requirements()) {
-                                    items.image(stack.item.uiIcon).size(16f).padRight(4f);
-                                    items.add(String.valueOf(stack.amount)).color(Color.lightGray).padRight(10f);
-                                    if (++itemIdx % 4 == 0) items.row();
-                                }
-                            }).row();
-
-                            // Энергия (если есть потребление или производство)
-                            float power = (schem.powerProduction() - schem.powerConsumption()) * 60f;
-                            if (Math.abs(power) > 0.01f) {
-                                stats.table(p -> {
-                                    p.image(Icon.power).color(power > 0 ? Pal.accent : Pal.remove).size(16f).padRight(4f);
-                                    p.add((power > 0 ? "+" : "") + Strings.fixed(power, 2))
-                                            .color(power > 0 ? Pal.accent : Pal.remove);
-                                }).padTop(4f);
-                            }
-                        });
-                    }));
-                }
-            }
-            count++;
-            if (count % cols == 0) container.row(); // Перенос строки
-        }
-
-        rebuildTabs();
-        updateSize();
-    }
-
-    // Настройка КОНКРЕТНОЙ вкладки
-    private void showTabSettings(QuickTab tab, int tabIndex) {
-        BaseDialog dialog = new BaseDialog(arc.Core.bundle.get("gl.ui.quickschem.1"));
-        dialog.cont.table(t -> {
-            t.table( tn ->{
-                tn.add(arc.Core.bundle.get("gl.ui.quickschem.2")).left();
-                tn.field(tab.name, val -> {
-                    tab.name = val;
+            @Override
+            public void touchUp(InputEvent e, float x, float y, int pointer, KeyCode key){
+                if(dragFrom != index) return;
+                dragFrom = -1;
+                Element over = scene.hit(e.stageX, e.stageY, true);
+                while(over != null && !(over.userObject instanceof Integer)) over = over.parent;
+                if(over != null && over.userObject instanceof Integer to && to != index && isAscendantOf(over)){
+                    tab.slots.swap(index, to);
                     saveData();
-                    rebuild();
-                }).growX().row();
-            }).growX().row();
-
-            t.check(arc.Core.bundle.get("gl.ui.quickschem.3"), tab.useIcon, val -> {
-                tab.useIcon = val;
-                saveData();
-                rebuild();
-            }).row();
-
-            t.button(arc.Core.bundle.get("gl.ui.quickschem.4"), () -> {
-                showIconPicker(null, tab, false, dialog);
-            }).size(200, 45).row();
-
-            t.table(di->{
-                di.add(arc.Core.bundle.get("gl.ui.quickschem.5")).left().padTop(10);
-                di.button(getIconDrawable(tab.defaultSlotIcon, tab.defaultSlotIsContent), () -> {
-                    showIconPickerForTabDefault(tab, dialog);
-                }).size(45).get();
-            }).get().row();
-            t.row();
-            t.table( tb ->{
-                tb.button(arc.Core.bundle.get("gl.ui.quickschem.6"), Icon.trash, () -> {
-                    if (tabs.size > 1) {
-                        tabs.remove(tabIndex);
-                        currentTab = Math.min(currentTab, tabs.size - 1);
-                        saveData();
-                        rebuild();
-                        dialog.hide();
-                    }
-                }).width(280f).height(50).color(Pal.remove).row();
-            });
-
-
-
+                    app.post(QuickSchemFrag.this::rebuild);
+                }
+                e.cancel(); // no click after a drag
+            }
         });
-        dialog.addCloseButton();
-        dialog.hidden(() -> {
-            saveData();
-            rebuildTabs();
-            rebuild();
-        });
-        dialog.show();
     }
 
-    private void showIconPickerForTabDefault(QuickTab tab, BaseDialog parent) {
-        // Вызываем обычный пикер, но используем "хитрость":
-        // передаем null в slot и саму вкладку в tab,
-        // но в rebuildIconList добавим проверку
-        showIconPicker(null, tab, true, parent);
-    }
+    private void buildPreview(@Nullable Schematic schem){
+        if(schem == null || preview.userObject == schem) return;
+        preview.userObject = schem;
+        preview.clear();
+        preview.background(Styles.black6);
+        preview.margin(8f);
+        preview.add(schem.name(), Styles.outlineLabel).color(Pal.accent).padBottom(4f).row();
+        float scale = Math.min(Math.min(360f / (schem.width * 8f), 360f / (schem.height * 8f)), 4f);
+        preview.add(new SchematicsDialog.SchematicImage(schem)).size(schem.width * 8f * scale, schem.height * 8f * scale).row();
+        preview.add(bundle.format("gl.ui.qs.info", schem.width, schem.height, schem.tiles.size), Styles.outlineLabel).color(Color.lightGray).padTop(4f).row();
 
-    // ГЛОБАЛЬНЫЕ настройки интерфейса
-    private void showSettings() {
-        BaseDialog dialog = new BaseDialog(arc.Core.bundle.get("gl.ui.quickschem.7"));
+        preview.table(req -> {
+            int i = 0;
+            for(ItemStack stack : schem.requirements()){
+                Item item = stack.item;
+                int amount = stack.amount;
+                req.image(item.uiIcon).size(iconSmall).left();
+                req.label(() -> {
+                    var core = player.core();
+                    if(core == null || state.rules.infiniteResources || core.items.has(item, amount)) return "[lightgray]" + amount;
+                    return "[scarlet]" + core.items.get(item) + "[lightgray]/" + amount;
+                }).padLeft(2f).padRight(8f).left();
+                if(++i % 4 == 0) req.row();
+            }
+        }).padTop(4f).row();
 
-        setupSettingsContent(dialog);
-
-        dialog.addCloseButton();
-        dialog.show();
-    }
-
-    private void setupSettingsContent(BaseDialog dialog) {
-        dialog.cont.clear();
-
-        dialog.cont.pane(p -> {
-            p.defaults().left().growX();
-
-            // Настройка колонок
-            p.table(t -> {
-                t.label(() -> "Columns: " + Core.settings.getInt("qs-cols", 5)).left().row();
-                t.slider(1, 15, 1, Core.settings.getInt("qs-cols", 5), val -> {
-                    Core.settings.put("qs-cols", (int)val);
-                    rebuild();
-                }).left().growX();
-            }).row();
-
-            // Настройка строк
-            p.table(t -> {
-                t.label(() -> "Rows: " + Core.settings.getInt("qs-rows", 4)).left().row();
-                t.slider(1, 15, 1, Core.settings.getInt("qs-rows", 4), val -> {
-                    Core.settings.put("qs-rows", (int)val);
-                    rebuild();
-                }).left().growX();
-            }).row();
-
-            // Настройка кол-ва вкладок в строку
-            p.table(t -> {
-                t.label(() -> "Tabs at row: " + Core.settings.getInt("qs-tbs-cols", DEFAULT_TABS_PER_ROW)).left().row();
-                t.slider(1, 15, 1, Core.settings.getInt("qs-tbs-cols", DEFAULT_TABS_PER_ROW), val -> {
-                    Core.settings.put("qs-tbs-cols", (int)val);
-                    rebuildTabs();
-                }).left().growX();
-            }).row();
-
-            // Настройка размера кнопок
-            p.table(t -> {
-                t.label(() -> "Button Size: " + (int)Core.settings.getFloat("qs-btn-size", 64f)).left().row();
-                t.slider(16, 128, 4, Core.settings.getFloat("qs-btn-size", 64f), val -> {
-                    Core.settings.put("qs-btn-size", val);
-                    rebuild();
-                }).left().growX();
-            }).row();
-
-            p.table(t -> {
-                t.add((arc.Core.bundle.get("gl.ui.quickschem.8") + " ")).left();
-
-                // Показываем текущую дефолтную иконку
-                String defName = Core.settings.getString("qs-default-icon", "infoSmall");
-                boolean defIsCont = Core.settings.getBool("qs-default-iscontent", false);
-
-                t.button(getIconDrawable(defName, defIsCont), () -> {
-                    showIconPicker(null, null,false, dialog);
-                }).size(45);
-            }).left().row();
-
-            p.image().height(2).color(Pal.accent).row();
-
-            p.label(() -> arc.Core.bundle.get("gl.ui.quickschem.9")).color(Pal.accent).padBottom(10).row();
-            p.table(tabsTable -> {
-                tabsTable.defaults().pad(2);
-
-                for (int i = 0; i < tabs.size; i++) {
-                    int index = i;
-                    QuickTab tab = tabs.get(i);
-
-                    tabsTable.table(Styles.black3, row -> {
-                        // Кнопка ВВЕРХ
-                        row.button(Icon.upOpen, Styles.cleari, () -> {
-                            if (index > 0) {
-                                tabs.swap(index, index - 1);
-                                if (currentTab == index) currentTab--;
-                                else if (currentTab == index - 1) currentTab++;
-                                saveData();
-                                rebuild();
-                                setupSettingsContent(dialog); // Перерисовываем список
-                            }
-                        }).size(35).disabled(index == 0);
-
-                        // Кнопка ВНИЗ
-                        row.button(Icon.downOpen, Styles.cleari, () -> {
-                            if (index < tabs.size - 1) {
-                                tabs.swap(index, index + 1);
-                                if (currentTab == index) currentTab++;
-                                else if (currentTab == index + 1) currentTab--;
-                                saveData();
-                                rebuild();
-                                setupSettingsContent(dialog); // Перерисовываем список
-                            }
-                        }).size(35).disabled(index == tabs.size - 1);
-
-                        // Иконка и имя вкладки
-                        row.image(getIconDrawable(tab.iconName, tab.isContent)).size(24).padRight(10);
-                        row.add(tab.name).growX().ellipsis(true);
-                    }).growX().row();
+        float produce = schem.powerProduction() * 60f, consume = schem.powerConsumption() * 60f;
+        if(produce > 0.001f || consume > 0.001f){
+            preview.table(p -> {
+                if(produce > 0.001f){
+                    p.image(Icon.powerSmall).color(Pal.powerLight).padRight(3f);
+                    p.add("+" + Strings.autoFixed(produce, 2)).color(Pal.powerLight).padRight(12f);
                 }
-            }).growX().row();
-
-            p.button(arc.Core.bundle.get("gl.ui.quickschem.10"), Icon.add, () -> {
-                QuickTab nt = new QuickTab("New");
-                nt.iconName = Core.settings.getString("qs-default-icon", "infoSmall");
-                nt.isContent = Core.settings.getBool("qs-default-iscontent", false);
-                tabs.add(nt);
-                saveData();
-                rebuild();
-            }).height(50).row();
-
-            p.button(arc.Core.bundle.get("gl.ui.quickschem.11"), Icon.trash, () -> {
-                if (tabs.size > 1) {
-                    tabs.remove(currentTab);
-                    currentTab = 0;
-                    saveData();
-                    rebuild();
-                    dialog.hide();
+                if(consume > 0.001f){
+                    p.image(Icon.powerSmall).color(Pal.remove).padRight(3f);
+                    p.add("-" + Strings.autoFixed(consume, 2)).color(Pal.remove);
                 }
-            }).width(200f).height(50f).color(Pal.remove);
-        }).grow();
-
-    }
-
-    // Вспомогательный метод получения иконки
-    private TextureRegionDrawable getIconDrawable(String name, boolean isContent) {
-        // 1. Проверка на "пустую" иконку
-        if (name == null || name.equals("none")) return (TextureRegionDrawable) Icon.none;
-
-        // 2. Системные иконки.
-        if (!isContent) return Icon.icons.get(name, (TextureRegionDrawable) Icon.none);
-
-        // 3. Контент игры
-        for (ContentType type : ContentType.all) {
-            var content = Vars.content.getByName(type, name);
-            if (content instanceof UnlockableContent uc)
-                return new TextureRegionDrawable(uc.uiIcon);
+            }).padTop(4f);
         }
-
-        // 4. Если вообще ничего не нашли
-        return (TextureRegionDrawable) Icon.none;
     }
 
-    // Универсальный выбор иконки (для слота или для вкладки)
-    private void showIconPicker(QuickSlot slot, QuickTab tab, boolean editDefault, BaseDialog parent) {
-        BaseDialog picker = new BaseDialog(arc.Core.bundle.get("gl.ui.quickschem.12"));
-        picker.setSize(Core.graphics.getWidth() * 0.8f, Core.graphics.getHeight() * 0.8f);
+    // endregion
+    // region editing
 
-        // Контейнер для списка иконок, который мы будем перерисовывать
-        Table listTable = new Table();
-
-        // Поле поиска
-        picker.cont.table(t -> {
-            t.add((arc.Core.bundle.get("gl.ui.quickschem.13") + " ")).padRight(8f);
-            t.field("", text -> {
-                // При каждом изменении текста очищаем и пересобираем список
-                rebuildIconList(listTable, text.toLowerCase(), slot, tab, editDefault, picker, parent);
-            }).growX().get();
-        }).growX().pad(10).row();
-
-        // Панель прокрутки, внутри которой лежит наш список
-        picker.cont.pane(listTable).grow().scrollX(false).scrollY(true);
-
-        // Первичная сборка списка (пустой поиск = показать всё)
-        rebuildIconList(listTable, "", slot, tab, editDefault, picker, parent);
-
-        picker.addCloseButton();
-        picker.show();
-    }
-
-    // Вспомогательный метод для пересборки списка иконок
-    private void rebuildIconList(Table t, String query, QuickSlot slot, QuickTab tab, boolean editDefault, BaseDialog picker, BaseDialog parent) {
-        t.clear();
-        t.top().left();
-        t.defaults().size(48f).pad(2f);
-        int count = 0;
-        // Рассчитываем колонки (примерно)
-        int columns = Math.max(1, (int)((Core.graphics.getWidth() * 0.8f) / 54f) - 1);
-
-
-        // Вспомогательный метод для обработки клика (чтобы не дублировать код)
-        Runnable handleResult = () -> {
-            saveData();
-            picker.hide();
-            rebuild();
-            if (tab != null) rebuildTabs();
-            // Если мы меняли глобальную настройку (slot и tab = null), обновляем само окно настроек
-            if (slot == null && tab == null && parent != null) setupSettingsContent(parent);
-        };
-
-        // КНОПА "НЕТ ИКОНКИ" В НАЧАЛО
-        if (query.isEmpty() || "none".contains(query)) {
-            t.button(Icon.none, () -> {
-                if (slot != null) { slot.iconName = "none"; slot.isContent = false; }
-                else if (tab != null) {
-                    if (editDefault) { // Меням дефолт для слотов
-                        tab.defaultSlotIcon = "none"; tab.defaultSlotIsContent = false;
-                    } else { // Меняем иконку самой вкладки
-                        tab.iconName = "none"; tab.isContent = false;
-                    }
+    private void editSlot(QuickSlot slot){
+        BaseDialog dialog = new BaseDialog(bundle.get("gl.ui.qs.slot"));
+        Runnable[] fill = {null};
+        fill[0] = () -> {
+            dialog.cont.clear();
+            Schematic schem = findSchem(slot.schemName);
+            dialog.cont.table(Styles.black3, t -> {
+                t.margin(10f);
+                if(schem != null){
+                    t.add(new SchematicsDialog.SchematicImage(schem)).size(120f).padRight(10f);
                 }
-                else {
-                    Core.settings.put("qs-default-icon", "none");
-                    Core.settings.put("qs-default-iscontent", false);
-                }
-                handleResult.run();
-            }).tooltip(arc.Core.bundle.get("gl.ui.quickschem.14"));
-            if (++count % columns == 0) t.row();
-        }
-
-        // 1. Системные иконки (фильтр только по названию поля)
-        for (java.lang.reflect.Field field : Icon.class.getFields()) {
-            if (field.getType() == TextureRegionDrawable.class) {
-                String name = field.getName();
-
-                // Если запрос не пустой и имя иконки его не содержит - пропускаем
-                if (!query.isEmpty() && !name.toLowerCase().contains(query)) continue;
-
-                t.button((TextureRegionDrawable)getIconDrawable(name, false), () -> {
-                    if(slot != null) { slot.iconName = name; slot.isContent = false; }
-                    else if(tab != null) {
-                        if (editDefault) {
-                            tab.defaultSlotIcon = name; tab.defaultSlotIsContent = false;
-                        } else {
-                            tab.iconName = name; tab.isContent = false;
-                        }
-                    }
-                    else {
-                        Core.settings.put("qs-default-icon", name);
-                        Core.settings.put("qs-default-iscontent", false);
-                    }
-                    handleResult.run();
+                t.table(info -> {
+                    info.left().defaults().left();
+                    info.add(schem != null ? schem.name() : slot.schemName.isEmpty() ? bundle.get("gl.ui.qs.empty") : bundle.format("gl.ui.qs.missing", slot.schemName))
+                        .color(schem != null ? Pal.accent : Color.lightGray).wrap().width(300f).row();
+                    info.button(bundle.get("gl.ui.qs.pickschem"), Icon.paste, () -> pickSchematic(slot, () -> fill[0].run())).size(260f, 50f).padTop(8f).row();
                 });
+            }).row();
 
-                if (++count % columns == 0) t.row();
-            }
-        }
+            dialog.cont.table(t -> {
+                t.add(bundle.get("gl.ui.qs.icon")).padRight(10f);
+                t.button(schem != null && "none".equals(slot.iconName) ? new TextureRegionDrawable(autoIcon(schem)) : icon(slot.iconName, slot.isContent), Styles.cleari, 40f,
+                    () -> pickIcon(true, (name, isContent) -> {
+                        slot.iconName = name;
+                        slot.isContent = isContent;
+                        saveData();
+                        fill[0].run();
+                    })).size(56f);
+                t.add("none".equals(slot.iconName) ? bundle.get("gl.ui.qs.iconauto") : "").color(Color.lightGray).padLeft(10f);
+            }).padTop(12f).row();
 
-        // Если нашли что-то из системных и будем искать дальше - добавим разделитель
-        if (count > 0) {
-            t.row();
-            t.image().height(4).color(Pal.accent).fillX().colspan(columns).pad(10).row();
-            count = 0; // Сбрасываем счетчик для новой секции
-        }
-
-        // 2. Иконки контента (блоки, юниты, предметы)
-        for (ContentType type : new ContentType[]{ContentType.block, ContentType.unit, ContentType.item, ContentType.liquid, ContentType.status, ContentType.planet, ContentType.weather}) {
-            for (var content : Vars.content.getBy(type)) {
-                if (content instanceof UnlockableContent uc) {
-                    String internalName = uc.name.toLowerCase();
-                    String localizedName = uc.localizedName.toLowerCase();
-
-                    // Фильтр по внутреннему ИЛИ локализованному имени
-                    if (!query.isEmpty() && !internalName.contains(query) && !localizedName.contains(query)) continue;
-
-                    t.button(new TextureRegionDrawable(uc.uiIcon), () -> {
-                        if(slot != null) { slot.iconName = uc.name; slot.isContent = true; }
-                        else if(tab != null) {
-                            if(editDefault) {
-                                tab.defaultSlotIcon = uc.name; tab.defaultSlotIsContent = true;
-                            } else {
-                                tab.iconName = uc.name; tab.isContent = true;
-                            }
-                        }
-                        else {
-                            Core.settings.put("qs-default-icon", uc.name);
-                            Core.settings.put("qs-default-iscontent", true);
-                        }
-                        handleResult.run();
-                    });
-
-                    if (++count % columns == 0) t.row();
-                }
-            }
-        }
-    }
-
-    private void showEditDialog(QuickSlot slot) {
-        BaseDialog dialog = new BaseDialog(arc.Core.bundle.get("gl.ui.quickschem.15"));
-        dialog.cont.add(arc.Core.bundle.get("gl.ui.quickschem.16")).left().row();
-        dialog.cont.field(slot.schemName, val -> {
-            slot.schemName = val;
-            saveData();
-        }).growX().row();
-        dialog.cont.button(arc.Core.bundle.get("gl.ui.quickschem.17"), () -> showIconPicker(slot, null, false, dialog)).size(200, 50);
+            dialog.cont.button(bundle.get("gl.ui.qs.clear"), Icon.trash, () -> {
+                slot.schemName = "";
+                slot.iconName = "none";
+                slot.isContent = false;
+                saveData();
+                dialog.hide();
+            }).size(260f, 50f).padTop(12f).disabled(b -> slot.schemName.isEmpty() && "none".equals(slot.iconName));
+        };
+        fill[0].run();
         dialog.addCloseButton();
         dialog.hidden(this::rebuild);
         dialog.show();
     }
 
-    private void useSchematic(String name) {
-        if (name == null || name.isEmpty()) return;
-        var schem = Vars.schematics.all().find(s -> s.name().equals(name));
-        if (schem != null) {
-            Vars.control.input.useSchematic(schem);
-        } else {
-            Vars.ui.showInfoFade((arc.Core.bundle.get("gl.ui.quickschem.18") + " ") + name);
-        }
+    private void pickSchematic(QuickSlot slot){
+        pickSchematic(slot, null);
     }
 
-    private void loadData() {
-        var file = Vars.dataDirectory.child("quickschems.json");
-        Log.info("Попытка загрузить quickschems из: @ (существует: @)", file.absolutePath(), file.exists());
+    /** The game's schematics list (tags, search) in choosing mode, a click puts the schematic into the slot. */
+    private void pickSchematic(QuickSlot slot, @Nullable Runnable done){
+        ui.schematics.pick(schem -> {
+            slot.schemName = schem.name();
+            saveData();
+            if(done != null) done.run();
+            rebuild();
+        });
+    }
 
-        if (file.exists()) {
-            try {
-                String content = file.readString();
-                Log.info("Прочитано символов из файла: @", content.length());
+    private void editTab(int index){
+        QuickTab tab = tabs.get(index);
+        BaseDialog dialog = new BaseDialog(bundle.get("gl.ui.qs.tab"));
+        Runnable[] fill = {null};
+        fill[0] = () -> {
+            dialog.cont.clear();
+            dialog.cont.defaults().left().padTop(6f);
+            dialog.cont.table(t -> {
+                t.add(bundle.get("gl.ui.qs.name")).padRight(8f);
+                t.field(tab.name, text -> {
+                    tab.name = text;
+                    saveData();
+                }).width(260f);
+            }).row();
+            dialog.cont.table(t -> {
+                t.add(bundle.get("gl.ui.qs.icon")).padRight(8f);
+                t.button(icon(tab.iconName, tab.isContent), Styles.cleari, 40f, () -> pickIcon(false, (name, isContent) -> {
+                    tab.iconName = name;
+                    tab.isContent = isContent;
+                    tab.useIcon = !"none".equals(name);
+                    saveData();
+                    fill[0].run();
+                })).size(56f);
+                t.add("none".equals(tab.iconName) ? bundle.get("gl.ui.qs.iconname") : "").color(Color.lightGray).padLeft(10f);
+            }).row();
+            dialog.cont.table(t -> {
+                t.defaults().size(56f).padRight(6f);
+                tooltipText(t.button(Icon.left, Styles.cleari, () -> {
+                    move(index, -1);
+                    dialog.hide();
+                }).disabled(b -> index == 0).get(), bundle.get("gl.ui.qs.moveleft"));
+                tooltipText(t.button(Icon.right, Styles.cleari, () -> {
+                    move(index, 1);
+                    dialog.hide();
+                }).disabled(b -> index >= tabs.size - 1).get(), bundle.get("gl.ui.qs.moveright"));
+                t.button(bundle.get("gl.ui.qs.deletetab"), Icon.trash, () -> ui.showConfirm(bundle.get("gl.ui.qs.deletetab"), bundle.format("gl.ui.qs.deleteconfirm", tab.name), () -> {
+                    tabs.remove(index);
+                    if(tabs.isEmpty()) tabs.add(new QuickTab(bundle.get("gl.ui.qs.defaulttab")));
+                    currentTab = Math.min(currentTab, tabs.size - 1);
+                    saveData();
+                    dialog.hide();
+                })).size(240f, 56f);
+            }).padTop(12f);
+        };
+        fill[0].run();
+        dialog.addCloseButton();
+        dialog.hidden(this::rebuild);
+        dialog.show();
+    }
 
-                Seq<QuickTab> loaded = json.fromJson(Seq.class, QuickTab.class, content);
-                tabs = (loaded != null && loaded.any()) ? loaded : new Seq<>();
+    private void move(int index, int by){
+        int to = index + by;
+        if(to < 0 || to >= tabs.size) return;
+        tabs.swap(index, to);
+        if(currentTab == index) currentTab = to;
+        else if(currentTab == to) currentTab = index;
+        saveData();
+    }
 
-                for(QuickTab tab : tabs) {
-                    if(tab != null) tab.validate();
-                }
-                Log.info("Успешно загружено вкладок: @", tabs.size);
-            } catch (Throwable e) {
-                // Выведет точную причину в терминал IDEA
-                Log.err("КРИТИЧЕСКАЯ ОШИБКА ПАРСИНГА quickschems.json", e);
-                tabs = new Seq<>();
+    private void showSettings(){
+        BaseDialog dialog = new BaseDialog(bundle.get("gl.ui.qs.settings"));
+        Runnable[] fill = {null};
+        fill[0] = () -> {
+            dialog.cont.clear();
+            dialog.cont.defaults().width(Math.min(scene.getWidth() / Scl.scl(1f) - 40f, 460f)).padTop(4f);
+            slider(dialog.cont, "gl.ui.qs.cols", "qs2-cols", 2, 12, cols());
+            slider(dialog.cont, "gl.ui.qs.rows", "qs2-rows", 1, 16, rows());
+            slider(dialog.cont, "gl.ui.qs.size", "qs2-size", 24, 72, (int)size());
+            dialog.cont.check(bundle.get("gl.ui.qs.preview"), settings.getBool("qs2-preview", true), v -> settings.put("qs2-preview", v)).left().padTop(10f).row();
+            dialog.cont.add(bundle.get("gl.ui.qs.help")).color(Color.lightGray).wrap().padTop(14f).row();
+            dialog.cont.table(t -> {
+                t.left().defaults().size(250f, 50f).padRight(8f);
+                t.button(bundle.get("gl.ui.qs.resetpos"), Icon.move, () -> {
+                    settings.remove("qs2-x");
+                    settings.remove("qs2-top");
+                    placed = false;
+                });
+                // the panel settings only, the categories and slots stay
+                t.button(bundle.get("gl.ui.qs.defaults"), Icon.refresh, () -> {
+                    for(String key : new String[]{"qs2-cols", "qs2-rows", "qs2-size", "qs2-preview", "qs2-x", "qs2-top"}) settings.remove(key);
+                    placed = false;
+                    rebuild();
+                    fill[0].run();
+                });
+            }).padTop(10f).left();
+        };
+        fill[0].run();
+        dialog.addCloseButton();
+        dialog.show();
+    }
+
+    private void slider(Table t, String key, String setting, int min, int max, int value){
+        Label label = new Label("", Styles.outlineLabel);
+        Slider slider = new Slider(min, max, 1, false);
+        slider.setValue(value);
+        Runnable text = () -> label.setText(bundle.get(key) + ": [accent]" + (int)slider.getValue());
+        text.run();
+        slider.changed(() -> {
+            settings.put(setting, (int)slider.getValue());
+            text.run();
+            rebuild();
+        });
+        t.table(r -> {
+            r.add(label).left().growX().row();
+            r.add(slider).growX();
+        }).row();
+    }
+
+    private interface IconPicked{
+        void get(String name, boolean isContent);
+    }
+
+    /** Icons of the game and of all content, with a search by name. */
+    private void pickIcon(boolean forSlot, IconPicked picked){
+        BaseDialog dialog = new BaseDialog(bundle.get("gl.ui.qs.pickicon"));
+        Table list = new Table();
+        String[] query = {""};
+        Runnable[] fill = {null};
+        fill[0] = () -> {
+            list.clear();
+            list.top().left();
+            int columns = Math.max((int)(scene.getWidth() * 0.85f / Scl.scl(52f)), 4);
+            String q = query[0].toLowerCase();
+
+            Table[] section = {null};
+            int[] count = {0};
+            Cons<String> header = title -> {
+                list.table(h -> {
+                    h.left();
+                    h.add(title).color(Pal.accent).padRight(6f);
+                    h.image().color(Pal.accent).height(2f).growX();
+                }).growX().padTop(8f).padBottom(4f).row();
+                list.table(s -> {
+                    s.left().defaults().size(48f).pad(2f);
+                    section[0] = s;
+                }).left().row();
+                count[0] = 0;
+            };
+            Cons3<Drawable, String, Boolean> add = (drawable, name, isContent) -> {
+                section[0].button(drawable, Styles.clearNonei, 36f, () -> {
+                    picked.get(name, isContent);
+                    dialog.hide();
+                }).tooltip(name);
+                if(++count[0] % columns == 0) section[0].row();
+            };
+
+            if(q.isEmpty()){
+                header.get(bundle.get(forSlot ? "gl.ui.qs.iconauto" : "gl.ui.qs.iconname"));
+                add.get(forSlot ? Icon.refresh : Icon.edit, "none", false);
             }
-        } else {
-            tabs = new Seq<>();
+
+            Seq<ContentType> types = Seq.with(ContentType.block, ContentType.unit, ContentType.item, ContentType.liquid, ContentType.status);
+            for(ContentType type : types){
+                boolean first = true;
+                for(var c : content.getBy(type)){
+                    if(!(c instanceof UnlockableContent uc) || uc.isHidden() || uc.uiIcon == null || !uc.uiIcon.found()) continue;
+                    if(!q.isEmpty() && !uc.name.toLowerCase().contains(q) && !uc.localizedName.toLowerCase().contains(q)) continue;
+                    if(first){
+                        header.get(bundle.get("gl.ui.qs.type." + type.name()));
+                        first = false;
+                    }
+                    add.get(new TextureRegionDrawable(uc.uiIcon), uc.name, true);
+                }
+            }
+
+            boolean first = true;
+            for(String name : Icon.icons.keys().toSeq().sort()){
+                if(!q.isEmpty() && !name.toLowerCase().contains(q)) continue;
+                if(first){
+                    header.get(bundle.get("gl.ui.qs.type.icons"));
+                    first = false;
+                }
+                add.get(Icon.icons.get(name), name, false);
+            }
+        };
+        dialog.cont.table(t -> {
+            t.image(Icon.zoom).padRight(8f);
+            t.field("", text -> {
+                query[0] = text;
+                fill[0].run();
+            }).growX().get().setMessageText(bundle.get("gl.ui.qs.search"));
+        }).growX().pad(6f).row();
+        dialog.cont.pane(list).grow().scrollX(false);
+        fill[0].run();
+        dialog.addCloseButton();
+        dialog.show();
+    }
+
+    // endregion
+    // region helpers
+
+    private static void tooltip(Element e, String key){
+        tooltipText(e, bundle.get(key));
+    }
+
+    private static void tooltipText(Element e, String text){
+        if(!mobile) e.addListener(new Tooltip(t -> t.background(Styles.black6).margin(4f).add(text, Styles.outlineLabel)));
+    }
+
+    private static @Nullable Schematic findSchem(String name){
+        if(name == null || name.isEmpty()) return null;
+        return schematics.all().find(s -> s.name().equals(name));
+    }
+
+    private static Drawable icon(String name, boolean isContent){
+        if(name == null || "none".equals(name)) return Icon.none;
+        if(!isContent) return Icon.icons.get(name, Icon.none);
+        for(ContentType type : ContentType.all){
+            if(content.getByName(type, name) instanceof UnlockableContent uc) return new TextureRegionDrawable(uc.uiIcon);
         }
+        return Icon.none;
+    }
 
-        if (tabs.isEmpty()) {
-            Log.warn("Список вкладок пуст, создаем General");
-            tabs.add(new QuickTab("General"));
+    /** The block that takes the most room in the schematic. */
+    private TextureRegion autoIcon(Schematic schem){
+        return autoIcons.get(schem, () -> {
+            ObjectIntMap<Block> area = new ObjectIntMap<>();
+            for(Schematic.Stile tile : schem.tiles) area.increment(tile.block, tile.block.size * tile.block.size);
+            Block best = null;
+            int max = 0;
+            for(var e : area){
+                if(e.value > max){
+                    max = e.value;
+                    best = e.key;
+                }
+            }
+            return best == null ? Icon.paste.getRegion() : best.uiIcon;
+        });
+    }
+
+    private void loadData(){
+        Fi f = dataDirectory.child(file);
+        tabs = new Seq<>();
+        if(f.exists()){
+            try{
+                Seq<QuickTab> loaded = json.fromJson(Seq.class, QuickTab.class, f.readString());
+                if(loaded != null) tabs = loaded;
+            }catch(Throwable e){
+                Log.err("Could not read " + file, e);
+                f.copyTo(dataDirectory.child(file + ".broken"));
+            }
         }
+        tabs.removeAll(t -> t == null);
+        for(QuickTab tab : tabs) tab.validate();
     }
 
-    private void saveData() {
-        var file = Vars.dataDirectory.child("quickschems.json");
-        file.writeString(json.prettyPrint(tabs));
+    private void saveData(){
+        dataDirectory.child(file).writeString(json.prettyPrint(tabs));
     }
 
-    public void toggle() {
-        visible = !visible;
-        if (visible) { rebuild(); toFront(); }
-    }
-
-    private void updateSize() {
-        invalidateHierarchy();
-        pack();
-    }
-
-    private int syncSlots(QuickTab tab) {
-        int cols = Core.settings.getInt("qs-cols", 5);
-        int rows = Core.settings.getInt("qs-rows", 4);
-        int totalSlots = cols * rows;
-
-        while (tab.slots.size < totalSlots) {
-            QuickSlot ns = new QuickSlot();
-            ns.iconName = "none";
-            ns.isContent = false;
-            tab.slots.add(ns);
-        }
-        return totalSlots;
-    }
+    // endregion
 }

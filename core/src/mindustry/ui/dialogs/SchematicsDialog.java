@@ -47,6 +47,8 @@ public class SchematicsDialog extends BaseDialog{
     private boolean checkedTags;
     private final ItemSeq reusableItemSeq = new ItemSeq();
     private ScrollPane pane;
+    /** GL: set while a schematic is being chosen for something (quick schematics): a click hands it over. */
+    private @Nullable Cons<Schematic> picker;
 
     public SchematicsDialog(){
         super("@schematics");
@@ -73,7 +75,17 @@ public class SchematicsDialog extends BaseDialog{
         buttons.button("@client.schematic.browser", Icon.host, SchematicBrowserDialog::showBrowser);
         buttons.button("@schematic.import", Icon.download, this::showImport);
         makeButtonOverlay();
+        hidden(() -> picker = null);
         shown(() -> {
+            // GL: when choosing a schematic, only the back button stays at the bottom
+            buttons.clearChildren();
+            buttons.defaults().size(210f, 64f);
+            buttons.button("@back", Icon.left, this::hide).size(210f, 64f);
+            if(picker == null){
+                buttons.button("@client.schematic.browser", Icon.host, SchematicBrowserDialog::showBrowser);
+                buttons.button("@schematic.import", Icon.download, this::showImport);
+            }
+            title.setText(picker == null ? Core.bundle.get("schematics") : Core.bundle.get("gl.ui.qs.pickschem"));
             if(!Core.settings.getBool("schematicuicarryover")) searchField.selectAll();
             searchField.setText(search);
             setup();
@@ -237,6 +249,12 @@ public class SchematicsDialog extends BaseDialog{
                         })).size(200f);
                     }, () -> {
                         if(sel[0].childrenPressed()) return;
+                        if(picker != null){
+                            Cons<Schematic> picked = picker;
+                            hide();
+                            picked.get(s);
+                            return;
+                        }
                         if(state.isMenu()){
                             showInfo(s);
                         }else{
@@ -300,6 +318,12 @@ public class SchematicsDialog extends BaseDialog{
             pane.updateVisualScroll();
         }
         this.pane = pane;
+    }
+
+    /** GL: opens the list to choose a schematic, {@code picked} gets the one clicked. */
+    public void pick(Cons<Schematic> picked){
+        picker = picked;
+        show();
     }
 
     public void showInfo(Schematic schematic){

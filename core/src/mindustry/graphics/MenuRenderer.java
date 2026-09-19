@@ -58,14 +58,15 @@ public class MenuRenderer implements Disposable{
             case NORMAL, UHH -> rand.chance(0.2) ? rand.random(35) : rand.random(15);
             case OHNO, CURSED -> rand.random(35, 70);
             case WWWHHHHHYYYY -> rand.random(100, 110);
+            case PEWPEW -> 0; // the shooters fly instead, see MenuShooters
         };
         numBlockFlyers = switch(cursednessLevel){
-            case NORMAL, UHH, OHNO -> 0;
+            case NORMAL, UHH, OHNO, PEWPEW -> 0;
             case CURSED -> rand.random(5, 10);
             case WWWHHHHHYYYY -> rand.random(20, 25);
         };
         flyerType = switch(cursednessLevel){
-            case NORMAL -> Seq.with(UnitTypes.flare, UnitTypes.horizon, UnitTypes.zenith, UnitTypes.mono, UnitTypes.poly, UnitTypes.mega, UnitTypes.alpha, UnitTypes.beta, UnitTypes.gamma).random(rand);
+            case NORMAL, PEWPEW -> Seq.with(UnitTypes.flare, UnitTypes.horizon, UnitTypes.zenith, UnitTypes.mono, UnitTypes.poly, UnitTypes.mega, UnitTypes.alpha, UnitTypes.beta, UnitTypes.gamma).random(rand);
             case UHH, OHNO, CURSED -> content.units().select(u -> u.region != null && u.region.found()).random(rand);
             case WWWHHHHHYYYY -> content.units().select(u -> !u.flying && u.region != null && u.region.found()).random(rand);
         };
@@ -95,7 +96,7 @@ public class MenuRenderer implements Disposable{
         new Block[]{Blocks.dacite, Blocks.daciteWall}
         );
         Block[] selected2 = switch(CursednessLevel.get()){
-            case NORMAL, UHH, OHNO -> Structs.random(
+            case NORMAL, UHH, OHNO, PEWPEW -> Structs.random(
                 new Block[]{Blocks.basalt, Blocks.duneWall},
                 new Block[]{Blocks.basalt, Blocks.duneWall},
                 new Block[]{Blocks.stone, Blocks.stoneWall},
@@ -222,7 +223,7 @@ public class MenuRenderer implements Disposable{
         }
 
         int numBlocks = switch(CursednessLevel.get()){
-            case NORMAL, UHH, OHNO -> 0;
+            case NORMAL, UHH, OHNO, PEWPEW -> 0;
             case CURSED -> 1;
             case WWWHHHHHYYYY -> Mathf.random(3, 8);
         };
@@ -329,19 +330,19 @@ public class MenuRenderer implements Disposable{
 
         TextureRegion icon = flyerType.fullIcon;
         TextureRegion blockIcon = switch(cursednessLevel){
-            case NORMAL, UHH, OHNO, CURSED -> blockFlyerType.fullIcon;
+            case NORMAL, UHH, OHNO, CURSED, PEWPEW -> blockFlyerType.fullIcon;
             case WWWHHHHHYYYY -> blockFlyerType.teamRegion.found() ? blockFlyerType.teamRegion : blockFlyerType.uiIcon;
         };
 
         float sizeScl = switch(cursednessLevel){
-            case NORMAL, UHH -> Draw.scl * 1.6f;
+            case NORMAL, UHH, PEWPEW -> Draw.scl * 1.6f;
             case OHNO -> Draw.scl * 1.8f * (1 + Mathf.cosDeg(time % 360) * 0.1f);
             case CURSED -> Draw.scl * 2.4f * (1 + Mathf.cosDeg(time % 360) * 0.4f);
             case WWWHHHHHYYYY -> Draw.scl * 2.4f * Mathf.cosDeg((time % 30) * 2);
         };
 
         float blockSizeScl = switch(cursednessLevel){
-            case NORMAL, UHH, OHNO -> Draw.scl * 1.6f;
+            case NORMAL, UHH, OHNO, PEWPEW -> Draw.scl * 1.6f;
             case CURSED -> Draw.scl * 2.4f * (1 + Mathf.cosDeg(time % 360) * 0.4f);
             case WWWHHHHHYYYY -> Draw.scl * 4.0f * Mathf.cosDeg((time % 30) * 2);
         };

@@ -7,15 +7,19 @@ public enum CursednessLevel {
 	UHH,
 	OHNO,
 	CURSED,
-	WWWHHHHHYYYY;
+	WWWHHHHHYYYY,
+	/** GL: armed units fly in, shoot once at the cursor and fly away. */
+	PEWPEW;
 	//Warning: do not change the order.
 	public static CursednessLevel fromInteger(int x) {
 		return switch(x) {
+			// GL: PEW PEW is second on the slider and the default (1), the rest moved one step up
 			case 0 -> NORMAL;
-			case 1 -> UHH;
-			case 2 -> OHNO;
-			case 3 -> CURSED;
-			case 4 -> WWWHHHHHYYYY;
+			case 1 -> PEWPEW;
+			case 2 -> UHH;
+			case 3 -> OHNO;
+			case 4 -> CURSED;
+			case 5 -> WWWHHHHHYYYY;
 			default -> NORMAL;
 		};
 	}

@@ -43,6 +43,7 @@ public class MenuFragment{
         parent = group;
 
         parent.fill((x, y, w, h) -> renderer.render());
+        parent.addChild(new mindustry.client.ui.MenuShooters()); // GL: the PEW PEW cursedness level
 
         parent.fill(c -> {
             c.pane(Styles.noBarPane, cont -> {
@@ -170,7 +171,7 @@ public class MenuFragment{
         }
         String build = Version.build == -1 ? "[#fc8140aa]" + Core.bundle.get("gl.ui.menu.custombuild") : "[#ffffffba]" + Core.bundle.format("gl.ui.menu.build", Version.buildString());
         String client = buildDateText.isEmpty() ? Core.bundle.get("gl.ui.menu.client") : Core.bundle.format("gl.ui.menu.clientdate", buildDateText);
-        CursednessLevel level = CursednessLevel.fromInteger(Core.settings.getInt("cursednesslevel"));
+        CursednessLevel level = CursednessLevel.get();
         return build + "\n" + client + "\n[gray]" + Core.bundle.get("gl.ui.menu.dontpress") + "[]\n"
             + Core.bundle.format("gl.ui.menu.cursedness", Core.bundle.get("gl.ui.cursedness." + level.name().toLowerCase(java.util.Locale.ROOT)));
     }
