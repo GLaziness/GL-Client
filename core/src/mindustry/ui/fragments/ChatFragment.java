@@ -590,6 +590,20 @@ public class ChatFragment extends Table{
         }
     }
 
+    /** GL: send a generated message (panel reports) with the same chat color style and splitting as typed messages. */
+    public void sendStyled(String message, boolean team){
+        if(message == null || message.isEmpty()) return;
+        int chatMode = Core.settings.getInt("uchatmode", 0);
+        if(chatMode > 0) message = applyChatStyle(message, chatMode);
+        String prefix = team ? "/t " : "";
+        Seq<String> chunks = splitChatByWords(message, chatPacketLimit() - prefix.length());
+        for(int i = 0; i < chunks.size; i++){
+            String toSend = prefix + chunks.get(i);
+            if(i == 0) Call.sendChatMessage(toSend);
+            else arc.util.Timer.schedule(() -> Call.sendChatMessage(toSend), i * 1.1f);
+        }
+    }
+
     private static boolean isColorTag(String tag){
         if(tag == null || tag.length() < 2) return false;
         if(tag.equals("[]")) return true;
