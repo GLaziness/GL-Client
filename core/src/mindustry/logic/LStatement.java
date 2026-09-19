@@ -153,7 +153,7 @@ public abstract class LStatement{
     }
 
     protected static boolean logicLocalization(){
-        return Core.settings.getBool("logiclocalization", true);
+        return Core.settings.getBool("logiclocalization", false);
     }
 
     public static String bundle(String key){
