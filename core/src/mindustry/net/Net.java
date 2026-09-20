@@ -97,7 +97,7 @@ public class Net{
     public void showError(Throwable e){
 
         if(!headless){
-
+            Log.debug(e);
             Throwable t = e;
             while(t.getCause() != null){
                 t = t.getCause();

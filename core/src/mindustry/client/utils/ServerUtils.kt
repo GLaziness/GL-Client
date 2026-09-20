@@ -226,6 +226,7 @@ object Korea : Server(groupName = "Korea", ghost = true)
 object Fish : Server(
     groupName = "Fish",
     whisper = Companion.Cmd("/msg"),
+    networkTileLogs = true
 ) {
     init {
         Events.on(PlayerJoin::class.java) {

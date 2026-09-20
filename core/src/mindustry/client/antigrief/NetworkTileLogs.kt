@@ -18,8 +18,9 @@ import java.time.*
 object NetworkTileLogs {
     private val inp = ReusableByteInStream()
     private val reads = Reads(DataInputStream(inp))
-    private var upToDateTiles: Bits? = null
+    @JvmField public var upToDateTiles: Bits? = null
     private var lastBatchStart = 0
+    /** currently unused */
     private var wasSameMap = false
 
     /** Runs when the world Loads. Before ServerJoinEvent is handled. */

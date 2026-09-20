@@ -198,7 +198,7 @@ public class Build{
         }
 
         /*
-        if(!state.rules.editor && checkCoreRadius){
+        if(!state.rules.editor && checkCoreRadius && !(!checkVisible && team == Team.derelict)){
             //find closest core, if it doesn't match the team, placing is not legal
             if(state.rules.polygonCoreProtection){
                 float mindst = Float.MAX_VALUE;
