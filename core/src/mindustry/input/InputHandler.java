@@ -2301,6 +2301,13 @@ public abstract class InputHandler implements InputProcessor, GestureListener{
                 block = (x1 == x2 && y1 == y2) ? Blocks.reinforcedLiquidRouter : Blocks.reinforcedBridgeConduit;
             }
         }
+        // GL: a bridge line with ctrl held goes around what is in the way, see buildPathfindBridgeLine
+        if(Core.input.ctrl() && isBridgePlacement(old) && !(x1 == x2 && y1 == y2)){
+            buildPathfindBridgeLine(x1, y1, x2, y2);
+            block = old;
+            return;
+        }
+
         iterateLine(x1, y1, x2, y2, (l) -> {
             rotation = l.rotation;
             BuildPlan plan = new BuildPlan(l.x, l.y, l.rotation, this.block, this.block.nextConfig());
@@ -2319,6 +2326,52 @@ public abstract class InputHandler implements InputProcessor, GestureListener{
             block.handlePlacementLine(linePlans);
         }
         block = old;
+    }
+
+    /** GL: bridges that can be placed as a spaced line, from Morj's client. */
+    private static boolean isBridgePlacement(Block b){
+        return b instanceof ItemBridge || b instanceof DirectionBridge;
+    }
+
+    private int bridgePlaceRange(){
+        if(block instanceof ItemBridge ib) return Math.max(1, ib.range);
+        if(block instanceof DirectionBridge db) return Math.max(1, db.range);
+        return 4;
+    }
+
+    /** GL: the line of bridges goes around the walls and buildings in the way instead of through them (from Morj's client). */
+    private void buildPathfindBridgeLine(int x1, int y1, int x2, int y2){
+        if(block == null) return;
+        Seq<Point2> nodes = new Seq<>();
+        Placement.buildBridgePath(x1, y1, x2, y2, bridgePlaceRange(), block, rotation, nodes);
+
+        linePlans.clear();
+        for(int i = 0; i < nodes.size; i++){
+            Point2 p = nodes.get(i);
+            Point2 next = i + 1 < nodes.size ? nodes.get(i + 1) : null;
+            int rot = rotation;
+            if(next != null){
+                int r = Tile.relativeTo(p.x, p.y, next.x, next.y);
+                if(r != -1) rot = r;
+            }else if(i > 0){
+                Point2 prev = nodes.get(i - 1);
+                int r = Tile.relativeTo(prev.x, prev.y, p.x, p.y);
+                if(r != -1) rot = r;
+            }
+            rotation = rot;
+
+            // the link is set here, so the weaving in handlePlacementLine does not drop a hop
+            Object config = null;
+            if(next != null && block instanceof ItemBridge ib && ib.positionsValid(p.x, p.y, next.x, next.y)){
+                config = new Point2(next.x - p.x, next.y - p.y);
+            }
+
+            BuildPlan plan = new BuildPlan(p.x, p.y, rot, block, config);
+            plan.animScale = 1f;
+            linePlans.add(plan);
+        }
+
+        if(!(block instanceof ItemBridge) && linePlans.size > 0) block.handlePlacementLine(linePlans);
     }
 
     protected void updateLine(int x1, int y1){

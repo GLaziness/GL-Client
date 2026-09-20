@@ -101,6 +101,295 @@ public class Placement{
         }
     }
 
+
+    /** GL: a bridge can stand on this tile (taken from Morj's client). */
+    public static boolean canHostBridge(Block block, int x, int y, int rotation){
+        if(block == null) return false;
+        Tile t = world.tile(x, y);
+        if(t == null) return false;
+        if(t.block() == block) return true;
+        if(t.build != null && t.build.block == block) return true;
+        // hard obstacle - cannot stand a bridge here
+        if(!t.block().alwaysReplace && !block.canReplace(t.block())) return false;
+        if(t.floor().isDeep() && !block.placeableLiquid) return false;
+        return Build.validPlace(block, player.team(), x, y, rotation, false);
+    }
+
+    /** GL: walks one straight segment, hopping by up to {@code range} and landing only where a bridge can stand. */
+    private static void appendHostableSegment(Seq<Point2> out, int x1, int y1, int x2, int y2, Block block, int rotation, int range){
+        if(x1 == x2 && y1 == y2) return;
+        if(x1 != x2 && y1 != y2) return;
+        int dx = Integer.signum(x2 - x1);
+        int dy = Integer.signum(y2 - y1);
+        int dist = Math.abs(x2 - x1) + Math.abs(y2 - y1);
+        int traveled = 0;
+        int cx = x1, cy = y1;
+        while(traveled < dist){
+            int step = Math.min(range, dist - traveled);
+            boolean placed = false;
+            for(int s = step; s >= 1; s--){ // a full hop when its landing is free, otherwise a shorter one
+                int nx = cx + dx * s, ny = cy + dy * s;
+                if((nx == x2 && ny == y2) || canHostBridge(block, nx, ny, rotation)){
+                    if(out.peek().x != nx || out.peek().y != ny) out.add(new Point2(nx, ny));
+                    cx = nx;
+                    cy = ny;
+                    traveled += s;
+                    placed = true;
+                    break;
+                }
+            }
+            if(!placed) break; // blocked: stop instead of putting a bridge into a wall
+        }
+    }
+
+    /** GL: dense path around the obstacles, by the same A* the conveyors use (from Morj's client). */
+    public static boolean tilePathAround(int startX, int startY, int endX, int endY, Block block, Seq<Point2> out){
+        out.clear();
+        if(startX == endX && startY == endY){
+            out.add(new Point2(startX, startY));
+            return true;
+        }
+        // the heuristics read the block being placed, so it is set for the search
+        Block prev = control.input != null ? control.input.block : null;
+        if(control.input != null) control.input.block = block;
+        try{
+            Pools.freeAll(points);
+            points.clear();
+            if(!astar(startX, startY, endX, endY)) return false;
+            for(Point2 p : points) out.add(new Point2(p.x, p.y));
+            return out.size > 0;
+        }finally{
+            if(control.input != null) control.input.block = prev;
+        }
+    }
+
+    /**
+     * GL: A* over bridge hops: every landing is a free tile, every step an orthogonal jump of 1..range, so the line
+     * can span over an obstacle instead of walking around it (from Morj's client).
+     */
+    public static boolean findBridgePath(int startX, int startY, int endX, int endY, int range, Block block, int rotation, Seq<Point2> out){
+        out.clear();
+        if(block == null || range < 1) return false;
+        if(startX == endX && startY == endY){
+            out.add(new Point2(startX, startY));
+            return true;
+        }
+
+        // a wide margin, so the way can go around a whole base
+        int manh = Math.abs(endX - startX) + Math.abs(endY - startY);
+        int margin = Math.max(48, manh + range * 6);
+        int minX = Math.min(startX, endX) - margin, maxX = Math.max(startX, endX) + margin;
+        int minY = Math.min(startY, endY) - margin, maxY = Math.max(startY, endY) + margin;
+
+        costs.clear();
+        closed.clear();
+        parents.clear();
+
+        int startPos = Point2.pack(startX, startY), endPos = Point2.pack(endX, endY);
+        Tile endTile = world.tile(endX, endY);
+        if(endTile == null) return false;
+        // a solid wall as the end of the line is refused: that is running into the obstacle, not around it
+        boolean endOk = canHostBridge(block, endX, endY, rotation) || endTile.block().alwaysReplace
+            || endTile.block() == block || block.canReplace(endTile.block());
+        if(!endOk) return false;
+
+        int nodeLimit = 20000, totalNodes = 0;
+        PQueue<Tile> queue = new PQueue<>(64, (Tile a, Tile b) -> Float.compare(
+            costs.get(a.pos(), 0f) + bridgeHeuristic(a.x, a.y, endX, endY, range),
+            costs.get(b.pos(), 0f) + bridgeHeuristic(b.x, b.y, endX, endY, range)));
+
+        Tile startTile = world.tile(startX, startY);
+        if(startTile == null) return false;
+        queue.add(startTile);
+        costs.put(startPos, 0f);
+
+        boolean found = false;
+        while(!queue.empty() && totalNodes++ < nodeLimit){
+            Tile cur = queue.poll();
+            if(cur == null) break;
+            int cpos = cur.pos();
+            if(!closed.add(cpos)) continue;
+            if(cpos == endPos){
+                found = true;
+                break;
+            }
+
+            float base = costs.get(cpos, 0f);
+            // the way the line came here, to keep it going straight where it can
+            int inDir = -1;
+            int from = parents.get(cpos, -1);
+            if(from != -1){
+                int fdx = Integer.signum(cur.x - Point2.x(from)), fdy = Integer.signum(cur.y - Point2.y(from));
+                for(int d = 0; d < 4; d++){
+                    if(Geometry.d4x(d) == fdx && Geometry.d4y(d) == fdy){
+                        inDir = d;
+                        break;
+                    }
+                }
+            }
+            for(int d = 0; d < 4; d++){
+                int dx = Geometry.d4x(d), dy = Geometry.d4y(d);
+                for(int dist = 1; dist <= range; dist++){
+                    int nx = cur.x + dx * dist, ny = cur.y + dy * dist;
+                    if(nx < minX || nx > maxX || ny < minY || ny > maxY) break;
+                    Tile child = world.tile(nx, ny);
+                    if(child == null) break;
+
+                    boolean isStart = nx == startX && ny == startY;
+                    boolean isEnd = nx == endX && ny == endY;
+                    // every landing but the one under the first click has to be free
+                    if(!isStart && !isEnd && !canHostBridge(block, nx, ny, rotation)) continue;
+                    if(closed.contains(child.pos())) continue;
+
+                    float newCost = base + 1f + (range - dist) * 0.02f; // a long hop is cheaper than a short one
+                    if(d != inDir && inDir != -1) newCost += 1.5f; // and a turn costs more than going straight on
+                    if(newCost < costs.get(child.pos(), Float.POSITIVE_INFINITY)){
+                        costs.put(child.pos(), newCost);
+                        parents.put(child.pos(), cpos);
+                        queue.add(child);
+                    }
+                }
+            }
+        }
+
+        if(!found) return false;
+
+        int curPos = endPos, guard = 0;
+        while(guard++ < nodeLimit){
+            out.add(new Point2(Point2.x(curPos), Point2.y(curPos)));
+            if(curPos == startPos) break;
+            int parent = parents.get(curPos, -1);
+            if(parent == -1){
+                out.clear();
+                return false;
+            }
+            curPos = parent;
+        }
+        out.reverse();
+        return out.size > 0;
+    }
+
+    private static float bridgeHeuristic(int x, int y, int endX, int endY, int range){
+        return (Math.abs(x - endX) + Math.abs(y - endY)) / (float)Math.max(1, range);
+    }
+
+    /**
+     * GL: the nodes of a bridge line that never stands on a wall: first a way around the obstacles, then hops over
+     * them, and as a last resort just the two ends (from Morj's client).
+     */
+    public static boolean buildBridgePath(int startX, int startY, int endX, int endY, int range, Block block, int rotation, Seq<Point2> out){
+        out.clear();
+        if(block == null) return false;
+
+        if(findBridgePath(startX, startY, endX, endY, range, block, rotation, out)){
+            sanitizeBridgeNodes(out, block, rotation, range, startX, startY);
+            if(out.size > 0) return true;
+        }
+
+        // nothing to jump from or to: walk around instead
+        Seq<Point2> dense = new Seq<>();
+        if(tilePathAround(startX, startY, endX, endY, block, dense)){
+            sampleBridgeNodes(dense, range, out);
+            sanitizeBridgeNodes(out, block, rotation, range, startX, startY);
+            if(out.size > 0) return true;
+        }
+
+        out.clear();
+        out.add(new Point2(startX, startY));
+        if((startX == endX || startY == endY) && Math.abs(startX - endX) + Math.abs(startY - endY) <= range
+                && canHostBridge(block, endX, endY, rotation)){
+            out.add(new Point2(endX, endY));
+        }
+        return out.size > 0;
+    }
+
+    /** GL: throws away the nodes that stand on something solid and links the rest through free corners and hops. */
+    public static void sanitizeBridgeNodes(Seq<Point2> nodes, Block block, int rotation, int range, int startX, int startY){
+        if(nodes.size <= 1) return;
+        int r = Math.max(1, range);
+        Seq<Point2> cleaned = new Seq<>();
+        for(int i = 0; i < nodes.size; i++){
+            Point2 p = nodes.get(i);
+            if((p.x == startX && p.y == startY) || canHostBridge(block, p.x, p.y, rotation)){
+                if(cleaned.isEmpty() || cleaned.peek().x != p.x || cleaned.peek().y != p.y) cleaned.add(new Point2(p.x, p.y));
+            }
+        }
+        Seq<Point2> linked = new Seq<>();
+        if(cleaned.size > 0) linked.add(cleaned.first());
+        for(int i = 1; i < cleaned.size; i++){
+            Point2 a = linked.peek(), b = cleaned.get(i);
+            if(a.x == b.x || a.y == b.y){
+                appendHostableSegment(linked, a.x, a.y, b.x, b.y, block, rotation, r);
+            }else{
+                Point2 c1 = new Point2(b.x, a.y), c2 = new Point2(a.x, b.y);
+                Point2 corner = canHostBridge(block, c1.x, c1.y, rotation) ? c1
+                    : canHostBridge(block, c2.x, c2.y, rotation) ? c2 : null;
+                if(corner != null){
+                    appendHostableSegment(linked, a.x, a.y, corner.x, corner.y, block, rotation, r);
+                    Point2 tip = linked.peek();
+                    appendHostableSegment(linked, tip.x, tip.y, b.x, b.y, block, rotation, r);
+                }
+            }
+        }
+        nodes.clear();
+        nodes.addAll(linked);
+    }
+
+    /** GL: turns a dense path into bridge nodes: the corners of it, and a node every {@code range} tiles between them. */
+    public static void sampleBridgeNodes(Seq<Point2> path, int range, Seq<Point2> out){
+        out.clear();
+        if(path.isEmpty()) return;
+        if(path.size == 1 || range < 1){
+            Point2 p = path.first();
+            out.add(new Point2(p.x, p.y));
+            return;
+        }
+
+        Seq<Point2> corners = new Seq<>();
+        corners.add(new Point2(path.first().x, path.first().y));
+        for(int i = 1; i < path.size; i++){
+            Point2 prev = corners.peek(), cur = path.get(i);
+            Point2 next = i + 1 < path.size ? path.get(i + 1) : null;
+            if(next == null){
+                if(prev.x != cur.x || prev.y != cur.y) corners.add(new Point2(cur.x, cur.y));
+            }else{
+                int dx1 = Integer.signum(cur.x - prev.x), dy1 = Integer.signum(cur.y - prev.y);
+                int dx2 = Integer.signum(next.x - cur.x), dy2 = Integer.signum(next.y - cur.y);
+                if((dx1 != dx2 || dy1 != dy2 || (cur.x != prev.x && cur.y != prev.y))
+                        && (prev.x != cur.x || prev.y != cur.y)){
+                    corners.add(new Point2(cur.x, cur.y));
+                }
+            }
+        }
+
+        out.add(new Point2(corners.first().x, corners.first().y));
+        for(int i = 1; i < corners.size; i++){
+            Point2 a = out.peek(), b = corners.get(i);
+            appendSegmentNodes(out, a.x, a.y, b.x, b.y, range);
+        }
+    }
+
+    /** GL: nodes spaced by {@code range} from (x1,y1) exclusive to (x2,y2) inclusive. */
+    public static void appendSegmentNodes(Seq<Point2> out, int x1, int y1, int x2, int y2, int range){
+        if(x1 == x2 && y1 == y2) return;
+        if(x1 != x2 && y1 != y2){
+            appendSegmentNodes(out, x1, y1, x2, y1, range);
+            Point2 mid = out.peek();
+            appendSegmentNodes(out, mid.x, mid.y, x2, y2, range);
+            return;
+        }
+        int dx = Integer.signum(x2 - x1), dy = Integer.signum(y2 - y1);
+        int dist = Math.abs(x2 - x1) + Math.abs(y2 - y1), traveled = 0;
+        int cx = x1, cy = y1;
+        while(traveled + range < dist){
+            cx += dx * range;
+            cy += dy * range;
+            traveled += range;
+            out.add(new Point2(cx, cy));
+        }
+        if(cx != x2 || cy != y2) out.add(new Point2(x2, y2));
+    }
+
     /** Normalize two points into one straight line, no diagonals. */
     public static Seq<Point2> normalizeLine(int startX, int startY, int endX, int endY){
         Pools.freeAll(points);

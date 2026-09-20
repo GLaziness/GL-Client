@@ -209,19 +209,18 @@ public class ItemBridge extends Block{
 
     @Override
     public void handlePlacementLine(Seq<BuildPlan> plans){
-        // GL: weaving is on ctrl, not shift: shift+click takes over a unit in this client
-        boolean weave = Core.input.ctrl();
-        int phaseWeaveInterval = weave && this == Blocks.phaseConveyor ? Core.settings.getInt("phaseweaveinterval", 1) : 1;
+        boolean shift = Core.input.shift();
+        int phaseWeaveInterval = shift && this == Blocks.phaseConveyor ? Core.settings.getInt("phaseweaveinterval", 1) : 1;
         for(int i = 0; i < plans.size; i++){
             var cur = plans.get(i);
             var next = plans.get(Math.min(
-                weave ?
+                shift ?
                     phaseWeaveInterval > 1 && i + range >= plans.size ?
                         plans.size - 1 - (plans.size - i - 1) % phaseWeaveInterval : // Multiweave for phase
                         i + range : // Normal weaving - Link as far down as possible
                     i + 1, // No weaving - Link to next only
                 plans.size - 1));
-            if(positionsValid(cur.x, cur.y, next.x, next.y) && (weave || !cur.samePos(next))){
+            if(positionsValid(cur.x, cur.y, next.x, next.y) && (shift || !cur.samePos(next))){
                 cur.config = new Point2(next.x - cur.x, next.y - cur.y);
             }
         }
@@ -229,7 +228,7 @@ public class ItemBridge extends Block{
 
     @Override
     public void changePlacementPath(Seq<Point2> points, int rotation){
-        if(Core.input.ctrl()) return; // GL: bridge weaving is enabled when ctrl is held (shift takes over a unit here)
+        if(Core.input.shift()) return; // Bridge weaving is enabled when shift is held
         Placement.calculateNodes(points, this, rotation, (point, other) -> Math.max(Math.abs(point.x - other.x), Math.abs(point.y - other.y)) <= range);
     }
 
