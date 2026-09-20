@@ -9,6 +9,7 @@ import mindustry.ai.types.CommandAI;
 import mindustry.ai.types.FlyingAI;
 import mindustry.ai.types.GroundAI;
 import mindustry.ai.types.PrebuildAI;
+import mindustry.client.navigation.*;
 import mindustry.entities.Units;
 import mindustry.entities.units.*;
 import mindustry.game.Team;
@@ -33,6 +34,8 @@ public class SelfBuilderAI extends AIController{
     public static boolean healDamaged = Core.settings.getBool("poly-heal", true);
     public static boolean findClosestPlan = Core.settings.getBool("poly-closest", true);
     public static boolean rebuildBlocks = Core.settings.getBool("poly-rebuild-blocks", true);
+    /** GL: the ghosts standing under enemy turrets are taken off the team queue for everybody, see {@link #clearGhosts()}. */
+    public static boolean clearGhosts = Core.settings.getBool("poly-clear-ghosts", false);
     /** GL: AFK mode, the unit goes mining after helping nobody for {@link #afkMineDelay} seconds. */
     public static boolean afkMine = Core.settings.getBool("poly-afk-mine", false);
     public static int afkMineDelay = Core.settings.getInt("poly-afk-delay", 5);
@@ -57,6 +60,12 @@ public class SelfBuilderAI extends AIController{
     private static final float playerRebuildPeriod = 10f;
     private static final int maxQueued = 12;
     private final arc.struct.Seq<BlockPlan> queued = new arc.struct.Seq<>();
+    /** GL: ghosts under a turret found in this pass, and the tiles somebody is putting back right now. */
+    private final arc.struct.IntSeq doomed = new arc.struct.IntSeq();
+    private final arc.struct.IntSet beingBuilt = new arc.struct.IntSet();
+    private float ghostsSentAt = -1000f;
+    private static final int maxGhostsAtOnce = 60;
+    private static final float ghostClearPeriod = 60f;
     private final arc.struct.FloatSeq queuedWeights = new arc.struct.FloatSeq();
     /** GL: plans this AI put into the queue. Everything else in the queue is the player's own, and the AI never removes it. */
     private final arc.struct.Seq<BuildPlan> aiPlans = new arc.struct.Seq<>();
@@ -91,14 +100,17 @@ public class SelfBuilderAI extends AIController{
         if(first) unit.plans.addFirst(plan); else unit.addBuild(plan);
     }
     float retreatTimer;
-    private static final float maxTurretCheckRange = 600f;
+    /** GL: the threat tree of the client, taken once a frame. */
+    private @Nullable EntityTree cachedTree;
+    private long treeFrame = -1;
 
     /** GL: where the unit leaves a turret zone to, and the target the safe way below is planned for, see safeMoveTo. */
     private final Vec2 escapeTo = new Vec2();
     private @Nullable Position safeFor;
     private float safeRange, safeTime;
     private boolean safeFound;
-    private final arc.struct.Seq<TurretBuild> threats = new arc.struct.Seq<>();
+    private final arc.struct.Seq<TurretPathfindingEntity> threats = new arc.struct.Seq<>();
+    private @Nullable TurretPathfindingEntity found1;
     /** GL: the way to the safe spot, around the turret zones; the last point is the spot itself. */
     private final arc.struct.Seq<Vec2> route = new arc.struct.Seq<>();
     private int routeAt;
@@ -155,12 +167,12 @@ public class SelfBuilderAI extends AIController{
 
         // GL: got into enemy turret range anyway (a new turret, knocked in, the player was there): leave it first
         if(checkEnemyTurrets && !hold){
-            TurretBuild threat = threatAt(unit.x, unit.y);
+            TurretPathfindingEntity threat = threatAt(unit.x, unit.y);
             if(threat != null){
                 float out = reach(threat) + tilesize * 3f;
-                escapeTo.set(unit.x - threat.x, unit.y - threat.y);
+                escapeTo.set(unit.x - threat.x(), unit.y - threat.y());
                 if(escapeTo.isZero()) escapeTo.set(1f, 0f);
-                escapeTo.setLength(out).add(threat.x, threat.y);
+                escapeTo.setLength(out).add(threat.x(), threat.y());
                 moveTo(escapeTo, 0f);
                 if(!unit.type.flying) unit.updateBoosting(true);
                 return;
@@ -317,6 +329,9 @@ public class SelfBuilderAI extends AIController{
                 var blocks = unit.team.data().plans;
                 queued.clear();
                 queuedWeights.clear();
+                doomed.clear();
+                boolean clearing = clearGhosts && checkEnemyTurrets && canClearGhosts();
+                if(clearing) fillBeingBuilt();
 
                 for(int i = 0; i < blocks.size; i++){
                     BlockPlan bp = blocks.get(i);
@@ -328,7 +343,12 @@ public class SelfBuilderAI extends AIController{
 
                     if(ignored(bp.block)) continue;
                     if(!Build.validPlace(bp.block, unit.team(), bp.x, bp.y, bp.rotation)) continue;
-                    if(checkEnemyTurrets && isInEnemyTurretRange(bp.x * tilesize, bp.y * tilesize)) continue;
+
+                    boolean doomedSpot = checkEnemyTurrets && underGroundFire(bp.x * tilesize, bp.y * tilesize);
+                    if(doomedSpot && clearing && doomed.size < maxGhostsAtOnce && !beingBuilt.contains(Point2.pack(bp.x, bp.y))){
+                        doomed.add(Point2.pack(bp.x, bp.y));
+                    }
+                    if(checkEnemyTurrets && (doomedSpot || isInEnemyTurretRange(bp.x * tilesize, bp.y * tilesize))) continue;
                     if(checkResources && !hasResources(bp.block)) continue;
                     if(alwaysFlee && nearEnemy(bp.x, bp.y)) continue;
 
@@ -360,6 +380,8 @@ public class SelfBuilderAI extends AIController{
                         queuedWeights.pop();
                     }
                 }
+
+                if(clearing && doomed.size > 0) clearGhosts();
 
                 if(queued.any()){
                     lastPlan = queued.first();
@@ -469,7 +491,7 @@ public class SelfBuilderAI extends AIController{
                 Tile tile = world.tile(bp.x, bp.y);
                 if(tile == null || tile.block() == bp.block || ignored(bp.block)) continue;
                 if(!Build.validPlace(bp.block, unit.team(), bp.x, bp.y, bp.rotation)) continue;
-                if(checkEnemyTurrets && isInEnemyTurretRange(bp.x * tilesize, bp.y * tilesize)) continue;
+                if(checkEnemyTurrets && unsafeBuildSpot(bp.x * tilesize, bp.y * tilesize)) continue;
                 if(checkResources && !hasResources(bp.block)) continue;
                 return true;
             }
@@ -495,7 +517,7 @@ public class SelfBuilderAI extends AIController{
         if(plan == null) return false;
         float wx = plan.x * tilesize, wy = plan.y * tilesize;
 
-        if(checkEnemyTurrets && isInEnemyTurretRange(wx, wy)){
+        if(checkEnemyTurrets && unsafeBuildSpot(wx, wy)){
             return false;
         }
 
@@ -506,6 +528,50 @@ public class SelfBuilderAI extends AIController{
         return true;
     }
 
+    /**
+     * GL: this one can shoot the unit right now: it has ammo and power, and aims at flying units when the unit flies
+     * (turrets for ground only leave a flying unit alone, and back). Empty or unpowered turrets are no danger.
+     */
+    private boolean canHit(TurretPathfindingEntity e){
+        return e.canShoot() && (unit.isFlying() ? e.targetAir : e.targetGround);
+    }
+
+    /** How close it reaches the unit: its real range with the current ammo, plus the unit's size. */
+    private float reach(TurretPathfindingEntity e){
+        return e.range() + unit.hitSize + 16f;
+    }
+
+    /**
+     * GL: the threats the client itself draws on the map as dashed circles - enemy turrets, and enemy units when their
+     * ranges are shown. One list for everything that shoots, with the real range of the ammo inside.
+     */
+    private EntityTree threatTree(){
+        if(treeFrame != Core.graphics.getFrameId() || cachedTree == null){
+            treeFrame = Core.graphics.getFrameId();
+            cachedTree = Navigation.getTree();
+        }
+        return cachedTree;
+    }
+
+    /** GL: the first threat that covers this point, or null. {@code air} picks what it must be able to shoot. */
+    private @Nullable TurretPathfindingEntity covering(float wx, float wy, float margin, boolean air){
+        EntityTree tree = threatTree();
+        if(tree == null) return null;
+        found1 = null;
+        tree.getLock().lock();
+        try{
+            // the quadtree holds each threat by its range box, so the box around the point finds everything that may reach it
+            tree.intersect(wx - margin, wy - margin, margin * 2f, margin * 2f, e -> {
+                if(e == null || found1 != null || !e.canShoot()) return;
+                if(air ? !e.targetAir : !e.targetGround) return;
+                if(Mathf.within(e.x(), e.y(), wx, wy, e.range() + margin)) found1 = e;
+            });
+        }finally{
+            tree.getLock().unlock();
+        }
+        return found1;
+    }
+
     public boolean isInEnemyTurretRange(float wx, float wy){
         return isInEnemyTurretRange(wx, wy, 0f);
     }
@@ -514,40 +580,62 @@ public class SelfBuilderAI extends AIController{
         return threatAt(wx, wy, margin) != null;
     }
 
-    /**
-     * GL: the turret can shoot the unit right now: it has ammo and power, and aims at flying units when the unit flies
-     * (turrets for ground only leave a flying unit alone, and back). Empty or unpowered turrets are no danger.
-     */
-    private boolean canHit(TurretBuild tb){
-        return tb.canShoot() && (unit.isFlying() ? tb.targetAir() : tb.targetGround());
-    }
-
-    /** How close the turret reaches the unit: its real range with the current ammo, plus the unit's size. */
-    private float reach(TurretBuild tb){
-        return tb.range() + unit.hitSize + 16f;
-    }
-
-    private @Nullable TurretBuild threatAt(float wx, float wy){
+    private @Nullable TurretPathfindingEntity threatAt(float wx, float wy){
         return threatAt(wx, wy, 0f);
     }
 
-    private @Nullable TurretBuild threatAt(float wx, float wy, float margin){
-        for(var teamData : state.teams.present){
-            if(teamData.team != unit.team && teamData.team != Team.derelict){
-                var tree = teamData.buildingTree;
-                if(tree != null){
-                    float check = maxTurretCheckRange + margin;
-                    Building danger = tree.find(wx - check, wy - check, check * 2f, check * 2f, b -> {
-                        if(b instanceof TurretBuild tb && canHit(tb)){
-                            return tb.within(wx, wy, reach(tb) + margin);
-                        }
-                        return false;
-                    });
-                    if(danger instanceof TurretBuild tb) return tb;
-                }
+    private @Nullable TurretPathfindingEntity threatAt(float wx, float wy, float margin){
+        return covering(wx, wy, unit.hitSize + 16f + margin, unit.isFlying());
+    }
+
+    /**
+     * GL: a block put on this tile would be shot down at once. What is built stands on the ground, so here the turrets
+     * that aim at the ground count - even when the unit itself flies over them safely.
+     */
+    private boolean underGroundFire(float wx, float wy){
+        return covering(wx, wy, tilesize, false) != null;
+    }
+
+    /** GL: nothing worth building here: either the unit can not get there, or what it builds does not survive. */
+    private boolean unsafeBuildSpot(float wx, float wy){
+        return isInEnemyTurretRange(wx, wy) || underGroundFire(wx, wy);
+    }
+
+    /** GL: only the player's own unit clears the team queue, and only as often as the server takes it. */
+    private boolean canClearGhosts(){
+        return player != null && unit.getPlayer() == player && Time.time - ghostsSentAt >= ghostClearPeriod;
+    }
+
+    /** GL: the tiles a teammate has in his plans: somebody is building it back, so his ghost is left alone. */
+    private void fillBeingBuilt(){
+        beingBuilt.clear();
+        for(Player p : Groups.player){
+            if(p.team() != unit.team || p.dead()) continue;
+            Unit u = p.unit();
+            for(BuildPlan plan : u.plans){
+                // the plans this AI queued itself are not somebody's work
+                if(u == unit && isAiPlan(plan)) continue;
+                if(!plan.breaking) beingBuilt.add(Point2.pack(plan.x, plan.y));
             }
         }
-        return null;
+    }
+
+    /**
+     * GL: takes the ghosts found under the enemy turrets off the team queue for everybody, the way the vanilla
+     * "remove plans" does it. Nobody rebuilds them into the fire any more, and the queue stops growing.
+     */
+    private void clearGhosts(){
+        ghostsSentAt = Time.time;
+        var blocks = unit.team.data().plans;
+        for(int i = 0; i < blocks.size; i++){
+            BlockPlan bp = blocks.get(i);
+            if(doomed.contains(Point2.pack(bp.x, bp.y))){
+                bp.removed = true;
+                blocks.removeIndex(i);
+                i--;
+            }
+        }
+        if(net.active()) Call.deletePlans(player, doomed.toArray());
     }
 
     /**
@@ -583,16 +671,21 @@ public class SelfBuilderAI extends AIController{
         route.clear();
         routeAt = 0;
 
-        // the turrets anywhere near the way and around the target, gathered once for all the checks below
+        // everything that could shoot along the way or around the target, gathered once for all the checks below.
+        // the tree keeps each threat by its range box, so the corridor itself finds every circle that touches it
         threats.clear();
-        float pad = maxTurretCheckRange + radius;
-        float minX = Math.min(unit.x, tx) - pad, minY = Math.min(unit.y, ty) - pad;
-        float w = Math.abs(unit.x - tx) + pad * 2f, h = Math.abs(unit.y - ty) + pad * 2f;
-        for(var teamData : state.teams.present){
-            if(teamData.team == unit.team || teamData.team == Team.derelict || teamData.buildingTree == null) continue;
-            teamData.buildingTree.intersect(minX, minY, w, h, b -> {
-                if(b instanceof TurretBuild tb && canHit(tb)) threats.add(tb);
-            });
+        float minX = Math.min(unit.x, tx) - radius, maxX = Math.max(unit.x, tx) + radius;
+        float minY = Math.min(unit.y, ty) - radius, maxY = Math.max(unit.y, ty) + radius;
+        EntityTree tree = threatTree();
+        if(tree != null){
+            tree.getLock().lock();
+            try{
+                tree.intersect(minX, minY, maxX - minX, maxY - minY, e -> {
+                    if(e != null && canHit(e)) threats.add(e);
+                });
+            }finally{
+                tree.getLock().unlock();
+            }
         }
         if(threats.isEmpty()){
             Vec2 spot = new Vec2(tx, ty).sub(unit.x, unit.y);
@@ -620,7 +713,9 @@ public class SelfBuilderAI extends AIController{
     /** A* on a coarse grid with the turret zones blocked, to any free cell within {@code radius} of the target. */
     private boolean planAround(float tx, float ty, float radius){
         float worldW = world.unitWidth(), worldH = world.unitHeight();
-        float pad = maxTurretCheckRange + tilesize * 10f;
+        float widest = 0f;
+        for(TurretPathfindingEntity e : threats) widest = Math.max(widest, reach(e));
+        float pad = widest + tilesize * 10f;
         float x0 = Mathf.clamp(Math.min(unit.x, tx) - pad, 0f, worldW), y0 = Mathf.clamp(Math.min(unit.y, ty) - pad, 0f, worldH);
         float x1 = Mathf.clamp(Math.max(unit.x, tx) + pad, 0f, worldW), y1 = Mathf.clamp(Math.max(unit.y, ty) + pad, 0f, worldH);
         float cell = tilesize * 2f;
@@ -631,13 +726,13 @@ public class SelfBuilderAI extends AIController{
 
         // blocked cells: a cell counts when any of it can be in range
         boolean[] blocked = new boolean[total];
-        for(TurretBuild tb : threats){
-            float r = reach(tb) + cell * 0.75f;
-            int cx0 = Math.max(0, (int)((tb.x - r - x0) / cell)), cx1 = Math.min(gw - 1, (int)((tb.x + r - x0) / cell));
-            int cy0 = Math.max(0, (int)((tb.y - r - y0) / cell)), cy1 = Math.min(gh - 1, (int)((tb.y + r - y0) / cell));
+        for(TurretPathfindingEntity e : threats){
+            float r = reach(e) + cell * 0.75f;
+            int cx0 = Math.max(0, (int)((e.x() - r - x0) / cell)), cx1 = Math.min(gw - 1, (int)((e.x() + r - x0) / cell));
+            int cy0 = Math.max(0, (int)((e.y() - r - y0) / cell)), cy1 = Math.min(gh - 1, (int)((e.y() + r - y0) / cell));
             for(int cy = cy0; cy <= cy1; cy++){
                 for(int cx = cx0; cx <= cx1; cx++){
-                    if(Mathf.dst(x0 + (cx + 0.5f) * cell, y0 + (cy + 0.5f) * cell, tb.x, tb.y) <= r) blocked[cx + cy * gw] = true;
+                    if(Mathf.dst(x0 + (cx + 0.5f) * cell, y0 + (cy + 0.5f) * cell, e.x(), e.y()) <= r) blocked[cx + cy * gw] = true;
                 }
             }
         }
@@ -710,8 +805,8 @@ public class SelfBuilderAI extends AIController{
     }
 
     private boolean threatened(float x, float y){
-        for(TurretBuild tb : threats){
-            if(tb.within(x, y, reach(tb))) return true;
+        for(TurretPathfindingEntity e : threats){
+            if(Mathf.within(e.x(), e.y(), x, y, reach(e))) return true;
         }
         return false;
     }

@@ -41,6 +41,11 @@ public class PolySettingsDialog extends BaseDialog{
                 SelfBuilderAI.checkEnemyTurrets = b;
                 Core.settings.put("poly-check-turrets", b);
             });
+            check(t, "@client.polyai.clearghosts", SelfBuilderAI.clearGhosts, b -> {
+                SelfBuilderAI.clearGhosts = b;
+                Core.settings.put("poly-clear-ghosts", b);
+            });
+            t.add("@client.polyai.clearghosts.hint").color(Color.lightGray).wrap().growX().left().padBottom(6f).row();
             check(t, "@client.polyai.resources", SelfBuilderAI.checkResources, b -> {
                 SelfBuilderAI.checkResources = b;
                 Core.settings.put("poly-check-res", b);
