@@ -84,8 +84,8 @@ public class BeControl{
             .submit(res -> {
                 Jval val = Jval.read(res.getResultAsString());
                 String newBuild = val.getString("name");
-                Jval asset = val.get("assets").asArray().find(v -> v.getString("name", "").toLowerCase().contains("desktop"));
-                if (asset == null) asset = val.get("assets").asArray().find(v -> v.getString("name", "").toLowerCase().contains("mindustry"));
+                Jval asset = findAsset(val, "desktop");
+                if (asset == null) asset = findAsset(val, "mindustry");
                 if(!newBuild.trim().isEmpty() && asset != null && isNewer(val, newBuild)){
                     updateUrl = asset.getString("browser_download_url", "");
                     updateAvailable = true;
@@ -107,6 +107,18 @@ public class BeControl{
         long releaseBuild = releaseBuildTime(release);
         if(releaseBuild > 0 && Version.buildTime > 0) return releaseBuild > Version.buildTime;
         return !Version.clientVersion.equals(releaseName);
+    }
+
+    /**
+     * GL: the Steam build is uploaded as its own asset, so a normal copy must not pick it up and a copy running
+     * under Steam must not be downgraded to one without the Steam libraries.
+     */
+    private static @Nullable Jval findAsset(Jval release, String key){
+        boolean wantSteam = steam || Version.isSteam;
+        return release.get("assets").asArray().find(v -> {
+            String name = v.getString("name", "").toLowerCase();
+            return name.contains(key) && name.contains("steam") == wantSteam;
+        });
     }
 
     private static long releaseBuildTime(Jval release){

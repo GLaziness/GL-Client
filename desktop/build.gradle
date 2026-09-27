@@ -80,6 +80,109 @@ if(!project.ext.hasSprites() && System.getenv("JITPACK") != "true"){
     dist.dependsOn ":tools:pack"
 }
 
+// GL: the Steam copy of the game is patched by swapping its jar, the way Foo's client is installed.
+def steamJarNames = ["jre/desktop.jar", "desktop.jar", "Mindustry.app/Contents/Resources/desktop.jar"]
+
+def findSteamGame = {
+    if(project.hasProperty("steamDir")) return file(project.property("steamDir"))
+
+    def home = System.getProperty("user.home")
+    def roots = ["C:/Program Files (x86)/Steam", "C:/Program Files/Steam",
+                 "$home/.steam/steam", "$home/.local/share/Steam",
+                 "$home/Library/Application Support/Steam"].collect{ new File(it.toString()) }
+    if(System.env.STEAM_DIR != null) roots.add(0, new File(System.env.STEAM_DIR))
+
+    def libraries = []
+    roots.findAll{ it.isDirectory() }.each{ root ->
+        libraries.add(root)
+        // other drives are listed in libraryfolders.vdf
+        def vdf = new File(root, "steamapps/libraryfolders.vdf")
+        if(vdf.isFile()){
+            vdf.eachLine("UTF-8"){ line ->
+                def m = (line =~ /"path"\s+"(.+)"/)
+                if(m.find()) libraries.add(new File(m.group(1).replace("\\\\", "/")))
+            }
+        }
+    }
+
+    for(lib in libraries){
+        def game = new File(lib, "steamapps/common/Mindustry")
+        if(game.isDirectory()) return game
+    }
+    return null
+}
+
+def steamGameJar = { File game ->
+    for(name in steamJarNames){
+        def f = new File(game, name)
+        if(f.isFile()) return f
+    }
+    return null
+}
+
+/** GL: puts the built client into the Steam copy of the game, keeping a copy of the original jar. */
+tasks.register('steamInstall'){
+    dependsOn dist
+    group = "gl"
+    description = "Installs the client into the Steam copy of Mindustry. Build with -Prelease -PversionModifier=steam."
+
+    doLast{
+        if(!versionModifier.contains("steam")){
+            logger.warn("WARNING: built without -PversionModifier=steam, the Steam native libraries are missing from this jar.")
+        }
+
+        def game = findSteamGame()
+        if(game == null) throw new GradleException("The Steam copy of Mindustry was not found. Pass the folder: -PsteamDir=\"C:/.../steamapps/common/Mindustry\"")
+
+        def target = steamGameJar(game)
+        if(target == null) throw new GradleException("No desktop.jar inside $game - is this really the Steam copy of the game?")
+
+        def backup = new File(target.parentFile, target.name + ".vanilla")
+        if(!backup.isFile()){ // only the untouched jar is kept, a second install must not overwrite it
+            copy{
+                from target
+                into target.parentFile
+                rename{ target.name + ".vanilla" }
+            }
+            logger.lifecycle("Original saved as $backup")
+        }
+
+        def built = tasks.dist.archiveFile.get().asFile
+        copy{
+            from built
+            into target.parentFile
+            rename{ target.name }
+        }
+        logger.lifecycle("$appName installed into $target - launch the game through Steam as usual.")
+        logger.lifecycle("Steam puts its own jar back on every game update and on 'verify integrity of game files'; run this task again after that.")
+    }
+}
+
+/** GL: puts the original Steam jar back. */
+tasks.register('steamRestore'){
+    group = "gl"
+    description = "Restores the original jar of the Steam copy of Mindustry."
+
+    doLast{
+        def game = findSteamGame()
+        if(game == null) throw new GradleException("The Steam copy of Mindustry was not found. Pass the folder: -PsteamDir=\"C:/.../steamapps/common/Mindustry\"")
+
+        def target = steamGameJar(game)
+        if(target == null) throw new GradleException("No desktop.jar inside $game.")
+
+        def backup = new File(target.parentFile, target.name + ".vanilla")
+        if(!backup.isFile()) throw new GradleException("No saved original next to $target - let Steam verify the game files instead.")
+
+        copy{
+            from backup
+            into target.parentFile
+            rename{ target.name }
+        }
+        backup.delete()
+        logger.lifecycle("The original game is back in $target")
+    }
+}
+
 //this is only for local testing
 //add -Prelease -PversionModifier=steam as build properties
 tasks.register('steamtest'){
