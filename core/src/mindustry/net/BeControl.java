@@ -3,6 +3,7 @@ package mindustry.net;
 import arc.*;
 import arc.files.*;
 import arc.func.*;
+import arc.struct.*;
 import arc.util.*;
 import arc.util.serialization.*;
 import mindustry.client.utils.*;
@@ -84,8 +85,7 @@ public class BeControl{
             .submit(res -> {
                 Jval val = Jval.read(res.getResultAsString());
                 String newBuild = val.getString("name");
-                Jval asset = findAsset(val, "desktop");
-                if (asset == null) asset = findAsset(val, "mindustry");
+                Jval asset = findAsset(val);
                 if(!newBuild.trim().isEmpty() && asset != null && isNewer(val, newBuild)){
                     updateUrl = asset.getString("browser_download_url", "");
                     updateAvailable = true;
@@ -110,15 +110,21 @@ public class BeControl{
     }
 
     /**
-     * GL: the Steam build is uploaded as its own asset, so a normal copy must not pick it up and a copy running
-     * under Steam must not be downgraded to one without the Steam libraries.
+     * GL: the Steam build is uploaded as its own asset, named so that it holds neither "desktop" nor "mindustry" -
+     * older clients look for those two words only and must never be handed the Steam build, which asks Steam to
+     * install the game on startup. A copy running under Steam takes the "steam" asset and nothing else.
      */
-    private static @Nullable Jval findAsset(Jval release, String key){
-        boolean wantSteam = steam || Version.isSteam;
-        return release.get("assets").asArray().find(v -> {
-            String name = v.getString("name", "").toLowerCase();
-            return name.contains(key) && name.contains("steam") == wantSteam;
-        });
+    private static @Nullable Jval findAsset(Jval release){
+        Seq<Jval> assets = release.get("assets").asArray();
+        if(steam || Version.isSteam) return assets.find(v -> v.getString("name", "").toLowerCase().contains("steam"));
+
+        Jval plain = assets.find(v -> matchesPlain(v, "desktop"));
+        return plain != null ? plain : assets.find(v -> matchesPlain(v, "mindustry"));
+    }
+
+    private static boolean matchesPlain(Jval asset, String key){
+        String name = asset.getString("name", "").toLowerCase();
+        return name.contains(key) && !name.contains("steam");
     }
 
     private static long releaseBuildTime(Jval release){
