@@ -38,6 +38,8 @@
 
 ## Установка
 
+> **Это не мод.** `MindustryGL.jar` — отдельная сборка игры. Не кладите его в папку `mods` и не открывайте через «Импорт мода»: игра не найдёт внутри `mod.json` и напишет `No mod.json found`. Мод для админов — это [GL Admin Mode](https://github.com/GLaziness/GL-AdminMode), а не клиент.
+
 1. Скачайте `MindustryGL.jar` из [Releases](../../releases) (или соберите сами, см. ниже).
 2. Запустите:
    ```
