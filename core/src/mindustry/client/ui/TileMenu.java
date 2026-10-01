@@ -54,12 +54,6 @@ public class TileMenu{
         menu.clearChildren();
         header(menu, tile);
 
-        group(menu, "@client.tilemenu.chat");
-        Button chat = item(menu, Icon.chat, "@client.tilemenu.globalchat", GlobalChatDialog::showDialog);
-        chat.label(() -> !mindustry.client.utils.GlobalChat.enabled() ? bundle.get("mod.disabled") :
-            mindustry.client.utils.GlobalChat.connected() ? bundle.format("client.tilemenu.online", mindustry.client.utils.GlobalChat.online()) : "...")
-            .update(l -> l.setColor(mindustry.client.utils.GlobalChat.connected() ? Pal.accent : Color.gray)).padLeft(8f);
-
         group(menu, "@client.tilemenu.tile");
         item(menu, Icon.chat, "@client.tilemenu.coords", () -> {
             Call.sendChatMessage(tile.x + ", " + tile.y);

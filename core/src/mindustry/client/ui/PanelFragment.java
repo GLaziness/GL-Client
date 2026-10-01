@@ -187,7 +187,6 @@ public class PanelFragment extends Table{
         mindustry.client.fallen.ActivityLogger.init();
         MinersFDAI.init();
         BuilderAssist.init();
-        mindustry.client.utils.GlobalChat.init();
         AntiAttemPatcher.load();
         Log.info("Start init");
     }

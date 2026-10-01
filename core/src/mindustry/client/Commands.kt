@@ -515,32 +515,6 @@ fun setupCommands() {
         ui.chatfrag.addMsg("Stopped pathing of player ${player.name}[white].")
     }
 
-    register("g [message...]", Core.bundle.get("client.command.g.description")) { args, player ->
-        // GL: global chat between GL Client players
-        if (args.isEmpty()) player.sendMessage(mindustry.client.utils.GlobalChat.status())
-        else mindustry.client.utils.GlobalChat.send(args[0]) // writes the reason to the chat when it cannot send
-    }
-
-    register("ghelp", Core.bundle.get("client.command.ghelp.description")) { _, player ->
-        // GL: all commands and controls of the global chat
-        player.sendMessage("[accent]" + Core.bundle.get("client.globalchat.help.title") + "[]\n" + Core.bundle.get("client.globalchat.help"))
-    }
-
-    register("gs [message...]", Core.bundle.get("client.command.gs.description")) { args, player ->
-        // GL: chat of the server I am on (all its modes), through the global chat server
-        val chat = mindustry.client.utils.GlobalChat.channel()
-        if (args.isEmpty()) player.sendMessage(mindustry.client.utils.GlobalChat.icons(if (chat.isEmpty()) Core.bundle.get("client.globalchat.sys.noserver")
-            else Core.bundle.format("client.globalchat.serverstatus", chat, mindustry.client.utils.GlobalChat.serverOnline())))
-        else mindustry.client.utils.GlobalChat.send(args[0], true)
-    }
-
-    register("gm [action] [target...]", Core.bundle.get("client.command.gm.description")) { args, player ->
-        // GL: global chat moderation, the chat server checks the rights
-        val actions = listOf("mute", "unmute", "ban", "ban30", "banforever", "sban", "sbanforever", "unban", "addmod", "delmod", "addcur", "delcur", "list")
-        if (args.isEmpty() || args[0] !in actions) player.sendMessage(mindustry.client.utils.GlobalChat.icons(Core.bundle.get("client.globalchat.gmhelp")))
-        else mindustry.client.utils.GlobalChat.moderate(args[0], if (args.size > 1) args[1] else "")
-    }
-
     register("c <message...>", Core.bundle.get("client.command.c.description")) { args, _ ->
         Main.send(ClientMessageTransmission(args[0]).apply { addToChatfrag() })
     }

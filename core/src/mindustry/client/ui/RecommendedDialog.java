@@ -60,21 +60,6 @@ public class RecommendedDialog extends BaseDialog{
                     });
                 }).growX().padTop(6f).row();
             });
-
-            // global chat
-            section(all, width, Icon.chat, "@client.globalchat.title", t -> {
-                t.add("@client.recommended.chat.text").wrap().growX().left().row();
-                t.add("@client.recommended.chat.list").color(Color.lightGray).wrap().growX().left().padTop(6f).row();
-                t.label(() -> Strings.stripColors(GlobalChat.status()).replace("<" + mindustry.gen.Iconc.planet + "> ", "").replace("<" + mindustry.gen.Iconc.host + "> ", "")).wrap().growX().left().padTop(8f)
-                    .update(l -> l.setColor(GlobalChat.connected() ? Pal.accent : Color.lightGray)).row();
-                t.button(b -> b.label(() -> Core.bundle.get(GlobalChat.enabled() ? "client.recommended.chat.off" : "client.recommended.chat.on")),
-                    Styles.flatt, () -> {
-                        // both channels: the global one and the chat of the server
-                        boolean on = !GlobalChat.enabled();
-                        Core.settings.put("globalchat-server", on);
-                        GlobalChat.setGlobal(on);
-                    }).height(48f).growX().padTop(8f).row();
-            });
         }).grow().scrollX(false);
     }
 
