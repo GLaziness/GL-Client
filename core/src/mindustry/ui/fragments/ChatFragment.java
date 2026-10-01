@@ -16,6 +16,7 @@ import arc.util.*;
 import arc.util.Timer;
 import mindustry.*;
 import mindustry.client.*;
+import mindustry.client.fallen.ChatTranslator;
 import mindustry.client.ui.*;
 import mindustry.client.utils.*;
 import mindustry.core.*;
@@ -199,6 +200,16 @@ public class ChatFragment extends Table{
 
         bottom().left().marginBottom(offsety).marginLeft(offsetx * 2);
         button(Icon.uploadSmall, uploadStyle, UploadDialog.INSTANCE::show).padRight(5f).tooltip("@client.uploadimages").visible(() -> shown).checked(h -> UploadDialog.INSTANCE.hasImage());
+        // FD's addition: chat translation, incoming and outgoing (tap: language and on/off, right click: on/off)
+        for(boolean in : new boolean[]{true, false}){
+            TextButton tb = button("", Styles.nonet, () -> ChatTranslator.showPicker(in)).padRight(5f).height(28f).padBottom(offsety)
+                .tooltip(in ? "@client.chattrans.in" : "@client.chattrans.out").visible(() -> shown).get();
+            tb.getLabel().setText(() -> ChatTranslator.label(in));
+            tb.clicked(arc.input.KeyCode.mouseRight, () -> {
+                if(in) ChatTranslator.toggleIn();
+                else ChatTranslator.toggleOut();
+            });
+        }
         add(fieldlabel).padBottom(6f);
         chatfield.typed(this::handleType);
 
@@ -476,6 +487,28 @@ public class ChatFragment extends Table{
         }
         message = messageBuild.toString();
 
+        // FD's addition: the outgoing translation, only the text (not the chat mode prefix, not commands)
+        if(ChatTranslator.outEnabled() && !UploadDialog.INSTANCE.hasImage()){
+            String modePrefix = "";
+            for(ChatMode m : ChatMode.all){
+                if(!m.prefix.isEmpty() && message.startsWith(m.prefix + " ")){
+                    modePrefix = m.prefix + " ";
+                    break;
+                }
+            }
+            String body = message.substring(modePrefix.length());
+            String clean = body.startsWith("/") || body.startsWith("!") ? null : ChatTranslator.cleanForTranslation(body);
+            if(clean != null && !ChatTranslator.alreadyInTarget(clean, ChatTranslator.outLang())){
+                String p = modePrefix;
+                ChatTranslator.translateOutgoing(Strings.stripColors(body), translated -> finishSend(p + translated));
+                return;
+            }
+        }
+
+        finishSend(message);
+    }
+
+    private void finishSend(String message){
         checkPing(message);
 
         int chatMode = Core.settings.getInt("uchatmode", 0);

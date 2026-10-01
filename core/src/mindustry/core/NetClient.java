@@ -369,6 +369,7 @@ public class NetClient implements ApplicationListener{
 
                 output = ui.chatfrag.addMessage(message, playersender.coloredName(), background, prefix, unformatted);
                 findPlayerName(output, playersender);
+                if(playersender != player) mindustry.client.fallen.ChatTranslator.translateIncoming(output); // FD's addition
             } else {
                 // server message, unformatted is ignored
                 mindustry.client.utils.CursorHider.onServerMessage(message); // GL
