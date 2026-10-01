@@ -13,6 +13,7 @@ import arc.scene.*;
 import arc.scene.style.*;
 import arc.scene.event.InputEvent;
 import arc.scene.event.InputListener;
+import arc.scene.event.ElementGestureListener;
 import arc.scene.ui.*;
 import arc.scene.ui.layout.*;
 import arc.struct.*;
@@ -200,6 +201,9 @@ public class PanelFragment extends Table{
     }
 
     public void build(Group parent){
+        // a rebuilt panel starts at the top: attach it again on the first update
+        attachedOffset = -1f;
+        attachTimer.reset(0, 20f);
         parent.fill(full -> {
             fdpanel = full;
             full.top().left().visible(() -> ui.hudfrag.shown);
@@ -207,31 +211,22 @@ public class PanelFragment extends Table{
                 root.margin(6f, 6f, 8f, 8f);
                 root.defaults().growX();
 
-                root.table(bars -> {
-                    bars.defaults().height(18f).growX().pad(1f);
-                    bars.add(new Bar(
-                        () -> {
-                            Unit u = player == null ? null : player.unit();
-                            return u == null ? bundle.get("fdpanel.hp") : bundle.get("fdpanel.hp") + " " + Mathf.round(u.health) + " / " + Mathf.round(u.maxHealth);
-                        },
-                        () -> Pal.health,
-                        () -> player == null || player.unit() == null ? 0f : Mathf.clamp(player.unit().healthf())
-                    )).row();
-                    bars.add(new Bar(
-                        () -> {
-                            Unit u = player == null ? null : player.unit();
-                            return bundle.get("fdpanel.shield") + " " + (u == null ? 0 : Mathf.round(u.shield));
-                        },
-                        () -> Pal.accent,
-                        () -> player == null || player.unit() == null ? 0f : Mathf.clamp(player.unit().shield / Math.max(player.unit().maxHealth, 1f))
-                    ));
-                }).padBottom(4f).row();
-
-                buildMining(root);
-                buildView(root);
-                buildCombat(root);
-                buildAuto(root);
-                buildServer(root);
+                if(mobile){
+                    // GL: on a phone the panel folds into a small "GL" button and scrolls when open,
+                    // it covered half the screen; the unit's health is in the vanilla hexagon already
+                    boolean open = mobileOpen();
+                    root.button((open ? "[accent]" : "") + "GL " + (open ? Iconc.upOpen : Iconc.downOpen), Styles.cleart, () -> {
+                        settings.put("glpanel-mobile-open", !open);
+                        Core.app.post(this::rebuild); // folded, the panel is only as wide as the button
+                    }).height(34f).minWidth(90f).growX().row();
+                    if(open){
+                        root.pane(Styles.noBarPane, this::buildSections)
+                            .maxHeight(graphics.getHeight() / Scl.scl(1f) * 0.45f).scrollX(false).growX();
+                    }
+                }else{
+                    buildBars(root);
+                    buildSections(root);
+                }
             }).left();
 
             full.update(() -> {
@@ -244,6 +239,41 @@ public class PanelFragment extends Table{
                 }
             });
         });
+    }
+
+    private static boolean mobileOpen(){
+        return settings.getBool("glpanel-mobile-open", false);
+    }
+
+    private void buildSections(Table root){
+        root.defaults().growX();
+        buildMining(root);
+        buildView(root);
+        buildCombat(root);
+        buildAuto(root);
+        buildServer(root);
+    }
+
+    private void buildBars(Table root){
+        root.table(bars -> {
+            bars.defaults().height(18f).growX().pad(1f);
+            bars.add(new Bar(
+                () -> {
+                    Unit u = player == null ? null : player.unit();
+                    return u == null ? bundle.get("fdpanel.hp") : bundle.get("fdpanel.hp") + " " + Mathf.round(u.health) + " / " + Mathf.round(u.maxHealth);
+                },
+                () -> Pal.health,
+                () -> player == null || player.unit() == null ? 0f : Mathf.clamp(player.unit().healthf())
+            )).row();
+            bars.add(new Bar(
+                () -> {
+                    Unit u = player == null ? null : player.unit();
+                    return bundle.get("fdpanel.shield") + " " + (u == null ? 0 : Mathf.round(u.shield));
+                },
+                () -> Pal.accent,
+                () -> player == null || player.unit() == null ? 0f : Mathf.clamp(player.unit().shield / Math.max(player.unit().maxHealth, 1f))
+            ));
+        }).padBottom(4f).row();
     }
 
     private final Interval attachTimer = new Interval();
@@ -541,17 +571,31 @@ public class PanelFragment extends Table{
     private static GridEntry withSettings(GridEntry entry, Runnable openSettings){
         return g -> {
             entry.add(g);
-            g.getChildren().peek().addListener(new InputListener(){
-                @Override
-                public boolean touchDown(InputEvent e, float x, float y, int pointer, KeyCode key){
-                    if(key == KeyCode.mouseRight){
-                        openSettings.run();
-                        return true;
-                    }
-                    return false;
-                }
-            });
+            secondary(g.getChildren().peek(), openSettings);
         };
+    }
+
+    /** The second action of a button: right click, or a long press on a phone (which then does not also click). */
+    private static void secondary(Element button, Runnable action){
+        button.addListener(new InputListener(){
+            @Override
+            public boolean touchDown(InputEvent e, float x, float y, int pointer, KeyCode key){
+                if(key == KeyCode.mouseRight){
+                    action.run();
+                    return true;
+                }
+                return false;
+            }
+        });
+        if(!mobile) return;
+        button.addListener(new ElementGestureListener(20f, 0.4f, 0.5f, 0.15f){ // half a second, not 1.1 s
+            @Override
+            public boolean longPress(Element element, float x, float y){
+                if(button instanceof Button b) b.getClickListener().cancel();
+                action.run();
+                return true;
+            }
+        });
     }
 
     /** Left click runs the action once, right click toggles running it automatically (highlighted while automatic). */
@@ -564,16 +608,7 @@ public class PanelFragment extends Table{
                 b.setChecked(auto.get());
                 b.getImage().setColor(auto.get() ? Pal.accent : Color.white);
             });
-            b.addListener(new InputListener(){
-                @Override
-                public boolean touchDown(InputEvent e, float x, float y, int pointer, KeyCode key){
-                    if(key == KeyCode.mouseRight){
-                        toggleAuto.run();
-                        return true;
-                    }
-                    return false;
-                }
-            });
+            secondary(b, toggleAuto);
         };
     }
 
