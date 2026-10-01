@@ -56,6 +56,10 @@ public class AndroidLauncher extends AndroidApplication{
         }
 
         initialize(new ClientLauncher(){
+            {
+                // The client itself (navigation, the Foo protocol, signing), as the desktop launcher does.
+                add(mindustry.client.Main.INSTANCE);
+            }
 
             @Override
             public void hide(){

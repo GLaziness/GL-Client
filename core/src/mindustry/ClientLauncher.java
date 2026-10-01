@@ -62,6 +62,8 @@ public abstract class ClientLauncher extends ApplicationCore implements Platform
         Events.fire(new ClientCreateEvent());
 
         loadFileLogger();
+        //the desktop launcher reads the version before anything else; the others do it here (or the build is 0 and servers refuse it)
+        if(Version.type.equals("unknown")) Version.init();
         platform = this;
         maxTextureSize = Gl.getInt(Gl.maxTextureSize);
         beginTime = Time.millis();

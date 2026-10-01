@@ -56,7 +56,10 @@ public class Version{
         buildDate = map.get("buildDate", "unknown");
         buildTime = Strings.parseLong(map.get("buildTime", "0"), 0L);
         var proton = (OS.hasEnv("STEAM_COMPAT_DATA_PATH") || OS.hasEnv("STEAM_COMPAT_CLIENT_INSTALL_PATH")) && "1127400".equals(OS.env("SteamAppId")); // Proton is not run under the normal steam dir so we have to detect it separately. This is not a perfect fix as people could theoretically be running non-steam copies under proton, but it's better than not having steam for proton at all.
-        var path = Version.class.getProtectionDomain().getCodeSource().getLocation().getPath().replace('\\', '/');
+        // No code source on Android: the jar path is desktop only.
+        var domain = Version.class.getProtectionDomain();
+        var source = domain == null ? null : domain.getCodeSource();
+        var path = source == null || source.getLocation() == null ? "" : source.getLocation().getPath().replace('\\', '/');
         if(path.contains("/steamapps/common/Mindustry/") || proton) modifier += " steam";
         isSteam = modifier.contains("steam");
         if(map.get("build").contains(".")){

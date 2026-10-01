@@ -6,11 +6,18 @@ buildscript{
     }
 
     dependencies{
-        classpath 'com.android.tools.build:gradle:8.2.2'
+        classpath 'com.android.tools.build:gradle:8.13.0'
     }
 }
 
 apply plugin: "com.android.application"
+// AGP 8.13 asks :core (a plain Kotlin/JVM library) for the androidJvm Kotlin platform: ask for jvm instead.
+abstract class JvmFitsAndroidJvm implements AttributeCompatibilityRule<String>{
+    void execute(CompatibilityCheckDetails<String> d){
+        if(d.consumerValue == "androidJvm" && d.producerValue == "jvm") d.compatible()
+    }
+}
+dependencies.attributesSchema.attribute(Attribute.of("org.jetbrains.kotlin.platform.type", String)).compatibilityRules.add(JvmFitsAndroidJvm)
 
 configurations{ natives }
 
@@ -59,8 +66,10 @@ android{
         Integer vcode = props['androidBuildCode']?.toInteger() ?: 1
         def versionNameResult = "$versionNumber-$versionType-${getBuildVersion().replace(" ", "-")}"
 
-        applicationId "io.anuke.mindustry"
-        minSdkVersion 21
+        // Its own id: installs next to the normal game instead of over it.
+        applicationId "io.github.glaziness.mindustrygl"
+        // 26 (Android 8): the client uses java.nio.file and Java 8 interface methods without desugaring.
+        minSdkVersion 26
         targetSdkVersion 36
 
         versionName versionNameResult
@@ -125,6 +134,11 @@ dependencies{
 
     implementation arcModule("backends:backend-android")
     implementation 'com.jakewharton.android.repackaged:dalvik-dx:9.0.0_r3'
+    // The client's crypto (signed messages, encrypted chat) — the desktop jar bundles the same.
+    implementation files("../bouncycastle/bcprov-jdk15on.jar")
+    implementation files("../bouncycastle/bcpkix-jdk15on.jar")
+    implementation files("../bouncycastle/bctls-jdk15on.jar")
+    implementation files("../bouncycastle/bcutil-jdk15on.jar")
 
     if(!localArc){
         natives "com.github.Anuken.Arc:natives-android:$arcHash"
@@ -154,7 +168,7 @@ task copyAndroidNatives(){
 }
 
 task run(type: Exec){
-    commandLine "${findSdkDir()}/platform-tools/adb", 'shell', 'am', 'start', '-n', 'io.anuke.mindustry/mindustry.android.AndroidLauncher'
+    commandLine "${findSdkDir()}/platform-tools/adb", 'shell', 'am', 'start', '-n', 'io.github.glaziness.mindustrygl/mindustry.android.AndroidLauncher'
 }
 
 if(!project.ext.hasSprites()){

@@ -504,7 +504,8 @@ fun restartGame(){
     if(!Core.settings.getBool("autorestart", true)){
         return
     }
-    if(!Core.settings.getBool("realautorestart", !OS.hasProp("running-under-external-launcher"))){
+    // A phone can not start a new JVM: the game is closed, the player opens it again.
+    if(!Core.settings.getBool("realautorestart", !OS.hasProp("running-under-external-launcher")) || !Core.app.isDesktop){
         Log.info("Exiting to reload game.")
         Core.app.exit()
         return
