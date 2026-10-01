@@ -52,6 +52,7 @@ object Main : ApplicationListener {
             TileRecords.init()
         } else {
             keyStorage = KeyStorage(Files.createTempDirectory("keystorage").toFile())
+            signatures = Signatures(keyStorage, ntp.clock) // GL: sending a chat message signs it, a phone crashed without this (no key: unsigned)
             communicationSystem = SwitchableCommunicationSystem(DummyCommunicationSystem(mutableListOf()))
             communicationSystem.init()
         }
