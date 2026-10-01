@@ -102,9 +102,15 @@ public class Version{
     public static String clientLabel(){
         if(clientVersion.equals("v0.0.0")) return "Dev";
         if(buildTime <= 0) return clientVersion;
+        return formatDate(buildTime);
+    }
+
+    /** GL: a date in the game language, like "19 сентября 2026". The default bundle has no language (Android then printed "M10"): English. */
+    public static String formatDate(long time){
         java.util.Locale locale = arc.Core.bundle != null ? arc.Core.bundle.getLocale() : java.util.Locale.getDefault();
+        if(locale == null || locale.getLanguage().isEmpty()) locale = java.util.Locale.ENGLISH;
         return java.time.format.DateTimeFormatter.ofPattern("d MMMM yyyy", locale)
-            .format(java.time.Instant.ofEpochMilli(buildTime).atZone(java.time.ZoneId.systemDefault()));
+            .format(java.time.Instant.ofEpochMilli(time).atZone(java.time.ZoneId.systemDefault()));
     }
 
     /** get menu version without colors */

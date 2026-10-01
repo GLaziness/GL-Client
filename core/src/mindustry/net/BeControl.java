@@ -137,8 +137,7 @@ public class BeControl{
     /** GL: a build time as a date in the game language, like "19 сентября 2026"; empty when unknown. */
     public static String buildDate(long time){
         if(time <= 0) return "";
-        return java.time.format.DateTimeFormatter.ofPattern("d MMMM yyyy", Core.bundle.getLocale())
-            .format(java.time.Instant.ofEpochMilli(time).atZone(java.time.ZoneId.systemDefault()));
+        return Version.formatDate(time);
     }
 
     private static String buildText(long time, String fallback){
