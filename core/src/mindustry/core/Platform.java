@@ -124,6 +124,11 @@ public interface Platform{
         throw new IllegalArgumentException("Not implemented on this platform!");
     }
 
+    /** GL: installs a downloaded client update through the system installer, which asks the player. Android only. */
+    default void installUpdate(Fi apk){
+        throw new UnsupportedOperationException("Not implemented on this platform!");
+    }
+
     /** Hide the app. Android only. */
     default void hide(){
     }

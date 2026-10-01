@@ -47,7 +47,7 @@ public class BeControl{
         Events.on(EventType.ClientLoadEvent.class, event -> {
             checkUpdates = Core.settings.getBool("autoupdate", true);
             Timer.schedule(() -> {
-                    if(checkUpdates && !mobile){ // Don't auto update on manually cloned copies of the repo
+                    if(checkUpdates && (!mobile || Core.app.isAndroid())){ // GL: the APK updates itself too
                         checkUpdate(result -> {
                             if (result) showUpdateDialog();
                         });
@@ -116,6 +116,8 @@ public class BeControl{
      */
     private static @Nullable Jval findAsset(Jval release){
         Seq<Jval> assets = release.get("assets").asArray();
+        // GL: a phone takes the APK, named without "desktop" and "mindustry" too
+        if(Core.app.isAndroid()) return assets.find(v -> v.getString("name", "").toLowerCase().endsWith(".apk"));
         if(steam || Version.isSteam) return assets.find(v -> v.getString("name", "").toLowerCase().contains("steam"));
 
         Jval plain = assets.find(v -> matchesPlain(v, "desktop"));
@@ -243,15 +245,28 @@ public class BeControl{
             boolean[] cancel = {false};
             float[] progress = {0};
             int[] length = {0};
-            Fi file = bebuildDirectory.child("client-be-" + updateBuild + ".jar");
-            Fi fileDest = OS.hasProp("becopy") ?
+            boolean android = Core.app.isAndroid();
+            Fi file = bebuildDirectory.child(android ? "update.apk" : "client-be-" + updateBuild + ".jar");
+            Fi fileDest = android ? null : OS.hasProp("becopy") ?
                 Fi.get(OS.prop("becopy")) :
                 Fi.get(BeControl.class.getProtectionDomain().getCodeSource().getLocation().toURI().getPath());
 
             BaseDialog dialog = new BaseDialog("@be.updating");
             download(updateUrl, file, i -> length[0] = i, v -> progress[0] = v, () -> cancel[0], () -> {
                 Log.info(file.absolutePath());
-                ClientUtils.openJar("-Dberestart", "-Dbecopy=" + fileDest.absolutePath(), "-jar", file.absolutePath());
+                if(android){
+                    // GL: the system installer takes over; the game restarts updated
+                    Core.app.post(() -> {
+                        dialog.hide();
+                        try{
+                            platform.installUpdate(file);
+                        }catch(Throwable e){
+                            ui.showException("@gl.be.update.installfailed", e);
+                        }
+                    });
+                }else{
+                    ClientUtils.openJar("-Dberestart", "-Dbecopy=" + fileDest.absolutePath(), "-jar", file.absolutePath());
+                }
             }, e -> {
                 dialog.hide();
                 ui.showException(e);

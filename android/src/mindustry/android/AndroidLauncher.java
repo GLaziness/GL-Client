@@ -72,6 +72,11 @@ public class AndroidLauncher extends AndroidApplication{
             }
 
             @Override
+            public void installUpdate(Fi apk){
+                installApk(apk);
+            }
+
+            @Override
             public void shareFile(Fi file){
             }
 
@@ -289,7 +294,54 @@ public class AndroidLauncher extends AndroidApplication{
     protected void onNewIntent(Intent intent){
         super.onNewIntent(intent);
 
+        if(installStatus.equals(intent.getAction())){
+            onInstallStatus(intent);
+            return;
+        }
         handleIntent(intent);
+    }
+
+    /** GL: action of the intent the system installer sends back with the result of an update. */
+    static final String installStatus = "mindustry.gl.INSTALL_STATUS";
+
+    /** GL: writes the downloaded APK into an installer session; the system then asks the player to update. */
+    void installApk(Fi apk){
+        try{
+            PackageInstaller installer = getPackageManager().getPackageInstaller();
+            PackageInstaller.SessionParams params = new PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL);
+            params.setAppPackageName(getPackageName());
+            int id = installer.createSession(params);
+            try(PackageInstaller.Session session = installer.openSession(id)){
+                try(InputStream in = apk.read(); OutputStream out = session.openWrite("update", 0, apk.length())){
+                    byte[] buffer = new byte[64 * 1024];
+                    int n;
+                    while((n = in.read(buffer)) > 0) out.write(buffer, 0, n);
+                    session.fsync(out);
+                }
+                Intent status = new Intent(this, AndroidLauncher.class).setAction(installStatus);
+                int flags = PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= 31 ? PendingIntent.FLAG_MUTABLE : 0);
+                session.commit(PendingIntent.getActivity(this, id, status, flags).getIntentSender());
+            }
+        }catch(Throwable e){
+            Log.err(e);
+            Core.app.post(() -> ui.showException("@gl.be.update.installfailed", e));
+        }
+    }
+
+    private void onInstallStatus(Intent intent){
+        int status = intent.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE);
+        if(status == PackageInstaller.STATUS_PENDING_USER_ACTION){
+            // the confirmation (and, the first time, the "install unknown apps" switch) of the system
+            Intent confirm = intent.getParcelableExtra(Intent.EXTRA_INTENT);
+            if(confirm != null) startActivity(confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        }else if(status != PackageInstaller.STATUS_SUCCESS){
+            String message = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE);
+            Log.err("Update install failed: @ @", status, message);
+            //cancelled by the player: nothing to say
+            if(status != PackageInstaller.STATUS_FAILURE_ABORTED){
+                Core.app.post(() -> ui.showErrorMessage(Core.bundle.get("gl.be.update.installfailed") + (message == null ? "" : ":\n" + message)));
+            }
+        }
     }
 
     private void handleIntent(Intent intent){
