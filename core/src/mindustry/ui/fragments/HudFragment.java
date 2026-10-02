@@ -257,6 +257,8 @@ public class HudFragment{
         Spectate.INSTANCE.setPos(null);
         control.input.spectating = null;
         if(control.input instanceof DesktopInput d) d.panning = false;
+        // a phone does not pan the camera back to the player on its own, so put it there
+        if(mobile) Core.camera.position.set(player);
         if(ui.listfrag.shown()) ui.listfrag.rebuild();
     }
 
