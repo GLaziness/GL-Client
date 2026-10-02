@@ -22,22 +22,25 @@ object BuildPlanCommunicationSystem : CommunicationSystem() {
     private const val PREFIX = "end\nprint \"gwiogrwog\"\nprint \"%s\"\n"
 
     private val lastGotten = mutableMapOf<Int, Int>()
-    private lateinit var corners: Array<Tile>
 
-    private fun findLocation() = corners.maxByOrNull { Vars.player.dst2(it) }!!
+    /**
+     * The map's corners, from the world loaded now. Not kept from WorldLoadEvent: this object is created on first use,
+     * which on Android can be after the world loaded (placing a micro processor), and the corners were never set.
+     */
+    private fun corners(): Array<Tile> {
+        val w = Vars.world.width()
+        val h = Vars.world.height()
+        if (w <= 0 || h <= 0) return emptyArray()
+        return arrayOf(Vars.world.tiles.get(0, 0), Vars.world.tiles.get(0, h - 1), Vars.world.tiles.get(w - 1, 0), Vars.world.tiles.get(w - 1, h - 1))
+    }
 
-    fun isNetworking(plan: BuildPlan) = plan.block == Blocks.microProcessor && plan.tile() in corners
+    private fun findLocation() = corners().maxByOrNull { Vars.player.dst2(it) }
+
+    fun isNetworking(plan: BuildPlan) = plan.block == Blocks.microProcessor && plan.tile() in corners()
 
     init {
         Events.on(EventType.WorldLoadEvent::class.java) {
             lastGotten.clear()
-            if (Vars.world.width() <= 0 || Vars.world.height() <= 0) return@on
-            corners = arrayOf(
-                Vars.world.tiles.get(0, 0),
-                Vars.world.tiles.get(0, Vars.world.height() - 1),
-                Vars.world.tiles.get(Vars.world.width() - 1, 0),
-                Vars.world.tiles.get(Vars.world.width() - 1, Vars.world.height() - 1)
-            )
         }
 
         val re = ("\\A$PREFIX").replace("%s", "-?\\d+").replace("\n", "\\n").toRegex()
@@ -73,7 +76,7 @@ object BuildPlanCommunicationSystem : CommunicationSystem() {
         }
 //        val config = bytes.base32768().chunked(LAssembler.maxTokenLength - 2).joinToString("\n", prefix = PREFIX.format(Random.nextLong())) { "print \"$it\"" }
         val config = "${PREFIX.format(Random.nextLong())}print \"${bytes.base32768()}\""
-        val tile = findLocation()
+        val tile = findLocation() ?: return
         val plan = BuildPlan(tile.x.toInt(), tile.y.toInt(), 0, Blocks.microProcessor, config)
         // Stores build state. Toggles building off as otherwise it can fail.
         val toggle = Vars.control.input.isBuilding
