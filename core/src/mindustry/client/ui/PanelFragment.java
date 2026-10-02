@@ -215,11 +215,21 @@ public class PanelFragment extends Table{
                     // GL: on a phone the panel folds into a small "GL" button and scrolls when open,
                     // it covered half the screen; the unit's health is in the vanilla hexagon already
                     boolean open = mobileOpen();
-                    root.button((open ? "[accent]" : "") + "GL " + (open ? Iconc.upOpen : Iconc.downOpen), Styles.cleart, () -> {
-                        settings.put("glpanel-mobile-open", !open);
-                        Core.app.post(this::rebuild); // folded, the panel is only as wide as the button
-                    }).height(34f).minWidth(90f).growX().row();
+                    root.table(head -> {
+                        head.button((open ? "[accent]" : "") + "GL " + (open ? Iconc.upOpen : Iconc.downOpen), Styles.cleart, () -> {
+                            settings.put("glpanel-mobile-open", !open);
+                            Core.app.post(this::rebuild); // folded, the panel is only as wide as the button
+                        }).height(34f).minWidth(90f).growX();
+                        if(open){
+                            // GL: a phone has no hover, so the tooltips are read in this mode instead
+                            head.button(helpMode ? "[accent]?" : "?", Styles.cleart, () -> {
+                                helpMode = !helpMode;
+                                Core.app.post(this::rebuild);
+                            }).height(34f).width(44f).padLeft(4f);
+                        }
+                    }).growX().row();
                     if(open){
+                        if(helpMode) root.add("[lightgray]" + bundle.get("fdpanel.help.hint")).wrap().padBottom(2f).growX().row();
                         root.pane(Styles.noBarPane, this::buildSections)
                             .maxHeight(graphics.getHeight() / Scl.scl(1f) * 0.45f).scrollX(false).growX();
                     }
@@ -240,6 +250,9 @@ public class PanelFragment extends Table{
             });
         });
     }
+
+    /** GL: while on, a tap on a panel button shows what it does instead of doing it (a phone has no hover). */
+    private static boolean helpMode = false;
 
     private static boolean mobileOpen(){
         return settings.getBool("glpanel-mobile-open", false);
@@ -507,7 +520,14 @@ public class PanelFragment extends Table{
                 checked = ((TextureRegionDrawable)Tex.whiteui).tint(Pal.accent.r, Pal.accent.g, Pal.accent.b, 0.3f);
             }};
         }
-        return g.button(icon, iconStyle, iconSize(), action).tooltip(t -> {
+        return g.button(icon, iconStyle, iconSize(), () -> {
+            if(helpMode){
+                ui.showInfo(tooltipText + (state == null ? "" : "\n\n" + (state.get()
+                    ? "[accent]" + bundle.get("fdpanel.on") : "[lightgray]" + bundle.get("fdpanel.off"))));
+                return;
+            }
+            action.run();
+        }).tooltip(t -> {
             t.background(Styles.black6).margin(4f);
             // long descriptions wrap instead of stretching across the whole screen
             Label label = new Label(tooltipText, Styles.outlineLabel);
@@ -602,7 +622,7 @@ public class PanelFragment extends Table{
             @Override
             public boolean longPress(Element element, float x, float y){
                 if(button instanceof Button b) b.getClickListener().cancel();
-                action.run();
+                if(!helpMode) action.run(); // in help mode the tap already explains the button
                 return true;
             }
         });
