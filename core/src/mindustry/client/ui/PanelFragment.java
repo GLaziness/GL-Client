@@ -24,7 +24,6 @@ import mindustry.ai.UnitCommand;
 import mindustry.ai.UnitStance;
 import mindustry.ai.types.BuilderAI;
 import mindustry.client.ClientVars;
-import mindustry.client.Spectate;
 import mindustry.client.fallen.*;
 import mindustry.client.fallen.assistai.*;
 import mindustry.client.fallen.miners.MinersFDAI;
@@ -47,6 +46,7 @@ import mindustry.input.DesktopInput;
 import mindustry.type.*;
 import mindustry.ui.*;
 import mindustry.ui.fragments.ChatFragment;
+import mindustry.ui.fragments.HudFragment;
 import mindustry.world.*;
 import mindustry.world.blocks.ConstructBlock.*;
 import mindustry.world.blocks.sandbox.ItemSource;
@@ -387,7 +387,7 @@ public class PanelFragment extends Table{
             settingToggle(Icon.chartAlt, "fdpanel.prodanal", "prod-anal"),
             settingToggle(Icon.eyeOff, "fdpanel.smarttransparency", "smarttransparency"),
             // GL: a phone has no "reset camera" key, so a locked camera could not be released at all
-            action(Icon.cancel, "fdpanel.unfollow", PanelFragment::stopFollowing)
+            action(Icon.cancel, "fdpanel.unfollow", HudFragment::stopFollowing)
         );
 
         header(root, "fdpanel.scan");
@@ -539,14 +539,6 @@ public class PanelFragment extends Table{
                 t.label(() -> state.get() ? "[accent]" + bundle.get("fdpanel.on") : "[lightgray]" + bundle.get("fdpanel.off")).style(Styles.outlineLabel).left();
             }
         });
-    }
-
-    /** GL: releases a camera that follows a player, a unit or a point - the "reset camera" key of a PC. */
-    private static void stopFollowing(){
-        Spectate.INSTANCE.setPos(null);
-        control.input.spectating = null;
-        if(control.input instanceof DesktopInput d) d.panning = false;
-        if(ui.listfrag.shown()) ui.listfrag.rebuild();
     }
 
     /** Keys of the switches whose saved state was already applied this launch. */

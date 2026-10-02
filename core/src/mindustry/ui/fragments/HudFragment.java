@@ -247,6 +247,19 @@ public class HudFragment{
         }
     }
 
+    /** GL: whether the camera follows a player, a unit or a point instead of the player's own unit. */
+    public static boolean following(){
+        return Spectate.INSTANCE.getPos() != null || control.input.spectating != null;
+    }
+
+    /** GL: gives such a camera back to the player - what the "reset camera" key does on a PC. */
+    public static void stopFollowing(){
+        Spectate.INSTANCE.setPos(null);
+        control.input.spectating = null;
+        if(control.input instanceof DesktopInput d) d.panning = false;
+        if(ui.listfrag.shown()) ui.listfrag.rebuild();
+    }
+
     public void build(Group parent){
         loadFavorites();
         //warn about guardian/boss waves
@@ -796,6 +809,16 @@ public class HudFragment{
             t.bottom().visible(() -> control.saves.isSaving());
             t.add("@saving").style(Styles.outlineLabel);
         });
+
+        //GL: a phone has no "reset camera" key, so a camera that follows someone needs a way out on screen
+        if(mobile){
+            parent.fill(t -> {
+                t.name = "stopfollowing";
+                t.bottom().visible(() -> shown && following());
+                t.button("@hud.stopfollowing", Styles.flatt, HudFragment::stopFollowing)
+                    .height(42f).minWidth(150f).padBottom(78f);
+            });
+        }
 
         //TODO DEBUG: rate table
         if(false)
