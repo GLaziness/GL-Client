@@ -304,28 +304,36 @@ public class AndroidLauncher extends AndroidApplication{
     /** GL: action of the intent the system installer sends back with the result of an update. */
     static final String installStatus = "mindustry.gl.INSTALL_STATUS";
 
-    /** GL: writes the downloaded APK into an installer session; the system then asks the player to update. */
+    /**
+     * GL: writes the downloaded APK into an installer session; the system then asks the player to update.
+     * The copy runs off the render thread - it is around 80 MB, and doing it inline froze the game until the
+     * system took over, which looked like the game hanging on the loading screen.
+     */
     void installApk(Fi apk){
-        try{
-            PackageInstaller installer = getPackageManager().getPackageInstaller();
-            PackageInstaller.SessionParams params = new PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL);
-            params.setAppPackageName(getPackageName());
-            int id = installer.createSession(params);
-            try(PackageInstaller.Session session = installer.openSession(id)){
-                try(InputStream in = apk.read(); OutputStream out = session.openWrite("update", 0, apk.length())){
-                    byte[] buffer = new byte[64 * 1024];
-                    int n;
-                    while((n = in.read(buffer)) > 0) out.write(buffer, 0, n);
-                    session.fsync(out);
+        Core.app.post(() -> ui.showInfoFade("@gl.be.update.installing"));
+
+        Threads.daemon("APK install", () -> {
+            try{
+                PackageInstaller installer = getPackageManager().getPackageInstaller();
+                PackageInstaller.SessionParams params = new PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL);
+                params.setAppPackageName(getPackageName());
+                int id = installer.createSession(params);
+                try(PackageInstaller.Session session = installer.openSession(id)){
+                    try(InputStream in = apk.read(); OutputStream out = session.openWrite("update", 0, apk.length())){
+                        byte[] buffer = new byte[64 * 1024];
+                        int n;
+                        while((n = in.read(buffer)) > 0) out.write(buffer, 0, n);
+                        session.fsync(out);
+                    }
+                    Intent status = new Intent(this, AndroidLauncher.class).setAction(installStatus);
+                    int flags = PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= 31 ? PendingIntent.FLAG_MUTABLE : 0);
+                    session.commit(PendingIntent.getActivity(this, id, status, flags).getIntentSender());
                 }
-                Intent status = new Intent(this, AndroidLauncher.class).setAction(installStatus);
-                int flags = PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= 31 ? PendingIntent.FLAG_MUTABLE : 0);
-                session.commit(PendingIntent.getActivity(this, id, status, flags).getIntentSender());
+            }catch(Throwable e){
+                Log.err(e);
+                Core.app.post(() -> ui.showException("@gl.be.update.installfailed", e));
             }
-        }catch(Throwable e){
-            Log.err(e);
-            Core.app.post(() -> ui.showException("@gl.be.update.installfailed", e));
-        }
+        });
     }
 
     private void onInstallStatus(Intent intent){
