@@ -380,9 +380,6 @@ public class PanelFragment extends Table{
             toggle(icon(Blocks.illuminator), "fdpanel.light", () -> enableLight, () -> enableLight = !enableLight),
             toggle(Icon.add, "fdpanel.unitshealth", () -> viewunitshealth, () -> viewunitshealth = !viewunitshealth),
             toggle(Icon.effect, "fdpanel.unitseffects", () -> viewunitseffects, () -> viewunitseffects = !viewunitseffects),
-            // GL: the flashes of shots and explosions hide the units under them
-            toggle(new SlashTextureRegionDrawable(Icon.effect.getRegion(), Color.white), "fdpanel.noeffects",
-                () -> !settings.getBool("effects", true), () -> settings.put("effects", !settings.getBool("effects", true))),
             toggle(icon(Blocks.groundFactory), "fdpanel.unitsprogress", () -> viewprogressunit, () -> viewprogressunit = !viewprogressunit),
             toggle(Icon.crafting, "fdpanel.buildprogress", () -> viewprogresbuild, () -> viewprogresbuild = !viewprogresbuild),
             toggle(Icon.chartBar, "fdpanel.efficiency", () -> viewEfficiency, () -> viewEfficiency = !viewEfficiency),
