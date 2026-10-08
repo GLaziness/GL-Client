@@ -1,6 +1,7 @@
 <resources>
     <style name="ArcThemeBase" parent="android:Theme">
-        <item name="android:windowBackground">@android:color/transparent</item>
+        <!-- GL: not transparent - a strip the window does not cover showed whatever was behind it -->
+        <item name="android:windowBackground">@android:color/black</item>
         <item name="android:colorBackgroundCacheHint">@null</item>
         <item name="android:windowAnimationStyle">@android:style/Animation</item>
         <item name="android:windowNoTitle">true</item>
