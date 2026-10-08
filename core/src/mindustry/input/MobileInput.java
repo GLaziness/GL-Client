@@ -280,9 +280,7 @@ public class MobileInput extends InputHandler implements GestureListener{
         table.row();
         buildToolButtons(table);
 
-        // GL: and two things a phone needs and a PC solves with keys
-        table.row();
-
+        // GL: and two things a phone needs and a PC solves with keys - same row, three is too many
         table.button(Icon.lock, Styles.clearNoneTogglei, this::tapLock).update(b -> {
             b.setChecked(unitLocked);
             b.getStyle().imageUp = unitLocked ? Icon.lock : Icon.lockOpen;

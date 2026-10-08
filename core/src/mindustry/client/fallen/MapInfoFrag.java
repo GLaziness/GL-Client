@@ -105,7 +105,10 @@ public class MapInfoFrag extends Table {
                         addProp(t, "Wave Sp:", () -> (state.rules.waveSpacing / 60f) + "s", 120f);
                         addProp(t, "Solar Power:", () -> state.rules.solarMultiplier + "x", 1.0f);
                         addProp(t, "Unit Cap Var:", () -> state.rules.unitCapVariable ? "Yes" : "No", true);
-                    }).padRight(4);
+                    }).padRight(4).padBottom(mobile ? 4f : 0f);
+
+                    // GL: a phone window is too narrow for two columns, the right one was cut off
+                    if(mobile) top.row();
 
                     // Правая колонка: Multipliers
                     top.table(Styles.black3, t -> {
@@ -129,21 +132,32 @@ public class MapInfoFrag extends Table {
 
 
                     addBoolProp(t, Core.bundle.get("map_inf.fire"), () -> state.rules.fire, false);
+                    if(mobile) t.row();
                     addBoolProp(t,  Core.bundle.get("map_inf.dExplosions"), () -> state.rules.damageExplosions, true);
-                    t.row();
+                    if(mobile) t.row();
+                    else t.row();
                     addBoolProp(t, Core.bundle.get("map_inf.rExplosions"), () -> state.rules.reactorExplosions, false);
+                    if(mobile) t.row();
                     addBoolProp(t, Core.bundle.get("map_inf.luBuild"), () -> state.rules.logicUnitBuild, false);
-                    t.row();
+                    if(mobile) t.row();
+                    else t.row();
                     addBoolProp(t, Core.bundle.get("map_inf.sAllowed"), () -> state.rules.schematicsAllowed, true);
+                    if(mobile) t.row();
                     addBoolProp(t, Core.bundle.get("map_inf.cCapture"), () -> state.rules.coreCapture, false);
-                    t.row();
+                    if(mobile) t.row();
+                    else t.row();
                     addBoolProp(t, Core.bundle.get("map_inf.fogWar"), () -> state.rules.fog, false);
-                    t.row();
+                    if(mobile) t.row();
+                    else t.row();
                     addBoolProp(t, Core.bundle.get("map_inf.coreInc"), () -> state.rules.coreIncinerates, true);
+                    if(mobile) t.row();
                     addBoolProp(t, Core.bundle.get("map_inf.oDCore"), () -> state.rules.onlyDepositCore, false);
-                    t.row();
+                    if(mobile) t.row();
+                    else t.row();
                     addBoolProp(t, Core.bundle.get("map_inf.randWave"), () -> state.rules.randomWaveAI, false);
+                    if(mobile) t.row();
                     addBoolProp(t, Core.bundle.get("map_inf.airSpawns"), () -> state.rules.airUseSpawns, false);
+                    if(mobile) t.row();
 
                 }).padTop(4).row();
 
@@ -221,7 +235,7 @@ public class MapInfoFrag extends Table {
             String icon = current ? "[green]" + Iconc.ok : "[scarlet]" + Iconc.cancel;
             Color c = (current == def) ? Color.gray : Color.white;
             return icon + " [#" + c.toString() + "]" + name;
-        }).padRight(10);
+        }).padRight(10).wrap().growX(); // GL: long names used to run past the window on a phone
     }
 
     private void scanWorld() {
