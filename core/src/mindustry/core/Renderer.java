@@ -42,6 +42,9 @@ public class Renderer implements ApplicationListener{
     public @Nullable Bloom bloom;
     public @Nullable FrameBuffer backgroundBuffer;
     public FrameBuffer effectBuffer = new FrameBuffer();
+    /** GL: everything a shot throws on the screen is off - the effects, the trails of the bullets and the bloom,
+     *  so the units standing in the fire stay visible. Switched from the row of active modes. */
+    public boolean hideEffects;
     public boolean animateShields, animateWater, drawWeather = true, drawStatus, enableEffects, drawDisplays = true, drawLight = true, pixelate = false, showPings = true, showOtherBuildPlans = true;
     public float weatherAlpha;
     /** minZoom = zooming out, maxZoom = zooming in */
@@ -170,7 +173,8 @@ public class Renderer implements ApplicationListener{
         animateWater = settings.getBool("animatedwater"); //TODO: rename to animatedSurfaces or something
         animateShields = animateWater; //vestigial: TODO, remove
         drawStatus = settings.getBool("blockstatus");
-        enableEffects = settings.getBool("effects");
+        hideEffects = settings.getBool("gl-hideeffects");
+        enableEffects = settings.getBool("effects") && !hideEffects;
         drawDisplays = !settings.getBool("hidedisplays");
         maxZoomInGame = settings.getFloat("maxzoomingamemultiplier", 1) * maxZoom;
         minZoomInGame = minZoom / settings.getFloat("minzoomingamemultiplier", 1);
@@ -390,7 +394,7 @@ public class Renderer implements ApplicationListener{
             Draw.draw(Layer.darkness, blocks::drawDarkness);
         }
 
-        if(bloom != null){
+        if(bloom != null && !hideEffects){
             bloom.resize(graphics.getWidth(), graphics.getHeight());
             bloom.setBloomIntensity(settings.getInt("bloomintensity", 6) / 4f + 1f);
             bloom.blurPasses = settings.getInt("bloomblur", 1);

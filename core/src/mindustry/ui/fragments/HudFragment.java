@@ -575,7 +575,7 @@ public class HudFragment{
                     modeIcon(st, () -> hidingBlocks, () -> hidingBlocks ^= true, new SlashTextureRegionDrawable(Icon.layers.getRegion(), new Color(1f, 1f, 1f, a)), "@client.mode.hideblocks", Binding.hideBlocks);
                     modeIcon(st, () -> hidingPlans, () -> hidingPlans ^= true, new SlashTextureRegionDrawable(Icon.effect.getRegion(), new Color(0.5f, 0.5f, 0.5f, a)), "@client.mode.hideplans", Binding.hideBlocks, "Shift");
                     // GL: the flashes of shots and explosions cover the units standing in them
-                    modeIcon(st, () -> !Core.settings.getBool("effects", true), () -> Core.settings.put("effects", !Core.settings.getBool("effects", true)), new SlashTextureRegionDrawable(Icon.star.getRegion(), new Color(1f, 0.8f, 0.4f, a)), "@client.mode.hideeffects");
+                    modeIcon(st, () -> Core.settings.getBool("gl-hideeffects"), () -> Core.settings.put("gl-hideeffects", !Core.settings.getBool("gl-hideeffects")), new SlashTextureRegionDrawable(Icon.star.getRegion(), new Color(1f, 0.8f, 0.4f, a)), "@client.mode.hideeffects");
                     modeIcon(st, () -> showingMassDrivers, () -> showingMassDrivers ^= true, new TextureRegionDrawable(Blocks.massDriver.region), "@client.mode.massdrivers", Binding.showMassdriverConfigs);
                     modeIcon(st, () -> showingOverdrives, () -> showingOverdrives ^= true, new TextureRegionDrawable(Blocks.overdriveProjector.region), "@client.mode.overdrives", Binding.showTurretRanges);
                     modeIcon(st, () -> Core.settings.getBool("showdomes"), () -> Core.settings.put("showdomes", !Core.settings.getBool("showdomes")), Icon.commandRally, "@client.mode.domes", Binding.showReactorAndDomeRanges);

@@ -699,6 +699,7 @@ public class BulletType extends Content implements Cloneable{
     }
 
     public void drawTrail(Bullet b){
+        if(Vars.renderer.hideEffects) return; // GL: the trail is part of what a shot smears over the units
         if(trailLength > 0 && b.trail != null){
             //draw below bullets
             float z = Draw.z();
@@ -720,6 +721,7 @@ public class BulletType extends Content implements Cloneable{
     }
 
     public void drawLight(Bullet b){
+        if(Vars.renderer.hideEffects) return; // GL: the glow of a shot washes out everything around it
         if(lightOpacity <= 0f || lightRadius <= 0f) return;
         Drawf.light(b, lightRadius, lightColor, lightOpacity);
     }
