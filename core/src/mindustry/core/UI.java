@@ -325,6 +325,13 @@ public class UI implements ApplicationListener, Loadable{
         int[] insets = Core.graphics.getSafeInsets();
         int customPadding = (int)Scl.scl(Core.settings.getInt("uiEdgePadding", 0));
 
+        // GL: beside the camera cutout the game keeps a safe strip free of the interface and covers it with a dark
+        // panel (HudFragment/MenuFragment draw it over the margin), so in landscape a grey band runs down the edge
+        // of the screen. Whoever would rather have the whole screen turns the strip off here.
+        if(Core.settings.getBool("gledgefullscreen", false)){
+            insets = new int[]{0, 0, 0, 0};
+        }
+
         Core.scene.marginLeft = insets[0];
         Core.scene.marginRight = insets[1];
         Core.scene.marginTop = insets[2];

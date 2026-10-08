@@ -668,6 +668,16 @@ public class SettingsMenuDialog extends BaseDialog{
             }
         });
 
+        // GL: the dark band beside the camera cutout
+        if(mobile){
+            graphics.checkPref("gledgefullscreen", false, b -> {
+                if(ui != null){
+                    ui.updateMargins();
+                    Core.scene.resize(Core.graphics.getWidth(), Core.graphics.getHeight());
+                }
+            });
+        }
+
         int[] lastUiScale = {settings.getInt("uiscale", 100)};
 
         graphics.sliderPref("uiscale", 100, 25, 300, 5, s -> {
