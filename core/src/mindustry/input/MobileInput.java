@@ -38,6 +38,9 @@ public class MobileInput extends InputHandler implements GestureListener{
     public boolean unitLocked;
     /** GL: when the lock was last tapped, for catching the second tap of a double tap. */
     private long lastLockTap;
+    /** GL: the coordinates button is armed and the next tap on the map picks the spot to send. */
+    public boolean pickingCoords;
+    private long lastCoordsTap;
 
     /** Distance to edge of screen to start panning. */
     public final float edgePan = Scl.scl(60f);
@@ -285,7 +288,8 @@ public class MobileInput extends InputHandler implements GestureListener{
             b.getStyle().imageUp = unitLocked ? Icon.lock : Icon.lockOpen;
         }).tooltip("@mobile.lockunit").name("lockunit");
 
-        table.button(Icon.commandRally, Styles.clearNonei, MobileInput::sendCameraPos)
+        table.button(Icon.commandRally, Styles.clearNoneTogglei, this::tapCoords)
+            .update(b -> b.setChecked(pickingCoords))
             .tooltip("@mobile.sendcoords").name("sendcoords");
     }
 
@@ -304,10 +308,29 @@ public class MobileInput extends InputHandler implements GestureListener{
         }
     }
 
-    /** GL: sends where the camera looks, the way {@code !here} sends where the player stands. */
-    static void sendCameraPos(){
-        if(!net.active()) return;
-        ClientUtils.sendMessage(Strings.format("(@, @)", World.toTile(Core.camera.position.x), World.toTile(Core.camera.position.y)));
+    /**
+     * GL: one tap arms the button and the next tap on the map sends that spot, two quick taps send where the player
+     * stands - a phone has no cursor, so the place to point at has to be picked by hand.
+     */
+    void tapCoords(){
+        if(Time.timeSinceMillis(lastCoordsTap) < 400){
+            pickingCoords = false;
+            lastCoordsTap = 0;
+            sendCoords(player.tileX(), player.tileY());
+        }else{
+            lastCoordsTap = Time.millis();
+            pickingCoords = !pickingCoords;
+            if(pickingCoords) ui.showInfoToast(Core.bundle.get("mobile.sendcoords.pick"), 3f);
+        }
+    }
+
+    /** GL: the same text {@code !here} sends, so it stays clickable for everyone. */
+    static void sendCoords(int tileX, int tileY){
+        if(!net.active()){
+            ui.showInfoToast(Core.bundle.format("mobile.sendcoords.offline", tileX, tileY), 3f);
+            return;
+        }
+        ClientUtils.sendMessage(Strings.format("(@, @)", tileX, tileY));
     }
 
     public boolean showCancel(){
@@ -726,6 +749,13 @@ public class MobileInput extends InputHandler implements GestureListener{
 
         //ignore off-screen taps
         if(cursor == null || Core.scene.hasMouse(x, y)) return false;
+
+        //GL: the coordinates button is waiting for the spot, this tap only picks it
+        if(pickingCoords){
+            pickingCoords = false;
+            sendCoords(cursor.x, cursor.y);
+            return true;
+        }
 
         Call.tileTap(player, cursor);
 
