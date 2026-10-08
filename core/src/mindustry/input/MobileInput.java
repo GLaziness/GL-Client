@@ -23,6 +23,7 @@ import mindustry.gen.*;
 import mindustry.graphics.*;
 import mindustry.type.*;
 import mindustry.ui.*;
+import mindustry.ui.fragments.*;
 import mindustry.world.*;
 import mindustry.world.blocks.*;
 
@@ -35,6 +36,8 @@ public class MobileInput extends InputHandler implements GestureListener{
     private static final float maxPanSpeed = 1.3f;
     /** GL: while on, the unit holds its ground and only the camera moves. */
     public boolean unitLocked;
+    /** GL: when the lock was last tapped, for catching the second tap of a double tap. */
+    private long lastLockTap;
 
     /** Distance to edge of screen to start panning. */
     public final float edgePan = Scl.scl(60f);
@@ -277,13 +280,28 @@ public class MobileInput extends InputHandler implements GestureListener{
         // GL: and two things a phone needs and a PC solves with keys
         table.row();
 
-        table.button(Icon.lock, Styles.clearNoneTogglei, () -> unitLocked = !unitLocked).update(b -> {
+        table.button(Icon.lock, Styles.clearNoneTogglei, this::tapLock).update(b -> {
             b.setChecked(unitLocked);
             b.getStyle().imageUp = unitLocked ? Icon.lock : Icon.lockOpen;
         }).tooltip("@mobile.lockunit").name("lockunit");
 
         table.button(Icon.commandRally, Styles.clearNonei, MobileInput::sendCameraPos)
             .tooltip("@mobile.sendcoords").name("sendcoords");
+    }
+
+    /**
+     * GL: one tap holds the unit in place or lets it follow again, two quick taps also release the lock and bring
+     * the camera back - after looking around the map that is what you want, in one gesture instead of two buttons.
+     */
+    void tapLock(){
+        if(Time.timeSinceMillis(lastLockTap) < 400){
+            unitLocked = false;
+            lastLockTap = 0;
+            HudFragment.stopFollowing();
+        }else{
+            unitLocked = !unitLocked;
+            lastLockTap = Time.millis();
+        }
     }
 
     /** GL: sends where the camera looks, the way {@code !here} sends where the player stands. */
