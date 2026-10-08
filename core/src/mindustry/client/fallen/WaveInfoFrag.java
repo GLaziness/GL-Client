@@ -442,7 +442,29 @@ public class WaveInfoFrag extends Table {
         }
     }
 
-    public void toggle() { visible = !visible; rebuild(); if(visible) toFront(); }
+    public void toggle(){
+        // GL: the window also hangs on a setting, so the button looked dead until it was switched on by hand;
+        // while the setting is off the window counts as hidden, whatever the flag says
+        boolean enabled = Core.settings.getBool("wavefragment", false);
+        visible = !enabled || !visible;
+        Core.settings.put("wavefragment", true);
+        rebuild();
+        if(visible){
+            toFront();
+            fitToScreen();
+        }
+    }
+
+    /** GL: a phone screen is smaller than the window, which was then drawn past its edges. */
+    public void fitToScreen(){
+        if(Core.scene == null) return;
+        float maxW = Core.scene.getWidth() - 16f, maxH = Core.scene.getHeight() - 16f;
+        setSize(Math.min(getWidth(), maxW), Math.min(getHeight(), maxH));
+        setPosition(
+            Mathf.clamp(x, 8f, Math.max(8f, Core.scene.getWidth() - getWidth() - 8f)),
+            Mathf.clamp(y, 8f, Math.max(8f, Core.scene.getHeight() - getHeight() - 8f))
+        );
+    }
 
     private ObjectMap<SpawnKey, UnitStats> calculateWaveStats(int internalWave, int spawnCount) {
         ObjectMap<SpawnKey, UnitStats> statsMap = new ObjectMap<>();

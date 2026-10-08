@@ -460,9 +460,21 @@ public class MapInfoFrag extends Table {
         visible = !visible;
         if(visible) {
             toFront();
+            fitToScreen();
             if(orePositions.isEmpty()) scanWorld();
             else rebuildDynamicContent();
         }
+    }
+
+    /** GL: the window is 500x700 by default, taller than a phone screen - it was simply cut off. */
+    public void fitToScreen(){
+        if(Core.scene == null) return;
+        float maxW = Core.scene.getWidth() - 16f, maxH = Core.scene.getHeight() - 16f;
+        setSize(Math.min(getWidth(), maxW), Math.min(getHeight(), maxH));
+        setPosition(
+            Mathf.clamp(x, 8f, Math.max(8f, Core.scene.getWidth() - getWidth() - 8f)),
+            Mathf.clamp(y, 8f, Math.max(8f, Core.scene.getHeight() - getHeight() - 8f))
+        );
     }
 
     public void resetPos(){
@@ -474,6 +486,7 @@ public class MapInfoFrag extends Table {
         if(w < 50f) w = 500f;
         if(h < 50f) h = 700f;
         setSize(w, h);
+        fitToScreen();
     }
 
 

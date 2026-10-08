@@ -1190,7 +1190,10 @@ public abstract class InputHandler implements InputProcessor, GestureListener{
      * A PC has them in one row; a phone had none of them at all, so both now build the same set.
      */
     public void buildToolButtons(Table table){
-        table.button(Icon.paste, Styles.clearNonei, () -> ui.schematics.show()).tooltip("@schematics");
+        // a phone already has schematics in the row above the map, next to the players and the chat
+        if(!mobile){
+            table.button(Icon.paste, Styles.clearNonei, () -> ui.schematics.show()).tooltip("@schematics");
+        }
 
         table.button(Icon.book, Styles.clearNonei, () -> ui.database.show()).tooltip("@database");
 

@@ -29,13 +29,31 @@ public class MenuShooters extends Element{
     private @Nullable Seq<UnitType> armed;
     private float nextWave = 60f;
 
+    /** The one in the menu, so that the H key can reach it. */
+    private static @Nullable MenuShooters instance;
+
     public MenuShooters(){
         touchable = Touchable.disabled;
         setFillParent(true);
+        instance = this;
     }
 
     public static boolean active(){
         return CursednessLevel.get() == CursednessLevel.PEWPEW;
+    }
+
+    /**
+     * GL: what the H key does at this cursedness level. The other levels re-roll their flyers, which PEW PEW has none
+     * of, so H used to do nothing at all here: it now clears the screen and sends a fresh group in at once.
+     */
+    public static void restart(){
+        if(instance == null || !active()) return;
+        instance.shooters.clear();
+        instance.shots.clear();
+        instance.cracks.clear();
+        instance.shards.clear();
+        instance.armed = null; // pick the units again, a reloaded mod may have added some
+        instance.spawnWave();
     }
 
     @Override

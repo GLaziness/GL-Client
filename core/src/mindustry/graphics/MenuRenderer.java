@@ -289,6 +289,7 @@ public class MenuRenderer implements Disposable{
                 Core.app.post(this::refresh);
             } else {
                 updateCursedness();
+                mindustry.client.ui.MenuShooters.restart(); // GL: PEW PEW has no flyers to re-roll, it gets a new group
             }
         }
         time += Time.delta;
