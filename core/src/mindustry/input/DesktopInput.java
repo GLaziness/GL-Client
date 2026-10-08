@@ -938,47 +938,7 @@ public class DesktopInput extends InputHandler{
     @Override
     public void buildPlacementUI(Table table){
         table.left().margin(0f).defaults().size(48f).left();
-
-        table.button(Icon.paste, Styles.clearNonei, () -> {
-            ui.schematics.show();
-        }).tooltip("@schematics");
-
-        table.button(Icon.book, Styles.clearNonei, () -> {
-            ui.database.show();
-        }).tooltip("@database");
-
-//        table.button(Icon.map, Styles.clearNonei, () -> {
-//            if (state.isCampaign() && !Vars.net.client()) ui.planet.show();
-//            else MarkerDialog.INSTANCE.show();
-//        }).tooltip(t -> t.background(Styles.black6).margin(4f).label(() -> state.isCampaign() ? "@planetmap" : "Map Markers"));
-
-        if (state.isCampaign()){
-            table.button(Icon.map, Styles.clearNonei, () -> {
-               ui.planet.show();
-            }).tooltip(t -> t.background(Styles.black6).margin(4f).label(() -> state.isCampaign() ? "@planetmap" : "Map Markers"));
-        }
-
-        table.button(Icon.map, Styles.clearNonei, () -> {
-            ui.mapInfoFrag.toggle();
-        }).tooltip("@mapInfoFrag");
-
-        table.button(Icon.waves, Styles.clearNonei, () -> {
-            ui.waveInfoFrag.toggle();
-        }).tooltip("@waveInfoFrag");
-
-
-//        table.button(Icon.units, Styles.clearNonei, () -> {
-//            ui.logicInfoFrag.toggle();
-//        }).tooltip("@unitcontrol");
-
-        table.button(Icon.units, Styles.clearNonei, () -> {
-            ui.trashbase.show();
-        }).tooltip("@trashbase");
-
-
-        table.button(Icon.tree, Styles.clearNonei, () -> {
-            ui.research.show();
-        }).visible(() -> state.isCampaign()).tooltip("@research");
+        buildToolButtons(table);
     }
 
     void pollInputNoPlayer(){

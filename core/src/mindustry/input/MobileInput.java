@@ -12,6 +12,7 @@ import arc.scene.ui.layout.*;
 import arc.struct.*;
 import arc.util.*;
 import mindustry.*;
+import mindustry.client.utils.*;
 import mindustry.content.*;
 import mindustry.core.*;
 import mindustry.entities.*;
@@ -32,6 +33,9 @@ import static mindustry.input.PlaceMode.*;
 public class MobileInput extends InputHandler implements GestureListener{
     /** Maximum speed the player can pan. */
     private static final float maxPanSpeed = 1.3f;
+    /** GL: while on, the unit holds its ground and only the camera moves. */
+    public boolean unitLocked;
+
     /** Distance to edge of screen to start panning. */
     public final float edgePan = Scl.scl(60f);
 
@@ -265,6 +269,27 @@ public class MobileInput extends InputHandler implements GestureListener{
             i.setDisabled(() -> player.dead());
 
         }).name("confirmplace");
+
+        // GL: the windows of the client, which a phone had no way to open at all
+        table.row();
+        buildToolButtons(table);
+
+        // GL: and two things a phone needs and a PC solves with keys
+        table.row();
+
+        table.button(Icon.lock, Styles.clearNoneTogglei, () -> unitLocked = !unitLocked).update(b -> {
+            b.setChecked(unitLocked);
+            b.getStyle().imageUp = unitLocked ? Icon.lock : Icon.lockOpen;
+        }).tooltip("@mobile.lockunit").name("lockunit");
+
+        table.button(Icon.commandRally, Styles.clearNonei, MobileInput::sendCameraPos)
+            .tooltip("@mobile.sendcoords").name("sendcoords");
+    }
+
+    /** GL: sends where the camera looks, the way {@code !here} sends where the player stands. */
+    static void sendCameraPos(){
+        if(!net.active()) return;
+        ClientUtils.sendMessage(Strings.format("(@, @)", World.toTile(Core.camera.position.x), World.toTile(Core.camera.position.y)));
     }
 
     public boolean showCancel(){
@@ -1062,6 +1087,9 @@ public class MobileInput extends InputHandler implements GestureListener{
         }else{
             payloadTarget = null;
         }
+
+        //GL: locked in place - the camera roams on its own, it does not drag the unit along
+        if(unitLocked) targetPos.set(unit);
 
         movement.set(targetPos).sub(player).limit(speed);
         movement.setAngle(Mathf.slerp(movement.angle(), unit.vel.angle(), 0.05f));

@@ -1176,6 +1176,29 @@ public abstract class InputHandler implements InputProcessor, GestureListener{
 
     }
 
+    /**
+     * GL: the windows of the client - schematics, database, map, waves, "extra", research.
+     * A PC has them in one row; a phone had none of them at all, so both now build the same set.
+     */
+    public void buildToolButtons(Table table){
+        table.button(Icon.paste, Styles.clearNonei, () -> ui.schematics.show()).tooltip("@schematics");
+
+        table.button(Icon.book, Styles.clearNonei, () -> ui.database.show()).tooltip("@database");
+
+        if(state.isCampaign()){
+            table.button(Icon.map, Styles.clearNonei, () -> ui.planet.show()).tooltip("@planetmap");
+        }
+
+        table.button(Icon.map, Styles.clearNonei, () -> ui.mapInfoFrag.toggle()).tooltip("@mapInfoFrag");
+
+        table.button(Icon.waves, Styles.clearNonei, () -> ui.waveInfoFrag.toggle()).tooltip("@waveInfoFrag");
+
+        table.button(Icon.units, Styles.clearNonei, () -> ui.trashbase.show()).tooltip("@trashbase");
+
+        table.button(Icon.tree, Styles.clearNonei, () -> ui.research.show())
+            .visible(() -> state.isCampaign()).tooltip("@research");
+    }
+
     public void buildUI(Group group){
 
     }
