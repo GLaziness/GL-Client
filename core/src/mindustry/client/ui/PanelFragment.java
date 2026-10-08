@@ -90,10 +90,9 @@ public class PanelFragment extends Table{
     public static boolean forcesavelogs = false;
     public static boolean rtvWaveKey = false;
     public static boolean rtvKey = false;
-    /** GL: run "!fixpower c" by itself once a minute (right click on the power grids button), removing extra links every 5 minutes. */
+    /** GL: run "!fixpower c" by itself once a minute (right click on the power grids button). */
     public static boolean autoFixPower = false;
     private static final Interval fixPowerTimer = new Interval();
-    private static int fixPowerRuns;
 
     private static final GlyphLayout layout = new GlyphLayout();
     private static final StringBuilder sb = new StringBuilder();
@@ -381,6 +380,9 @@ public class PanelFragment extends Table{
             toggle(icon(Blocks.illuminator), "fdpanel.light", () -> enableLight, () -> enableLight = !enableLight),
             toggle(Icon.add, "fdpanel.unitshealth", () -> viewunitshealth, () -> viewunitshealth = !viewunitshealth),
             toggle(Icon.effect, "fdpanel.unitseffects", () -> viewunitseffects, () -> viewunitseffects = !viewunitseffects),
+            // GL: the flashes of shots and explosions hide the units under them
+            toggle(new SlashTextureRegionDrawable(Icon.effect.getRegion(), Color.white), "fdpanel.noeffects",
+                () -> !settings.getBool("effects", true), () -> settings.put("effects", !settings.getBool("effects", true))),
             toggle(icon(Blocks.groundFactory), "fdpanel.unitsprogress", () -> viewprogressunit, () -> viewprogressunit = !viewprogressunit),
             toggle(Icon.crafting, "fdpanel.buildprogress", () -> viewprogresbuild, () -> viewprogresbuild = !viewprogresbuild),
             toggle(Icon.chartBar, "fdpanel.efficiency", () -> viewEfficiency, () -> viewEfficiency = !viewEfficiency),
@@ -431,7 +433,6 @@ public class PanelFragment extends Table{
             autoAction(Icon.power, "fdpanel.fixpower", PanelFragment::fixPower, () -> autoFixPower, () -> {
                 autoFixPower = !autoFixPower;
                 fixPowerTimer.reset(0, 0f); // the first automatic run waits a full minute
-                fixPowerRuns = 0;
             }),
             withSettings(toggle(icon(UnitTypes.nova), "fdpanel.novaassist", () -> BuilderAssist.enabled, BuilderAssist::toggle), BuilderAssist::showSettings),
             action(Icon.logic, "fdpanel.fixcode", () -> ClientVars.clientCommandHandler.handleMessage("!fixcode r", player)),
@@ -465,8 +466,7 @@ public class PanelFragment extends Table{
 
     /** The automatic run: silent when there is nothing to connect; every fifth run (5 minutes) also removes extra links. */
     private static void fixPowerQuiet(){
-        fixPowerRuns++;
-        ClientVars.clientCommandHandler.handleMessage(fixPowerRuns % 5 == 0 ? "!fixpower c qc" : "!fixpower c q", player);
+        ClientVars.clientCommandHandler.handleMessage("!fixpower c q", player);
     }
 
     // region panel widgets
