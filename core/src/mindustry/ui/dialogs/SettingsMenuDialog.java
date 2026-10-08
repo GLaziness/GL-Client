@@ -865,10 +865,21 @@ public class SettingsMenuDialog extends BaseDialog{
     }
 
     public void importData(Fi file){
+        //GL: a file picked through the Android chooser is a content stream with no real path, which ZipFi cannot open,
+        //so it is copied out first - this is why "import data" did nothing on a phone
+        Fi copy = null;
+        if(mobile){
+            tmpDirectory.mkdirs();
+            copy = tmpDirectory.child("data-import.zip");
+            file.copyTo(copy);
+            file = copy;
+        }
+
         Fi zipped = new ZipFi(file);
 
         Fi base = Core.settings.getDataDirectory();
         if(!zipped.child("settings.bin").exists()){
+            if(copy != null) copy.delete();
             throw new IllegalArgumentException("Not valid save data.");
         }
 
@@ -878,11 +889,12 @@ public class SettingsMenuDialog extends BaseDialog{
         //clear old assets cache
         assetCacheDirectory.deleteDirectory();
 
-        //purge existing tmp data, keep everything else
-        tmpDirectory.deleteDirectory();
+        //purge existing tmp data, keep everything else; the copy above lives there while it is needed
+        if(copy == null) tmpDirectory.deleteDirectory();
 
         zipped.walk(f -> f.copyTo(base.child(f.path())));
 
+        if(copy != null) copy.delete();
 
         //clear old data
         settings.clear();

@@ -371,6 +371,30 @@ public abstract class ClientLauncher extends ApplicationCore implements Platform
     public static void handleFileImport(Fi file){
         Core.app.post(() -> {
             try{
+                //GL: a mod or a whole data export opened from a file manager - the folder of the game is out of reach
+                //on a phone, so handing the file to the client is the only comfortable way in
+                arc.files.ZipFi zip = null;
+                try{ zip = new arc.files.ZipFi(file); }catch(Throwable ignored){}
+
+                if(zip != null && zip.child("settings.bin").exists()){
+                    Fi data = file;
+                    ui.showConfirm("@confirm", "@data.import.confirm", () -> {
+                        try{
+                            ui.settings.importData(data);
+                            Core.app.exit();
+                        }catch(Throwable e){
+                            ui.showException(e);
+                        }
+                    });
+                    return;
+                }
+
+                if(zip != null && (zip.child("mod.json").exists() || zip.child("mod.hjson").exists())){
+                    mods.importMod(file);
+                    ui.showInfoOnHidden("@mods.reloadexit", () -> Core.app.exit());
+                    return;
+                }
+
                 if(Schematics.isSchematic(file)){
                     ui.schematics.show();
                     ui.schematics.importAndShow(file);
