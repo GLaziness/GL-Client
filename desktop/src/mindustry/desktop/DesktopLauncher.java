@@ -126,7 +126,9 @@ public class DesktopLauncher extends ClientLauncher{
                         }
                     }
                 }
-                setWindowIcon(FileType.internal, "icons/gl_64.png");
+                if(!(OS.isMac && Version.build != -1)){
+                    setWindowIcon(FileType.internal, "icons/gl_64.png");
+                }
             }});
         }catch(Throwable e){
             handleCrash(e);

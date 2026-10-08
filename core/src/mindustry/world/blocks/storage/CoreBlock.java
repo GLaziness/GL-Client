@@ -310,6 +310,7 @@ public class CoreBlock extends StorageBlock{
 
             if(!state.rules.coreBuildAndConfig) return;
 
+
             table.row();
 
             ButtonGroup<ImageButton> group = new ButtonGroup<>();
