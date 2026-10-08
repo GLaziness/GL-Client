@@ -1,0 +1,9 @@
+<resources>
+    <!--
+      GL: without this the window is pushed away from the camera cutout in landscape, and the strip left beside it
+      keeps whatever was drawn there before - a band of stale world over the edge of the interface.
+    -->
+    <style name="ArcTheme" parent="ArcThemeBase">
+        <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
+    </style>
+</resources>
