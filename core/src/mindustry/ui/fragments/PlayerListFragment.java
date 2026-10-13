@@ -280,7 +280,7 @@ public class PlayerListFragment{
 
             nameButton.add(new Label(playerName.get(user), new Label.LabelStyle(Fonts.outline, Color.white)));
 
-            if(user.glUser || (user.isLocal() && Core.settings.getBool("displayasuser"))){
+            if(user.glUser || user.isLocal()){
                 nameButton.add(new Image(Core.atlas.find("gl-logo")).setScaling(Scaling.fit))
                     .size(h/5 * 2.28f, h/5).scaling(Scaling.fit).padLeft(4f).padBottom(18f).tooltip("@client.gluser");
             }else if(user.fooUser){
