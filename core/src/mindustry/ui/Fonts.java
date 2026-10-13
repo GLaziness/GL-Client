@@ -32,6 +32,8 @@ public class Fonts{
     private static ObjectIntMap<String> unicodeIcons = new ObjectIntMap<>();
     private static IntMap<String> unicodeToName = new IntMap<>();
     public static ObjectMap<String, String> stringIcons = new ObjectMap<>();
+    /** GL logo as a chat glyph, empty until {@link #loadContentIcons()} has run. */
+    public static String glLogo = "";
     private static ObjectMap<String, TextureRegion> largeIcons = new ObjectMap<>();
 
     public static Font def, outline, icon, iconLarge, tech, logic, monospace;
@@ -163,6 +165,30 @@ public class Fonts{
         Fonts.outline.getData().setGlyph(ch, glyph);
     }
 
+    /** Registers the wide GL logo as a glyph, so it can be put into chat lines. */
+    private static void registerGlLogo(Texture uitex){
+        TextureRegion region = Core.atlas.find("gl-logo");
+        if(region.texture != uitex) return;
+
+        int ch = 0xE0F0, size = (int)(Fonts.def.getData().lineHeight/Fonts.def.getData().scaleY);
+        Glyph glyph = new Glyph();
+        glyph.id = ch;
+        glyph.height = (int)(size * 0.8f);
+        glyph.width = (int)(glyph.height * (float)region.width / region.height);
+        glyph.u = region.u;
+        glyph.v = region.v2;
+        glyph.u2 = region.u2;
+        glyph.v2 = region.v;
+        glyph.xoffset = 0;
+        glyph.yoffset = (size - glyph.height) / 2 - size;
+        glyph.xadvance = glyph.width + 2;
+        glyph.fixedWidth = true;
+        glyph.page = 0;
+        Fonts.def.getData().setGlyph(ch, glyph);
+        Fonts.outline.getData().setGlyph(ch, glyph);
+        glLogo = (char)ch + "";
+    }
+
     public static void loadContentIcons(){
         Texture uitex = Core.atlas.find("logo").texture;
 
@@ -186,6 +212,8 @@ public class Fonts{
         }
 
         stringIcons.put("alphachan", stringIcons.get("alphaaaa"));
+
+        registerGlLogo(uitex);
 
         //TODO: mod emojis can't work because most mod icons are not on the UI page!
         /*

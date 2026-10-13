@@ -63,6 +63,8 @@ public class ClientVars {
 
     // Networking
     public static final byte FOO_USER = (byte) 0b10101010, ASSISTING = (byte) 0b01010101;
+    /** GL marker: FOO_USER plus the lowest bit, so Foo clients still see a client user, while GL sees its own. */
+    public static final byte GL_USER = (byte) 0b10101011;
     @NotNull public static Color encrypted = Color.valueOf("#243266"), verified = Color.valueOf("#2c9e52"), invalid = Color.valueOf("#890800"), user = Color.coral.cpy().mul(0.6f), developerMsgBackground = Color.valueOf("#9E2C9E"); // Encrypted = Blue, Verified = Green
     @NotNull public static String lastCertName = "";
     public static boolean isBuildingLock; // Whether the building state is being controlled by networking

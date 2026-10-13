@@ -288,7 +288,7 @@ object Main : ApplicationListener {
             Server.current.ghost -> Tmp.v1.set(sentAimX(), sentAimY())
             sendAssisting() && show ->
                 Tmp.v1.set(
-                    FloatEmbed.embedInFloat(sentAimX(), ClientVars.FOO_USER),
+                    FloatEmbed.embedInFloat(sentAimX(), ClientVars.GL_USER),
                     FloatEmbed.embedInFloat(sentAimY(), ClientVars.ASSISTING)
                 )
             sendAssisting() ->
@@ -298,7 +298,7 @@ object Main : ApplicationListener {
                 )
             show ->
                 Tmp.v1.set(
-                    FloatEmbed.embedInFloat(sentAimX(), ClientVars.FOO_USER),
+                    FloatEmbed.embedInFloat(sentAimX(), ClientVars.GL_USER),
                     FloatEmbed.embedInFloat(sentAimY(), ClientVars.FOO_USER)
                 )
             else -> Tmp.v1.set(sentAimX(), sentAimY())

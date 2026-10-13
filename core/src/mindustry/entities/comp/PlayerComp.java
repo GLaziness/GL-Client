@@ -71,6 +71,8 @@ abstract class PlayerComp implements UnitController, Entityc, Syncc, Timerc, Dra
     transient private int wrongReadUnits;
     transient @Nullable Unit justSwitchFrom, justSwitchTo;
     transient boolean fooUser;
+    /** A Foo client user who runs GL Client. */
+    transient boolean glUser;
     transient boolean assisting;
     transient @Nullable TraceInfo trace;
     transient @Nullable String serverID;
@@ -271,6 +273,7 @@ abstract class PlayerComp implements UnitController, Entityc, Syncc, Timerc, Dra
         textFadeTime -= Time.delta / (60 * 5);
 
         fooUser = FloatEmbed.isEmbedded(mouseX, ClientVars.FOO_USER) && (FloatEmbed.isEmbedded(mouseY, ClientVars.ASSISTING) || FloatEmbed.isEmbedded(mouseY, ClientVars.FOO_USER));
+        glUser = fooUser && FloatEmbed.isExact(mouseX, ClientVars.GL_USER);
         assisting = (FloatEmbed.isEmbedded(mouseX, ClientVars.FOO_USER) || FloatEmbed.isEmbedded(mouseX, ClientVars.ASSISTING)) && FloatEmbed.isEmbedded(mouseY, ClientVars.ASSISTING);
     }
 
@@ -469,6 +472,13 @@ abstract class PlayerComp implements UnitController, Entityc, Syncc, Timerc, Dra
                 Draw.rect(Icon.adminSmall.getRegion(), unit.x + layout.width / 2f + 2 + 1, unit.y + nameHeight - 1.5f, s, s);
                 Draw.color(color);
                 Draw.rect(Icon.adminSmall.getRegion(), unit.x + layout.width / 2f + 2 + 1, unit.y + nameHeight - 1f, s, s);
+            }else if(glUser){
+                TextureRegion logo = Core.atlas.find("gl-logo");
+                float lh = 3f, lw = lh * logo.width / logo.height;
+                Draw.color(color.r * 0.5f, color.g * 0.5f, color.b * 0.5f, 1f);
+                Draw.rect(logo, unit.x + layout.width / 2f + 2 + lw / 2f, unit.y + nameHeight - 1.5f, lw, lh);
+                Draw.color();
+                Draw.rect(logo, unit.x + layout.width / 2f + 2 + lw / 2f, unit.y + nameHeight - 1f, lw, lh);
             }else if(fooUser){
                 float s = 3f;
                 Draw.color(color.r * 0.5f, color.g * 0.5f, color.b * 0.5f, 1f);

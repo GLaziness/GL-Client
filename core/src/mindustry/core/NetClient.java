@@ -344,9 +344,9 @@ public class NetClient implements ApplicationListener{
         if(Vars.ui != null){
             var prefix = "";
 
-            // Add wrench to client user messages, highlight if enabled
+            // Add wrench to client user messages (GL logo for GL users), highlight if enabled
             if (playersender != null && playersender.fooUser && playersender != player) {
-                prefix = Iconc.wrench + " ";
+                prefix = (playersender.glUser && !Fonts.glLogo.isEmpty() ? Fonts.glLogo : Iconc.wrench + "") + " ";
                 if (Core.settings.getBool("highlightclientmsg")) background = ClientVars.user;
             }
 
