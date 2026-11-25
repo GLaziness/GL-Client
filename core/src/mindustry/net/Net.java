@@ -38,6 +38,8 @@ public class Net{
     private final ObjectMap<Class<?>, Cons> clientListeners = new ObjectMap<>();
     private final ObjectMap<Class<?>, Cons2<NetConnection, Object>> serverListeners = new ObjectMap<>();
     private final IntMap<StreamBuilder> streams = new IntMap<>();
+    /** GL: limits on what a server can make the client hold, see handleClientReceived. */
+    private static final int maxStreamSize = 256 * 1024 * 1024, maxStreams = 8, maxQueuedPackets = 200_000;
     public ExecutorService pingExecutor;
 
     private final NetProvider provider;
@@ -290,7 +292,22 @@ public class Net{
         object.handled();
 
         if(object instanceof StreamBegin b){
-            streams.put(b.id, currentStream = new StreamBuilder(b, ((Streamable)Net.newPacket(b.type)).incremental()));
+            //GL: a server decides the size of a stream; refuse sizes no map or asset pack has, and keep the number of
+            //open streams small - each one buffers memory, and an incremental one holds a thread until it ends
+            if(b.total <= 0 || b.total > maxStreamSize) throw new RuntimeException("Refusing a stream of " + b.total + " bytes");
+            boolean incremental = ((Streamable)Net.newPacket(b.type)).incremental();
+            StreamBuilder old = streams.remove(b.id);
+            if(old != null) old.close();
+            if(incremental){
+                for(var stream : streams.values().toArray()){
+                    if(stream.incremental){
+                        streams.remove(stream.id);
+                        stream.close();
+                    }
+                }
+            }
+            if(streams.size >= maxStreams) throw new RuntimeException("Too many streams at once");
+            streams.put(b.id, currentStream = new StreamBuilder(b, incremental));
             b.incrementalStream = currentStream.incrementalStream;
 
             var listeners = clientListeners.get(StreamBegin.class);
@@ -300,6 +317,12 @@ public class Net{
             StreamBuilder builder = streams.get(c.id);
             if(builder == null){
                 throw new RuntimeException("Received stream chunk without a StreamBegin beforehand!");
+            }
+            //GL: more data than announced is an error, not a reason to keep buffering
+            if((long)builder.received + c.data.length > builder.total){
+                streams.remove(builder.id);
+                builder.close();
+                throw new RuntimeException("Stream " + c.id + " is larger than announced");
             }
             builder.add(c.data);
 
@@ -330,6 +353,8 @@ public class Net{
                     object.handleClient();
                 }
             }else if(p != Packet.priorityLow){
+                //GL: the queue only fills while the world loads; a server flooding it gets dropped instead of eating the memory
+                if(packetQueue.size >= maxQueuedPackets) throw new RuntimeException("Too many packets before the world loaded");
                 packetQueue.add(object);
             }
         }

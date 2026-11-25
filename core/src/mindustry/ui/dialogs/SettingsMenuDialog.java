@@ -874,6 +874,17 @@ public class SettingsMenuDialog extends BaseDialog{
         }
     }
 
+    /** GL: {@code base/path}, or null when the path would leave {@code base}. */
+    static @Nullable Fi safeChild(Fi base, String path){
+        try{
+            java.nio.file.Path root = base.file().getCanonicalFile().toPath();
+            java.nio.file.Path target = new java.io.File(root.toFile(), path).getCanonicalFile().toPath();
+            return target.startsWith(root) && !target.equals(root) ? new Fi(target.toFile()) : null;
+        }catch(Exception e){
+            return null;
+        }
+    }
+
     public void importData(Fi file){
         //GL: a file picked through the Android chooser is a content stream with no real path, which ZipFi cannot open,
         //so it is copied out first - this is why "import data" did nothing on a phone
@@ -902,7 +913,12 @@ public class SettingsMenuDialog extends BaseDialog{
         //purge existing tmp data, keep everything else; the copy above lives there while it is needed
         if(copy == null) tmpDirectory.deleteDirectory();
 
-        zipped.walk(f -> f.copyTo(base.child(f.path())));
+        //GL: every entry lands inside the data folder; names like ../../x are skipped (zip-slip)
+        zipped.walk(f -> {
+            Fi target = safeChild(base, f.path());
+            if(target != null) f.copyTo(target);
+            else Log.warn("Skipped a data import entry outside the data folder: @", f.path());
+        });
 
         if(copy != null) copy.delete();
 
@@ -1577,7 +1593,7 @@ public class SettingsMenuDialog extends BaseDialog{
                             urlChanged = true;
                             settings.put(name, text);
                             if(text.isEmpty()) settings.remove(name);
-                        }).width(450).get().setMessageText("mindustry-antigrief/mindustry-client-v8-builds");
+                        }).width(450).get().setMessageText("GLaziness/GL-Client");
                     }).left().expandX().padTop(3).height(32).padBottom(3);
                     table.row();
                 }

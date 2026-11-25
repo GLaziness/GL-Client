@@ -131,7 +131,10 @@ object Packets {
         /** A queue of packets waiting to be sent. */
         private val outgoing = LinkedList<OutgoingTransmission>()
         /** A list of incoming connections.  Each transmission ID is mapped to a nullable list of bytearray segments. */
-        private val incoming = ConcurrentHashMap<Long, IncomingTransmission>()
+        private val incoming = ConcurrentHashMap<IncomingKey, IncomingTransmission>()
+
+        /** GL: segments are keyed by sender as well, so nobody can write into a transmission someone else is sending. */
+        private data class IncomingKey(val sender: Int, val transmissionId: Long)
         /** A list of listeners to be run when a transmission is received. */
         private val listeners = CopyOnWriteArrayList<(transmission: Transmission, senderId: Int) -> Unit>()
         private val listenersLock = ReentrantLock()
@@ -176,42 +179,58 @@ object Packets {
                 val header = Header(buf)
                 val content = buf.remainingBytes()
 
-                if (header.sequenceNumber >= header.sequenceCount)
-                    throw IndexOutOfBoundsException("Packet sequence number ${header.sequenceNumber} is greater than or equal to sequence count ${header.sequenceCount}!")
+                val key = IncomingKey(sender, header.transmissionId)
 
-                if (header.transmissionType >= registeredTransmissionTypes.size)
+                if (header.sequenceNumber < 0 || header.sequenceNumber >= header.sequenceCount)
+                    throw IndexOutOfBoundsException("Packet sequence number ${header.sequenceNumber} is out of the sequence count ${header.sequenceCount}!")
+
+                if (header.transmissionType < 0 || header.transmissionType >= registeredTransmissionTypes.size)
                     throw IndexOutOfBoundsException("Transmission type ${header.transmissionType} not found!")
 
                 if (header.sequenceCount > 500) { // Too many packets
-                    incoming.remove(header.transmissionId)
+                    incoming.remove(key)
                     return
                 }
 
                 if (header.expirationTime.isBefore(Main.ntp.instant())) { // Too old
-                    incoming.remove(header.transmissionId)
+                    incoming.remove(key)
                     return
                 }
 
-                val entry = incoming[header.transmissionId] ?: run {
+                val entry = incoming[key] ?: run {
                     if (incoming.size > 50) { Log.debug("Too many incoming transmissions"); return@run null }  // too many incoming connections
-                    incoming[header.transmissionId] = IncomingTransmission(MutableList(header.sequenceCount) { null }, Main.ntp.instant().plusSeconds(15))  // Create new incoming connection entry
-                    return@run incoming[header.transmissionId]
+                    // GL: a sender gets a handful of transmissions at once, not all 50 slots
+                    if (incoming.keys.count { it.sender == sender } >= 5) { Log.debug("Too many incoming transmissions from @", sender); return@run null }
+                    val created = IncomingTransmission(MutableList(header.sequenceCount) { null }, Main.ntp.instant().plusSeconds(15))  // Create new incoming connection entry
+                    incoming[key] = created
+                    return@run created
                 } ?: return
+
+                if (entry.segments.size != header.sequenceCount) { // GL: the sequence count must stay the same for the whole transmission
+                    incoming.remove(key)
+                    return
+                }
 
                 entry.segments[header.sequenceNumber] = content
                 entry.expirationTime = Main.ntp.instant().plusSeconds(15)
 
                 if (!entry.segments.contains(null)) {
-                    val array = entry.segments.reduceRight { a, b -> a!! + b!! }!!  // Collapse the list of packet contents to the full byte array
-                    val inflated = array.inflate()  // Decompress the transmission
+                    incoming.remove(key)
+                    val joined = java.io.ByteArrayOutputStream()
+                    for (segment in entry.segments) joined.write(segment!!)  // Collapse the list of packet contents to the full byte array
+                    val inflated = joined.toByteArray().inflate()  // Decompress the transmission, at most Compression.MAX_INFLATED
                     val transmission = registeredTransmissionTypes[header.transmissionType].constructor(inflated, header.transmissionId, sender)  // Deserialize the transmission
 
                     listenersLock.withLock {
-                        for (listener in listeners) listener(transmission, sender)
-                        incoming.remove(header.transmissionId)
+                        // GL: one broken listener must not keep the others from running
+                        for (listener in listeners) {
+                            try { listener(transmission, sender) } catch (e: Exception) { Log.err("Error in a transmission listener", e) }
+                        }
                     }
                 }
-            } catch (e: Exception) { Log.err(e) }
+            } catch (e: OutOfMemoryError) { // GL: a hostile frame must not take the game down
+                Log.err("Dropped a transmission that did not fit in memory")
+            } catch (e: Exception) { Log.debug("Dropped a broken transmission: @", e.toString()) }
         }
 
         private data class OutgoingTransmission(val packets: Queue<Packet>, val onFinish: Runnable?, val onError: (() -> Unit)?)

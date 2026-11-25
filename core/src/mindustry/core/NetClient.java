@@ -196,6 +196,8 @@ public class NetClient implements ApplicationListener{
             try(DataInputStream in = new DataInputStream(data.stream)){
                 String name = in.readUTF();
                 int length = in.readInt();
+                //GL: the length comes from the server; it cannot be more than what is left in the stream
+                if(length < 0 || length > in.available()) throw new IOException("Invalid texture size: " + length);
                 byte[] pngData = new byte[length];
                 in.readFully(pngData);
                 if(!headless){

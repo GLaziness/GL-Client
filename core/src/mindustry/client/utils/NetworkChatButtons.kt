@@ -61,8 +61,11 @@ object NetworkChatButtons {
     private fun run(actionOrCommand: String) {
         Log.debug("Running server button: $actionOrCommand")
         val action = actions[actionOrCommand.substringBefore(' ')]
-        if (action != null) action(actionOrCommand.substringAfter(' '))
-        else if (actionOrCommand.getOrNull(0) == '/') handleClientCommand(actionOrCommand, false)
+        if (action != null) action(actionOrCommand.substringAfter(' ').take(2000))
+        // GL: a server button may only run that server's own /commands; it never reaches the client command
+        // handler, which with prefix "/" would have let the server run !js and friends on this computer
+        else if (actionOrCommand.startsWith(Vars.netServer.clientCommands.getPrefix()) && !actionOrCommand.contains('\n'))
+            mindustry.gen.Call.sendChatMessage(mindustry.client.Main.sign(actionOrCommand))
     }
 
     /** First 8 bytes of the SHA-256 digest of [message], as a long. */

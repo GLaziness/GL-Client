@@ -39,6 +39,19 @@ class CommandTransmission : Transmission {
     companion object {
         var numStopIgnores: Int = 0
         var lastStopTime : Long = 0
+
+        /** GL: (certificate, id) of commands already taken, so a captured frame cannot be played again. */
+        private val seen = LinkedHashMap<String, Long>()
+
+        @Synchronized
+        private fun firstTime(certSN: ByteArray, id: Long): Boolean {
+            val now = Time.millis()
+            seen.entries.removeIf { now - it.value > Signatures.SIGNATURE_EXPIRY_SECONDS * 2000L }
+            val key = BigInteger(certSN).toString(16) + ":" + id
+            if (seen.containsKey(key)) return false
+            if (seen.size < 1000) seen[key] = now
+            return true
+        }
     }
     enum class Commands(val builtinOnly: Boolean = false, val lambda: (CommandTransmission) -> Unit) {
         STOP_PATH(false, {
@@ -64,11 +77,12 @@ class CommandTransmission : Transmission {
             }
         }),
 
+        /**
+         * GL: used to make the client download and run a build from another repository without asking. Nothing from the
+         * network may start an update any more; the entry stays so the ordinals of the other commands do not move.
+         */
         UPDATE(true, {
-            if (!isDeveloper()) {
-                val cert = Main.keyStorage.findTrusted(BigInteger(it.certSN))!!
-                Vars.becontrol.checkUpdate({ Vars.becontrol.actuallyDownload(Main.keyStorage.aliasOrName(cert)) }, "mindustry-antigrief/mindustry-client-v8-builds")
-            }
+            Log.info("Ignored a network update command from @", Main.keyStorage.findTrusted(BigInteger(it.certSN))?.readableName ?: "?")
         })
     }
 
@@ -87,7 +101,8 @@ class CommandTransmission : Transmission {
 
     override fun serialize() = (type?.ordinal ?: 0).toBytes() + signature + certSN.size.toBytes() + certSN + additionalInfo.size.toBytes() + additionalInfo + destination.toBytes() + timestamp.epochSecond.toBytes()
 
-    private fun toSignable() = (type?.ordinal ?: 0).toBytes() + certSN + additionalInfo + id.toBytes() + timestamp.epochSecond.toBytes()
+    /** GL: the destination is signed too, so a captured command cannot be readdressed to another player. */
+    private fun toSignable() = (type?.ordinal ?: 0).toBytes() + certSN + additionalInfo + id.toBytes() + timestamp.epochSecond.toBytes() + destination.toBytes()
 
     fun sign() {
         signature = Main.signatures.sign(toSignable()) ?: ByteArray(Signatures.SIGNATURE_LENGTH)
@@ -99,11 +114,12 @@ class CommandTransmission : Transmission {
         type ?: return false
         if (timestamp.ageNTP() > Signatures.SIGNATURE_EXPIRY_SECONDS) return false  // replay attacks are bad
         val res = Main.signatures.verify(toSignable(), signature, certSN)
-        if (type.builtinOnly) {
+        val valid = if (type.builtinOnly) {
             res.second ?: return false
-            return (res.first == Signatures.VerifyResult.VALID) && Main.keyStorage.builtInCerts.any { it.encoded.contentEquals(res.second!!.encoded) }
+            (res.first == Signatures.VerifyResult.VALID) && Main.keyStorage.builtInCerts.any { it.encoded.contentEquals(res.second!!.encoded) }
         } else {
-            return res.first == Signatures.VerifyResult.VALID
+            res.first == Signatures.VerifyResult.VALID
         }
+        return valid && firstTime(certSN, id)
     }
 }

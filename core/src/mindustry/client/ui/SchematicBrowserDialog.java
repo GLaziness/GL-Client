@@ -555,7 +555,7 @@ public class SchematicBrowserDialog extends BaseDialog {
         for (String link : unloadedRepositories) {
             Time.mark();
             if (hiddenRepositories.contains(link)) continue; // Skip loading
-            String fileName = link.replace("/","") + ".zip";
+            String fileName = repoFileName(link);
             Fi filePath = schematicRepoDirectory.child(fileName);
             if (!filePath.exists() || filePath.length() == 0) continue;
             ZipFi zip;
@@ -640,8 +640,13 @@ public class SchematicBrowserDialog extends BaseDialog {
         } else handleRepo(link, response);
     }
 
+    /** GL: the zip name of a repository link; only plain characters, so a link like ..\..\x cannot leave the folder. Same name as before for normal links. */
+    static String repoFileName(String link){
+        return link.replace("/", "").replaceAll("[^A-Za-z0-9._-]", "_").replaceAll("^[.]+", "_") + ".zip";
+    }
+
     void handleRepo(String link, Http.HttpResponse response){
-        String fileName = link.replace("/","") + ".zip";
+        String fileName = repoFileName(link);
         Fi filePath = schematicRepoDirectory.child(fileName);
         byte[] result = response.getResult();
         boolean fetched = result.length > 0 || !filePath.exists();

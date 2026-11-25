@@ -11,10 +11,11 @@ object UnpackJars {
         for (fi in jars) {
             println("Unloading $fi")
             val output = outputDir.child(fi)
-            if (!output.exists()) {
-                val inp = Fi(fi, Files.FileType.classpath)
-                if (!inp.exists()) return
-                inp.copyTo(output)
+            // GL: also replace a jar that differs from the bundled one, so a planted bcprov*.jar does not stay on the classpath
+            val inp = Fi(fi, Files.FileType.classpath)
+            if (!inp.exists()) return
+            if (!output.exists() || output.length() != inp.length() || !output.readBytes().contentEquals(inp.readBytes())) {
+                try { inp.copyTo(output) } catch (e: Throwable) { println("Could not replace $fi: $e") }
 //                val inp = this::class.java.getResourceAsStream("/$fi") ?: return
 //                output.writeBytes(inp.readBytes())
 //                inp.close()

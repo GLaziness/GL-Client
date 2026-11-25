@@ -106,7 +106,14 @@ public class DataImagePacker{
                 if(cacheFile == null) return;
 
                 try{
-                    Pixmap pixmap = new Pixmap(cacheFile);
+                    //GL: server-provided image; check the header size before decoding it
+                    byte[] imageData = cacheFile.readBytes();
+                    var size = mindustry.client.utils.ClientUtils.imageSize(imageData, 0, imageData.length);
+                    if(size == null || size.getFirst() <= 0 || size.getSecond() <= 0 || size.getFirst() > DataPatcher.maxImageSize || size.getSecond() > DataPatcher.maxImageSize){
+                        Log.err("Skipping server image @: not a PNG/JPEG within @ px", cacheFile.name(), DataPatcher.maxImageSize);
+                        return;
+                    }
+                    Pixmap pixmap = new Pixmap(imageData);
                     Pixmaps.antialias(pixmap);
                     Drawf.checkBleed(pixmap);
                     //don't add the double dp prefix, only add it if it's not already present
@@ -208,6 +215,12 @@ public class DataImagePacker{
     public void addTexture(String name, byte[] pngData){
         textureExecutor.execute(() -> {
             Pixmap pixmap;
+            //GL: check the size in the header first - decoding a small PNG that claims a huge size takes gigabytes
+            var size = mindustry.client.utils.ClientUtils.imageSize(pngData, 0, pngData.length);
+            if(size == null || size.getFirst() <= 0 || size.getSecond() <= 0 || size.getFirst() > DataPatcher.maxImageSize || size.getSecond() > DataPatcher.maxImageSize){
+                Log.err("Server-provided image '" + name + "' is not a PNG/JPEG within " + DataPatcher.maxImageSize + " px");
+                return;
+            }
             try{
                 pixmap = new Pixmap(pngData);
             }catch(Throwable e){

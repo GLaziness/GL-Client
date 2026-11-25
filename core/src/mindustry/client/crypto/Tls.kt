@@ -25,8 +25,9 @@ private fun certChainToTlsCert(cert: X509Certificate, chain: List<X509Certificat
 private fun getAuth(expectedCert: X509Certificate, cert: X509Certificate, chain: List<X509Certificate>, crypto: JcaTlsCrypto, context: TlsContext, key: PrivateKey): TlsAuthentication = object : TlsAuthentication {
     override fun notifyServerCertificate(serverCertificate: TlsServerCertificate?) {
         val expected = expectedCert.encoded
+        // GL: compare the leaf (first) certificate - its key is what the handshake proves; the rest of the chain is not validated
 
-        if (serverCertificate?.certificate?.certificateEntryList?.last()?.certificate?.encoded?.contentEquals(expected) != true) throw IOException(
+        if (serverCertificate?.certificate?.certificateEntryList?.firstOrNull()?.certificate?.encoded?.contentEquals(expected) != true) throw IOException(
             "Certificate is incorrect!"
         )
     }
@@ -137,8 +138,9 @@ class TlsServerImpl(private val cert: X509Certificate, private val chain: List<X
 
     override fun notifyClientCertificate(clientCertificate: Certificate?) {
         val expected = expectedCert.encoded
+        // GL: the leaf (first) certificate is the one whose key the handshake proves; the chain is not validated, so the last one could be anyone's
 
-        val lastEntry = clientCertificate?.certificateEntryList?.last()?.certificate
+        val lastEntry = clientCertificate?.certificateEntryList?.firstOrNull()?.certificate
         if (lastEntry?.encoded?.contentEquals(expected) != true) throw IOException("Certificate is incorrect!")
     }
 

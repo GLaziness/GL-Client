@@ -164,8 +164,11 @@ public class NetworkIO{
     public static void loadAssets(InputStream is) throws IOException{
         try(DataInputStream stream = new DataInputStream(is)){
             int amount = stream.readInt();
+            //GL: counts and sizes come from the server; check them before allocating
+            if(amount < 0 || amount > 100_000) throw new IOException("Invalid asset count: " + amount);
             for(int i = 0; i < amount; i++){
                 int len = stream.readInt();
+                if(len < 0 || len > 64 * 1024 * 1024) throw new IOException("Invalid asset size: " + len);
                 byte[] bytes = new byte[len];
                 stream.readFully(bytes);
                 assetCache.add(bytes);

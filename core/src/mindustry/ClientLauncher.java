@@ -390,8 +390,26 @@ public abstract class ClientLauncher extends ApplicationCore implements Platform
                 }
 
                 if(zip != null && (zip.child("mod.json").exists() || zip.child("mod.hjson").exists())){
-                    mods.importMod(file);
-                    ui.showInfoOnHidden("@mods.reloadexit", () -> Core.app.exit());
+                    //GL: any app on the phone can hand the game a file, so a mod - which runs code - is never
+                    //installed without the player saying so, and the game does not close by itself
+                    Fi meta = zip.child("mod.json").exists() ? zip.child("mod.json") : zip.child("mod.hjson");
+                    String name = file.nameWithoutExtension(), version = "?", author = "?";
+                    try{
+                        arc.util.serialization.Jval json = arc.util.serialization.Jval.read(meta.readString());
+                        name = json.getString("displayName", json.getString("name", name));
+                        version = json.getString("version", version);
+                        author = json.getString("author", author);
+                    }catch(Throwable ignored){}
+
+                    ui.showConfirm("@gl.mod.import.title", Core.bundle.format("gl.mod.import.confirm",
+                        Strings.stripColors(name), Strings.stripColors(version), Strings.stripColors(author)), () -> {
+                        try{
+                            mods.importMod(file);
+                            ui.showInfoOnHidden("@mods.reloadexit", () -> Core.app.exit());
+                        }catch(Throwable e){
+                            ui.showException(e);
+                        }
+                    });
                     return;
                 }
 

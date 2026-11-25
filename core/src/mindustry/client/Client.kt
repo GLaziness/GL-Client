@@ -81,7 +81,8 @@ object Client {
             }
         }
 
-        if (state?.rules?.editor == true) ui.editor.autoSave()
+        // GL: only the local editor; a server turning rules.editor on must not make the client save its map to disk
+        if (state?.rules?.editor == true && !net.client()) ui.editor.autoSave()
     }
 
     fun draw() {

@@ -294,6 +294,9 @@ public abstract class SaveVersion extends SaveFileReader{
         int width = stream.readUnsignedShort();
         int height = stream.readUnsignedShort();
 
+        //GL: width * height overflows int for 65535x65535; no real map comes close to the editor's 5000x5000
+        if(width <= 0 || height <= 0 || (long)width * height > 5000L * 5000L) throw new IOException("Invalid map size: " + width + "x" + height);
+
         boolean generating = context.isGenerating();
 
         if(!generating) context.begin();

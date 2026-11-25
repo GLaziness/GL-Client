@@ -44,13 +44,14 @@ class SchematicTransmission : Transmission {
 
     fun addToChat() {
         val message: ChatMessage = ui.chatfrag.addMsg(
-            Core.bundle.format("client.schematic.chatsharemessage", Groups.player.getByID(this.senderID).name)
+            Core.bundle.format("client.schematic.chatsharemessage", Groups.player.getByID(this.senderID)?.name ?: "?")
         )
 
         message.backgroundColor = Color.darkGray.cpy()
         message.addButton(0, message.formattedMessage.stripColors().length) {
             //Parse the schematic
-            this.schematic = Schematics.read(ByteArrayInputStream(bytes))
+            // GL: the bytes come from another player; a broken or oversized schematic shows an error instead of crashing
+            this.schematic = try { Schematics.read(ByteArrayInputStream(bytes)) } catch (e: Throwable) { ui.showException("@client.schematic.readerror", e); return@addButton }
             val inSchematics = senderID == player.id || schematics.all().contains(schematic) // FINISHME: The communication ID might not be player id
             if (!inSchematics) {
                 // This is incredibly cursed, if anyone has a better way please suggest

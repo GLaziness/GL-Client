@@ -98,12 +98,16 @@ object Main : ApplicationListener {
                 is BuildQueueTransmission -> {
                     if (senderId == communicationSystem.id) return@addListener
                     val path = Navigation.currentlyFollowing as? BuildPath ?: return@addListener
+                    // GL: only teammates' plans, and never deconstruction - nobody can make this player tear down their own base
+                    val sender = Groups.player.getByID(senderId)
+                    if (sender == null || sender.team() != Vars.player.team()) return@addListener
                     if (path.queues.contains(path.networkAssist)) {
                         val positions = IntSet()
                         for (plan in path.networkAssist) positions.add(Point2.pack(plan.x, plan.y))
 
                         for (plan in transmission.plans.sortedByDescending { it.dst(Vars.player) }) {
                             if (path.networkAssist.size > 1000) return@addListener  // too many plans, not accepting new ones
+                            if (plan.breaking) continue
                             if (positions.contains(Point2.pack(plan.x, plan.y))) continue
                             path.networkAssist.add(plan)
                         }
@@ -117,6 +121,10 @@ object Main : ApplicationListener {
                     val key = keyStorage.key() ?: return@addListener
                     val chain = keyStorage.chain() ?: return@addListener
                     val expected = keyStorage.findTrusted(transmission.sourceSN) ?: return@addListener
+
+                    // GL: one session per trusted peer and a hard cap, so repeated requests cannot pile up sessions
+                    tlsPeers.filter { it.second.peer.expectedCert == expected }.forEach { tlsPeers.remove(it) }
+                    if (tlsPeers.size >= 16) return@addListener
 
                     val peer = TlsClientHolder(cert, chain, expected, key)
                     val comms = TlsCommunicationSystem(peer, communicationClient, cert)

@@ -688,6 +688,8 @@ public class Schematics implements Loadable{
             int total = stream.readInt();
 
             if(limitSchematicSize && total > 128 * 128) throw new IOException("Invalid schematic: Too many blocks.");
+            //GL: size is unlimited, but a schematic cannot hold more blocks than its area, and a shared one cannot take all the memory
+            if(width <= 0 || height <= 0 || total < 0 || total > (long)width * height || total > 2_000_000) throw new IOException("Invalid schematic: bad size.");
 
             Reads read = new Reads(stream);
 

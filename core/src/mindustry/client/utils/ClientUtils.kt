@@ -57,6 +57,8 @@ fun ByteBuffer.remainingBytes(): ByteArray {
 }
 
 fun ByteBuffer.bytes(num: Int): ByteArray {
+    // GL: lengths come from the network, never allocate more than the buffer can hold
+    if (num < 0 || num > remaining()) throw BufferUnderflowException()
     val bytes = ByteArray(num)
     get(bytes)
     return bytes
@@ -111,11 +113,21 @@ object Compression {
         return output
     }
 
-    fun inflate(input: ByteArray): ByteArray {
-        val inflater = InflaterInputStream(input.inputStream())
-        val output = inflater.readBytes()
-        inflater.close()
-        return output
+    /** GL: the most a received transmission may inflate to; a zip bomb stops here instead of filling the memory. */
+    const val MAX_INFLATED = 8 * 1024 * 1024
+
+    fun inflate(input: ByteArray, limit: Int = MAX_INFLATED): ByteArray {
+        InflaterInputStream(input.inputStream()).use { inflater ->
+            val out = java.io.ByteArrayOutputStream()
+            val buf = ByteArray(8192)
+            while (true) {
+                val n = inflater.read(buf)
+                if (n < 0) break
+                if (out.size() + n > limit) throw java.io.IOException("Inflated data is larger than $limit bytes")
+                out.write(buf, 0, n)
+            }
+            return out.toByteArray()
+        }
     }
 }
 
@@ -384,8 +396,40 @@ fun compressImageAsPng(img: Pixmap): ByteArray {
         return bytes.toByteArray()
     }
 
+/** GL: largest side of an image taken from the network; a tiny PNG can claim a huge size and fill the memory when decoded. */
+const val MAX_NET_IMAGE_SIDE = 2048
+
 fun inflateImage(array: ByteArray, offset: Int, length: Int): Pixmap? {
+    // GL: read the size from the image header before decoding anything
+    val size = imageSize(array, offset, length) ?: run { Log.debug("Unknown image format"); return null }
+    if (size.first <= 0 || size.second <= 0 || size.first > MAX_NET_IMAGE_SIDE || size.second > MAX_NET_IMAGE_SIDE) { Log.debug("Image too large: @x@", size.first, size.second); return null }
     return try { Pixmap(array, offset, length) } catch (e: Exception) { Log.err(e); null }
+}
+
+/** GL: width and height of a PNG or JPEG without decoding it, null for anything else. */
+fun imageSize(array: ByteArray, offset: Int, length: Int): Pair<Int, Int>? {
+    if (offset < 0 || length < 24 || offset + length > array.size) return null
+    fun u8(i: Int) = array[offset + i].toInt() and 0xff
+    fun u16(i: Int) = (u8(i) shl 8) or u8(i + 1)
+    fun i32(i: Int) = (u8(i) shl 24) or (u8(i + 1) shl 16) or (u8(i + 2) shl 8) or u8(i + 3)
+
+    val png = intArrayOf(0x89, 'P'.code, 'N'.code, 'G'.code, 0x0D, 0x0A, 0x1A, 0x0A)
+    if ((0 until 8).all { u8(it) == png[it] }) return i32(16) to i32(20)
+
+    if (u8(0) == 0xFF && u8(1) == 0xD8) { // JPEG: walk the markers to the frame header
+        var i = 2
+        while (i + 9 < length) {
+            if (u8(i) != 0xFF) return null
+            val marker = u8(i + 1)
+            if (marker == 0xFF) { i++; continue }
+            if (marker in 0xC0..0xCF && marker != 0xC4 && marker != 0xC8 && marker != 0xCC) return u16(i + 7) to u16(i + 5)
+            if (marker == 0xD8 || marker in 0xD0..0xD7 || marker == 0x01) { i += 2; continue }
+            val len = u16(i + 2)
+            if (len < 2) return null
+            i += 2 + len
+        }
+    }
+    return null
 }
 
 inline fun circle(x: Int, y: Int, radius: Float, cons: (Tile?) -> Unit) {
