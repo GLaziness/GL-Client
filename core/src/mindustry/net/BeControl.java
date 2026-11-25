@@ -30,8 +30,8 @@ public class BeControl{
     public boolean checkUpdates;
     private boolean updateAvailable;
     private String updateUrl;
-    /** GL: the .sig asset that has to sign {@link #updateUrl}, see {@link UpdateVerifier}. */
-    private String updateSigUrl;
+    /** GL: the signature of {@link #updateUrl}, see {@link UpdateVerifier}: taken from the release notes, or downloaded from a .sig asset. */
+    private String updateSigUrl, updateSigText;
     private String updateBuild;
     /** GL: build time (ms) of the release found, 0 when the release does not say. */
     private long updateBuildTime;
@@ -96,12 +96,14 @@ public class BeControl{
                 Jval val = Jval.read(res.getResultAsString());
                 String newBuild = val.getString("name");
                 Jval asset = findAsset(val);
-                Jval sig = asset == null ? null : findSig(val, asset);
+                String sigText = asset == null ? null : notesSig(val, asset);
+                Jval sig = asset == null || sigText != null ? null : findSig(val, asset);
                 // GL: a release without a signature is never offered, whoever uploaded it
-                if(asset != null && sig == null) Log.warn("Release @ of @ has no signature for @, ignoring it", newBuild, repo, asset.getString("name", ""));
-                if(!newBuild.trim().isEmpty() && asset != null && sig != null && isNewer(val, newBuild)){
+                if(asset != null && sig == null && sigText == null) Log.warn("Release @ of @ has no signature for @, ignoring it", newBuild, repo, asset.getString("name", ""));
+                if(!newBuild.trim().isEmpty() && asset != null && (sig != null || sigText != null) && isNewer(val, newBuild)){
                     updateUrl = asset.getString("browser_download_url", "");
-                    updateSigUrl = sig.getString("browser_download_url", "");
+                    updateSigText = sigText;
+                    updateSigUrl = sig == null ? null : sig.getString("browser_download_url", "");
                     updateAvailable = true;
                     updateBuild = newBuild;
                     updateBuildTime = releaseBuildTime(val);
@@ -139,7 +141,22 @@ public class BeControl{
         return plain != null ? plain : assets.find(v -> matchesPlain(v, "mindustry"));
     }
 
-    /** GL: the signature is uploaded next to the asset as {@code <asset name>.sig}, made by release/SignRelease.java. */
+    /** GL: the signature as a hidden {@code <!-- gl-sig <asset name> <base64> -->} comment in the release notes, made by release/SignRelease.java. */
+    private static @Nullable String notesSig(Jval release, Jval asset){
+        String name = asset.getString("name", "");
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("<!--\\s*gl-sig\\s+(\\S+)\\s+([A-Za-z0-9+/=]{1,8000})\\s*-->").matcher(release.getString("body", ""));
+        while(m.find()){
+            if(!m.group(1).equalsIgnoreCase(name)) continue;
+            try{
+                return new String(java.util.Base64.getDecoder().decode(m.group(2)), java.nio.charset.StandardCharsets.UTF_8);
+            }catch(IllegalArgumentException e){
+                return null;
+            }
+        }
+        return null;
+    }
+
+    /** GL: older form - the signature uploaded next to the asset as {@code <asset name>.sig}. */
     private static @Nullable Jval findSig(Jval release, Jval asset){
         String name = asset.getString("name", "") + ".sig";
         return release.get("assets").asArray().find(v -> v.getString("name", "").equalsIgnoreCase(name));
@@ -239,7 +256,7 @@ public class BeControl{
      * Only ever started by the player; nothing from the network can start it.
      */
     public void actuallyDownload() {
-        if(!updateAvailable || updateUrl == null || updateSigUrl == null) return;
+        if(!updateAvailable || updateUrl == null || (updateSigUrl == null && updateSigText == null)) return;
         try{
             boolean[] cancel = {false};
             float[] progress = {0};
@@ -262,8 +279,18 @@ public class BeControl{
                 });
             };
 
+            String notesSig = updateSigText;
+            Cons<Runnable> fetchSig = then -> {
+                if(notesSig != null){
+                    sigFile.writeString(notesSig);
+                    then.run();
+                }else{
+                    download(updateSigUrl, sigFile, UpdateVerifier.maxSigSize, i -> {}, v -> {}, () -> cancel[0], then, failed);
+                }
+            };
+
             download(updateUrl, file, maxDownload, i -> length[0] = i, v -> progress[0] = v, () -> cancel[0], () ->
-            download(updateSigUrl, sigFile, UpdateVerifier.maxSigSize, i -> {}, v -> {}, () -> cancel[0], () -> {
+            fetchSig.get(() -> {
                 try{
                     UpdateVerifier.verify(file, sigFile.readString(), UpdateVerifier.expectedKind());
                 }catch(Throwable e){
@@ -292,7 +319,7 @@ public class BeControl{
                 }else{
                     ClientUtils.openJar("-Dberestart", "-Dbecopy=" + fileDest.absolutePath(), "-jar", file.absolutePath());
                 }
-            }, failed), failed);
+            }), failed);
 
             dialog.cont.add(new Bar(() -> length[0] == 0 ? Core.bundle.get("be.updating") : (int)(progress[0] * length[0])/1024/1024 + "/" + length[0]/1024/1024 + " MB", () -> Pal.accent, () -> progress[0])).width(400f).height(70f);
             dialog.buttons.button("@cancel", Icon.cancel, () -> {

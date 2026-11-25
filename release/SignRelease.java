@@ -11,8 +11,10 @@ import java.util.zip.*;
  * Runs with a plain JDK 17+, no build needed:
  *
  *   java release/SignRelease.java keygen <key file>             - makes a new key pair, prints the public key
- *   java release/SignRelease.java sign <key file> <kind> <file>  - writes <file>.sig next to the file
+ *   java release/SignRelease.java sign <key file> <kind> <file>  - prints a hidden {@code <!-- gl-sig ... -->} line
+ *                                                                  for the release notes (and keeps <file>.sig locally)
  *
+ * The printed line goes at the end of the release notes, one per asset; the file must be uploaded under the same name.
  * kind is desktop, steam or android: a client only takes a build signed for its own kind.
  * The key file holds the PRIVATE key. Keep it outside the repository and back it up: without it no client
  * accepts an update any more.
@@ -74,10 +76,12 @@ public class SignRelease{
         check.update(body.getBytes(StandardCharsets.UTF_8));
         if(!check.verify(sig)) throw new IllegalStateException("private and public key in " + keyFile + " do not match");
 
+        String sigText = body + "sig=" + Base64.getEncoder().encodeToString(sig) + "\n";
         Path out = file.resolveSibling(file.getFileName() + ".sig");
-        Files.writeString(out, body + "sig=" + Base64.getEncoder().encodeToString(sig) + "\n", StandardCharsets.UTF_8);
-        System.out.println("signed " + kind + " build " + buildTime + " -> " + out);
-        System.out.println("upload it next to the file under the same name plus .sig, e.g. MindustryGL.jar.sig");
+        Files.writeString(out, sigText, StandardCharsets.UTF_8);
+        System.err.println("signed " + kind + " build " + buildTime + " -> " + out);
+        // the release notes carry the signature as a hidden comment; the asset name is the file name as uploaded
+        System.out.println("<!-- gl-sig " + file.getFileName() + " " + Base64.getEncoder().encodeToString(sigText.getBytes(StandardCharsets.UTF_8)) + " -->");
     }
 
     /** version.properties sits at the jar root and under assets/ in the APK. */
